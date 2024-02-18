@@ -14,7 +14,7 @@ EXEC = yp_sr
 BIN  = bin
 
 CC        ?= gcc
-LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap
+LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux
 SUBDIRS   = iproute2
 
 all: yp_sr.c iproute2/config.mk
