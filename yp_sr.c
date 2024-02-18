@@ -47,6 +47,6 @@ const char *get_ip_lib_dir(void)
 }
 
 int
-main(int argc, char argv[]) {
+main(int argc, char **argv) {
 	return do_ipaddr(0, NULL);
 }
