@@ -17,7 +17,7 @@ CC        ?= gcc
 LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap
 SUBDIRS   = iproute2
 
-all: yp_sr.c
+all: yp_sr.c iproute2/config.mk
 	@set -e; \
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i || exit 1; done && \
@@ -28,3 +28,18 @@ all: yp_sr.c
 	$(CC) -o $(BIN)/$(EXEC) yp_sr.o `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
+
+clean:
+	@set -e; \
+	for i in $(SUBDIRS); do \
+	$(MAKE) -C $$i clean || exit 1; done && \
+	rm -f iproute2/config.mk && \
+	rm -f yp_sr.o && \
+	rm -f $(BIN)/$(EXEC)
+
+iproute2/config.mk:
+	@set -e; \
+	cd iproute2 && \
+	./configure && \
+	cd ..
+
