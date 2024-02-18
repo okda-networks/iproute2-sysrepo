@@ -25,6 +25,6 @@ all: yp_sr.c
 	rm iproute2/ip/rtmon.o
 	rm iproute2/ip/ip.o
 	$(CC) -c yp_sr.c -Iiproute2/ip -Iiproute2/include
-	$(CC) -o $(BIN)/$(EXEC) yp.o `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
+	$(CC) -o $(BIN)/$(EXEC) yp_sr.o `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
