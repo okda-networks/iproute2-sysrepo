@@ -4,7 +4,6 @@ module iproute2-ip-nexthop {
     prefix "ipnh";
 
     import ietf-inet-types { prefix inet; }
-    //import ietf-yang-types { prefix yang; }
     import iproute2-ip-link { prefix iplink; }
 
     organization
@@ -44,7 +43,7 @@ module iproute2-ip-nexthop {
 
                 }
             }
-            choice via { // review this: why a choice with one option ?
+            choice via {
                 description "nexthop ip address";
                 container ipv4 {
                     description "ipv4 nexthop";

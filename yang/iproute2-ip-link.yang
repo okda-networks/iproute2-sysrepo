@@ -37,12 +37,6 @@ module iproute2-ip-link {
             "Base identity for ip link types.";
     }
 
-    identity vlan {
-        base link-type;
-        description
-            "VLAN device.";
-    }
-
     identity bond {
         base link-type;
         description
@@ -202,7 +196,7 @@ module iproute2-ip-link {
                 description "specifies the desired index of the new virtual device.
                 The link creation fails, if the index is busy.";
             }
-            choice netns {
+        choice netns {
                 description "create the device in the network namespace associated with process
                 PID or the name NETNSNAME or the file NETNSFILE.";
                 case process-id {
