@@ -112,6 +112,9 @@ static int do_cmd(const char *argv0, int argc, char **argv)
 
 int
 main(int argc, char **argv) {
+    if (argc < 1)
+        return EXIT_FAILURE;
+
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
 
