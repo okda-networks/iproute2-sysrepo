@@ -26,6 +26,9 @@
 #include "utils.h"
 #include "ip_common.h"
 
+#include <sysrepo.h>
+#include "lib/lyd2cmd_generator.h"
+
 #ifndef LIBDIR
 #define LIBDIR "/usr/lib"
 #endif
@@ -46,6 +49,23 @@ int batch_mode;
 bool do_all;
 
 struct rtnl_handle rth = { .fd = -1 };
+
+static sr_session_ctx_t *sr_session;
+static sr_conn_ctx_t *sr_connection;
+static sr_subscription_ctx_t *sr_sub_ctx;
+static char *iproute2_ip_modules[] = { "iproute2-ip-link",
+                                       "iproute2-ip-nexthop",
+                                       NULL }; // null terminator
+
+
+volatile int exit_application = 0;
+
+static void sigint_handler(__attribute__((unused)) int signum)
+{
+    printf("Sigint called, exiting...\n");
+    exit_application = 1;
+}
+
 
 const char *get_ip_lib_dir(void)
 {
@@ -110,10 +130,118 @@ static int do_cmd(const char *argv0, int argc, char **argv)
     return EXIT_FAILURE;
 }
 
+int ip_sr_config_change_cb_prepare(const struct lyd_node *dnode)
+{
+    //TODO: add validation, and generate_argv() might be called here.
+    return SR_ERR_OK;
+}
+
+int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
+{
+    int ret;
+    struct cmd_args **ipr2_cmds;
+    if (change_dnode == NULL) {
+        return SR_ERR_INVAL_ARG;
+    }
+
+    ipr2_cmds = generate_cmd_argv(change_dnode);
+
+    for (int i = 0; ipr2_cmds[i] != NULL; i++) {
+        ret = do_cmd(ipr2_cmds[i]->argv[1], ipr2_cmds[i]->argc - 1, ipr2_cmds[i]->argv + 1);
+        if (ret != EXIT_SUCCESS)// TODO: add rollback functionality.
+            return SR_ERR_INTERNAL;
+    }
+    return SR_ERR_OK;
+}
+
+
+int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id,
+                           const char *module_name, const char *xpath,
+                           sr_event_t sr_ev, uint32_t request_id,
+                           void *private_data)
+{
+    int ret;
+    const struct lyd_node *dnode;
+    switch (sr_ev) {
+        case SR_EV_ENABLED:
+        case SR_EV_CHANGE:
+            dnode = sr_get_changes(session);
+            ret = ip_sr_config_change_cb_prepare(dnode);
+            break;
+        case SR_EV_DONE:
+            dnode = sr_get_change_diff(session);
+            ret = ip_sr_config_change_cb_apply(dnode);
+            break;
+        case SR_EV_ABORT:
+            // TODO: add abort event functionality.
+        case SR_EV_RPC:
+            // TODO: rpc support for iproute2 commands.
+        case SR_EV_UPDATE:
+            return 0;
+        default:
+            fprintf(stderr, "%s: unexpected sysrepo event: %u\n", __func__,
+                    sr_ev);
+            return SR_ERR_INTERNAL;
+    }
+
+    return ret;
+}
+
+static void sr_subscribe_config()
+{
+    char **ip_module = iproute2_ip_modules;
+    int ret;
+    while (*ip_module != NULL) {
+        printf("%s: subscribing to module '%s'\n",__func__ ,*ip_module);
+        ret = sr_module_change_subscribe(sr_session, *ip_module, NULL,
+                                         ip_sr_config_change_cb, NULL,
+                                         0, SR_SUBSCR_DEFAULT,
+                                         &sr_sub_ctx);
+        if (ret != SR_ERR_OK)
+            fprintf(stderr,
+                    "%s: failed to subscribe to module (%s): %s\n",
+                    __func__, *ip_module, sr_strerror(ret));
+
+        ++ip_module;
+    }
+    /* loop until ctrl-c is pressed / SIGINT is received */
+    signal(SIGINT, sigint_handler);
+    signal(SIGPIPE, SIG_IGN);
+    while (!exit_application) {
+        sleep(1);
+    }
+}
+
+int sysrepo_init(){
+    int ret;
+    ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
+    if (ret != SR_ERR_OK) {
+        fprintf(stderr, "%s: sr_connect(): %s\n", __func__,
+                sr_strerror(ret));
+        goto cleanup;
+    }
+
+    /* Start session. */
+    ret = sr_session_start(sr_connection, SR_DS_RUNNING, &sr_session);
+    if (ret != SR_ERR_OK) {
+        fprintf(stderr, "%s: sr_session_start(): %s\n", __func__,
+                sr_strerror(ret));
+        goto cleanup;
+    }
+    sr_subscribe_config();
+
+cleanup:
+    if (sr_session)
+        sr_session_stop(sr_session);
+    if (sr_connection)
+        sr_disconnect(sr_connection);
+    return EXIT_SUCCESS;
+}
+
 int
 main(int argc, char **argv) {
-    if (argc < 1)
-        return EXIT_FAILURE;
+    if (argc == 1)
+        return sysrepo_init();
 
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;

@@ -24,6 +24,6 @@ struct cmd_args{
  * @param[in] node Data node diff to generate the argc, argv.
  * @return Array of cmd_args struct.
  */
-struct cmd_args** generate_argv(struct lyd_node *change_node);
+struct cmd_args** generate_cmd_argv(const struct lyd_node *change_node);
 
 #endif// IPROUTE2_SYSREPO_LYD2CMD_GENERATOR_H

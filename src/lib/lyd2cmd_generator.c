@@ -14,7 +14,7 @@
 #include "lyd2cmd_generator.h"
 
 // not implemented yet
-struct cmd_args **generate_argv(struct lyd_node *change_node)
+struct cmd_args **generate_cmd_argv(const struct lyd_node *change_node)
 {
     static struct cmd_args *cmds[CMDS_ARRAY_SIZE] = {NULL};
     return cmds;
