@@ -28,6 +28,6 @@ jobs:
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
       - name: basic test ip address like
-        run : bin/iproute2-sysrepo
+        run : bin/iproute2-sysrepo link
       - name: yanglint
         run : make check
