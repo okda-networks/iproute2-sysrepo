@@ -29,14 +29,14 @@ jobs:
             repository: 'CESNET/libyang.git'
             ref: 'v2.1.148'
       - name: make libyang v2.1.148 from upstream
-        run: mkdir build && cd build && cmake -DCMAKE_LIBRARY_PATH:PATH=$(pwd)/bin -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/bin -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && make install
-      - name: sysrepo v2.2.150 from upstream
+        run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && make install
+      - name: sysrepo v2.2.105 from upstream
         uses: actions/checkout@v4
         with:
           repository: 'sysrepo/sysrepo.git'
           ref: 'v2.2.105'
       - name: make sysrepo v2.2.150 from upstream
-        run: mkdir build && cd build && cmake -DLIBYANG_LIBRARY:PATH=$(pwd)/bin -DLIBYANG_INCLUDE_DIR:PATH=$(pwd)/bin -DCMAKE_LIBRARY_PATH:PATH=$(pwd)/bin -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/bin -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && make install
+        run: mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/bin -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && make install
       - name: check sysrepo running ok
         run: sysrepoctl -l
       - name: make iproute2-sysrepo
