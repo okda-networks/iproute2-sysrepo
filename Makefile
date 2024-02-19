@@ -10,7 +10,7 @@
 # Copyright (C) 2024 Vincent Jardin, <vjardin@free.fr>
 #
 
-EXEC = iproute2_sysrepo
+EXEC = iproute2-sysrepo
 BIN  = bin
 
 CC        ?= gcc
