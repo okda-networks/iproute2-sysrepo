@@ -9,3 +9,10 @@ $ git clone --recursive https://github.com/okda-networks/iproute2-sysrepo.git
 $ make -j $(nproc)
 $ bin/iproute2-sysrepo
 ```
+
+# Yang
+
+Check the contents using:
+```
+make check
+```

@@ -43,3 +43,5 @@ iproute2/config.mk:
 	./configure && \
 	cd ..
 
+check:
+	yanglint yang/*.yang
