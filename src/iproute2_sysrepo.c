@@ -10,7 +10,7 @@
  *              version.
  *
  * Copyright (C) 2024 Vincent Jardin, <vjardin@free.fr>
- *               2024 okda netrworks, <contact@okdanetworks.com>
+ *               2024 Okda Netrworks, <contact@okdanetworks.com>
  */
 
 /* system includes */

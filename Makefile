@@ -14,7 +14,7 @@ EXEC = iproute2-sysrepo
 BIN  = bin
 
 CC        ?= gcc
-LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm -g --vtv-debug
+LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm
 SUBDIRS   = iproute2
 
 IPR2_SR_LIB_SRC = $(wildcard src/lib/*.c)
