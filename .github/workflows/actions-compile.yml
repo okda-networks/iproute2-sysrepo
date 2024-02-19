@@ -23,6 +23,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+      - name: libyang v2.1.148 from upstream
+        uses: actions/checkout@v4
+        with:
+            repository: 'CESNET/libyang.git'
+            ref: 'v2.1.148'
+      - name: make libyang v2.1.148 from upstream
+        run: mkdir build && cd build && cmake -DCMAKE_LIBRARY_PATH:PATH=$(pwd)/bin -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/bin -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && make install
       - name: sysrepo v2.2.150 from upstream
         uses: actions/checkout@v4
         with:
