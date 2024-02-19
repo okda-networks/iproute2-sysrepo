@@ -3,13 +3,11 @@ module iproute2-ip-link-vlan-ext {
     namespace "urn:okda:iproute2:ip:link:vlan:ext";
     prefix "iplinkvlan";
 
-    import ietf-inet-types { prefix inet; }
-    import ietf-yang-types { prefix yang; }
     import iproute2-ip-link {prefix iplink;}
 
 
     organization
-        "Okda networks";
+        "Okda Networks";
 
     contact
         "Author: Ali Aqrabawi
@@ -31,9 +29,9 @@ module iproute2-ip-link-vlan-ext {
     augment "/iplink:links/iplink:link" {
         description "adding vlan type paramters";
         container vlan {
-            when "../type='vlan'";
+            when "../iplink:type = 'iplink:vlan'";
             description "vlan type interface paramters";
-            leaf protcol {
+            leaf protocol {
                 description "VLAN_PROTO - either 802.1Q or 802.1ad.";
                 default "802.1q";
                 type enumeration {

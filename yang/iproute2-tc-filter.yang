@@ -25,7 +25,7 @@ module iproute2-tc-filter {
 
     list filter {
       description "A list of filters.";
-      
+      key "handle";
       choice dev-or-block { //review
         case dev-case {
           leaf dev {

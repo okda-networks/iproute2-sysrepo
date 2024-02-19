@@ -4,9 +4,9 @@ module iproute2-ip-route {
     prefix "iprt";
 
     import ietf-inet-types { prefix inet; }
-    import ietf-yang-types { prefix yang; }
+    //import ietf-yang-types { prefix yang; }
     organization
-        "Okda networks";
+        "Okda Networks";
 
     contact
         "Author: Ali Aqrabawi

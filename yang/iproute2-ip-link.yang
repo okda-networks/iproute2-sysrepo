@@ -3,10 +3,10 @@ module iproute2-ip-link {
     namespace "urn:okda:iproute2:ip:link";
     prefix "iplink";
 
-    import ietf-inet-types { prefix inet; }
-    import ietf-yang-types { prefix yang; }
+    //import ietf-inet-types { prefix inet; }
+    //import ietf-yang-types { prefix yang; }
     organization
-        "Okda networks";
+        "Okda Networks";
 
     contact
         "Author: Ali Aqrabawi
@@ -35,6 +35,12 @@ module iproute2-ip-link {
     identity link-type {
         description
             "Base identity for ip link types.";
+    }
+
+    identity vlan {
+        base link-type;
+        description
+            "VLAN device.";
     }
 
     identity bond {
