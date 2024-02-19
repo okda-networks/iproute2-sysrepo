@@ -1,5 +1,5 @@
 name: Yang iproute2 CI
-run-name: ${{ github.actor }} basic compilation ⚗️
+run-name: ${{ github.actor }} basic compilation and test ⚗️
 on:
   push:
     branches:
@@ -25,5 +25,7 @@ jobs:
           submodules: true
       - name: make yp_sr
         run : CC=${{ matrix.compiler }} make -j $(nproc)
-      - name: basic run
+      - name: basic compilation check
         run : ldd bin/yp_sr
+      - name: basic test ip address like
+        run : bin/yp_sr
