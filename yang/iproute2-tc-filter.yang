@@ -1,0 +1,70 @@
+module iproute2-tc-filter {
+  yang-version 1.1;
+  namespace "urn:okda:iproute2:tc:filter";
+  prefix "filter";
+  
+  import iproute2-ip-link {prefix iplink;}
+  import iproute2-tc-qdisc {prefix qdisc;}
+
+  organization "Okda Networks";
+  contact
+    "Author: Amjad Daraiseh
+    <adaraiseh@okdanetworks.com>";
+
+  description
+    "This module contain the iproute2 'tc filter' configurations.
+    This is module contains tc - show / manipulate 'filters' settings.
+    refer to https://manpages.debian.org/bookworm/iproute2/tc.8.en.html";
+
+  revision "2024-02-18" {
+    description "Initial version.";
+  }
+
+  container tc-filters {
+    description "Container for all tc filter configurations.";
+
+    list filter {
+      description "A list of filters.";
+      
+      choice dev-or-block { //review
+        case dev-case {
+          leaf dev {
+            type iplink:link-ref;
+            description "Name of device 'interface' the filter is attached to.";
+            mandatory true;
+          }
+          leaf parent-id {
+            type qdisc:parent-id;
+            description "Location of the filter in the traffic control hierarchy.";
+          }
+        }
+        case block-case {
+          leaf block {
+            type uint32;
+            description "Block index for filters and chains.";
+          }
+        }
+      }
+
+      leaf handle {
+        type uint16; // review
+        description "The filter ID.";
+      }
+
+      leaf protocol {
+        type string; //TODO reference it to allowed protocols (typedef-enum)
+        description "The protocol.";
+      }
+
+      leaf prio {
+        type uint8;
+        description "The priority.";
+      }
+
+      leaf filtertype {
+        type string; // TODO reference it to allowed filter types (typedef-enum)
+        description "The type of filter.";
+      }
+    }
+  }
+}

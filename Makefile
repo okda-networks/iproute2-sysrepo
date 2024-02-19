@@ -10,22 +10,22 @@
 # Copyright (C) 2024 Vincent Jardin, <vjardin@free.fr>
 #
 
-EXEC = yp_sr
+EXEC = iproute2_sysrepo
 BIN  = bin
 
 CC        ?= gcc
 LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm
 SUBDIRS   = iproute2
 
-all: yp_sr.c iproute2/config.mk
+all: src/iproute2_sysrepo.c iproute2/config.mk
 	@set -e; \
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i || exit 1; done && \
 	echo "Building $(BIN)/$(EXEC)" && \
 	rm iproute2/ip/rtmon.o
 	rm iproute2/ip/ip.o
-	$(CC) -c yp_sr.c -Iiproute2/ip -Iiproute2/include
-	$(CC) -o $(BIN)/$(EXEC) yp_sr.o `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
+	$(CC) -c src/iproute2_sysrepo.c -Iiproute2/ip -Iiproute2/include
+	$(CC) -o $(BIN)/$(EXEC) iproute2_sysrepo.o `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
 
@@ -34,7 +34,7 @@ clean:
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i clean || exit 1; done && \
 	rm -f iproute2/config.mk && \
-	rm -f yp_sr.o && \
+	rm -f iproute2_sysrepo.o && \
 	rm -f $(BIN)/$(EXEC)
 
 iproute2/config.mk:

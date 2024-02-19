@@ -1,0 +1,53 @@
+module iproute2-ip-route {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:ip:route";
+    prefix "iprt";
+
+    import ietf-inet-types { prefix inet; }
+    import ietf-yang-types { prefix yang; }
+    organization
+        "Okda networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+
+        "This module contain the iproute2 'ip route' configurations ,
+        this is module contains all IP-ROUTE(8) related configs,
+        refer to https://manpages.debian.org/stretch/iproute2/ip-route.8.en.html";
+
+    revision "2024-02-13" {
+        description "Revision 1";
+        reference
+            "YANG model for iproute2 ip route case.";
+    }
+
+    container ip-routes {
+        description
+            "ip route configuration";
+        list route {
+            description
+                "ip route details";
+            key "prefix";
+            leaf prefix{
+                type inet:ipv4-prefix;
+                description
+                    "ipv4 prifix";
+            }
+            leaf interface{
+                description
+                    "nexthop interfaces names";
+                type string;
+            }
+            leaf gateway{
+                description
+                    "nexthop ip";
+                type inet:ipv4-address;
+            }
+
+        }
+    }
+
+}

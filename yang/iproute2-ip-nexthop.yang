@@ -1,0 +1,150 @@
+module iproute2-ip-nexthop {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:ip:nexthop";
+    prefix "ipnh";
+
+    import ietf-inet-types { prefix inet; }
+    import ietf-yang-types { prefix yang; }
+    import iproute2-ip-link { prefix iplink; }
+
+    organization
+        "Okda networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+
+        "This module contain the iproute2 'ip nexthop' configurations ,
+        this is module contains all IP-NEXTHOP(8) related configs,
+        refer to https://manpages.debian.org/experimental/iproute2/ip-nexthop.8.en.html";
+
+    revision "2024-02-13" {
+        description "Revision 1";
+        reference
+            "YANG model for iproute2 ip nexthop case.";
+    }
+
+    container nexthops{
+        description
+            "iproute2 nexthops configurations";
+        list nexthop{
+            key "id";
+            description
+                "nexthop configuraton";
+            leaf id{
+                description "nexthop id";
+                type uint32;
+            }
+            leaf dev{
+                description "Specifies the network interface associated with the nexthop.";
+                type leafref {
+                    path "/iplink:links/iplink:link/iplink:name";
+
+                }
+            }
+            choice via {
+                description "nexthop ip address";
+                container ipv4 {
+                    description "ipv4 nexthop";
+                    leaf address {
+                        description "ipv4 nexthop address";
+                        type inet:ipv4-address;
+                    }
+                }
+                container ipv6 {
+                    description "ipv6 nexthop";
+                    leaf address {
+                        description "ipv6 nexthop address";
+                        type inet:ipv6-address;
+                    }
+                }
+
+            }
+            leaf blackhole {
+                default false;
+                description " specify if this is blackhole nexthop, which discards all traffic sent to it.";
+                type boolean;
+                when "not(../interface) and not(../via)";
+            }
+            leaf online {
+                type boolean;
+                default false;
+                description "Indicates that the nexthop is directly reachable on the link.";
+            }
+            choice encap {
+                container mpls {
+                    leaf label-stack {
+                        type string{
+                            pattern '(\d+)(/\d+)*';
+                        }
+                        description "mpls label stack with labels separated by /, example 200/300";
+
+                    }
+                    leaf ttl {
+                        type uint8 {
+                            range "0..255";
+                        }
+                        description "TTL to use for MPLS header or 0 to inherit from IP header";
+                    }
+                }
+            }
+            list group {
+                key "id weight";
+                description "create a nexthop group. Group specification is id with an optional weight";
+                leaf id{
+                    type leafref {
+                        path "../../id";
+                    }
+                    must ". != ../../id" {
+                        error-message "Cannot reference the current nexthop ID, you can use other nexthops ids";
+                    }
+                    description "specify the nexthop id you want to add to this next";
+                }
+                leaf weight {
+                    description "nexthop weight for this member";
+                    type uint16;
+                }
+                leaf type {
+                    default "mpath";
+                    type enumeration {
+                        enum "mpath";
+                        enum "resilient";
+                    }
+                    description "specifying the nexthop group type";
+
+                }
+                leaf resilient-buckets {
+                    when "../type='resilient'";
+                    type uint16;
+                    description "Number of nexthop buckets. Cannot be changed for an existing group";
+                }
+                leaf resilient-idle-timer {
+                    when "../type='resilient'";
+                    type uint16;
+                    description "Time in seconds in which a nexthop bucket does not see traffic
+                    and is therefore considered idle. Default is 120 seconds";
+                }
+                leaf resilient-unbalanced_timer {
+                    when "../type='resilient'";
+                    type uint32;
+                    description "Time in seconds in which a nexthop group is unbalanced and is therefore considered
+                    unbalanced. The kernel will try to rebalance unbalanced groups,
+                    which might result in someflows being reset. A value of 0 means that no rebalancing
+                    will take place. Default is 0 seconds";
+                }
+            }
+            leaf fdb {
+                type boolean;
+                description "nexthop and nexthop groups for use with layer-2 fdb entries.
+                A fdb nexthop group can only have fdb nexthops. Example: Used to represent a vxlan remote
+                vtep ip. layer-2 vxlan fdb entry pointing to an ecmp nexthop group containing multiple
+                remote vtep ips.";
+            }
+        }
+
+    }
+}
+
+
