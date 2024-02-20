@@ -18,7 +18,7 @@ jobs:
       - name: add missing packages
         uses: ConorMacBride/install-package@v1
         with:
-          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev cmake make gcc
+          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev cmake make gcc libtool-bin
       - name: recursive checkout (with iproute2 submodule)
         uses: actions/checkout@v4
         with:
@@ -40,7 +40,7 @@ jobs:
       - name: run ldconfig
         run: sudo ldconfig
       - name: check sysrepo running ok
-        run: sudo sysrepoctl -l
+        run: sudo ldconfig && sudo sysrepoctl -l
       - name: make iproute2-sysrepo
         run: CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
