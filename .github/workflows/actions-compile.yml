@@ -40,7 +40,7 @@ jobs:
       - name: run ldconfig
         run: sudo ldconfig
       - name: check sysrepo running ok
-        run: sysrepoctl -l
+        run: sudo sysrepoctl -l
       - name: make iproute2-sysrepo
         run: CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
