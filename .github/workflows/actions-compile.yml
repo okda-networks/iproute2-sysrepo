@@ -42,7 +42,7 @@ jobs:
       - name: check sysrepo running ok
         run: sudo ldconfig && sudo sysrepoctl -l
       - name: make iproute2-sysrepo
-        run: CC=${{ matrix.compiler }} make -j $(nproc)
+        run: ./iproute2/configure && CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
         run: ldd bin/iproute2-sysrepo
       - name: basic test ip address like
