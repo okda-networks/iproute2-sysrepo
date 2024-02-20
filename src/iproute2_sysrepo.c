@@ -2,6 +2,7 @@
 /*
  * Authors:     Vincent Jardin, <vjardin@free.fr>
  *              Ali Aqrabawi, <aaqrabaw@okdanetworks.com>
+ *              Amjad Daraiseh, <adaraiseh@okdanetworks.com>
  *
  *              This program is free software; you can redistribute it and/or
  *              modify it under the terms of the GNU Affero General Public
@@ -23,9 +24,21 @@
 #include <sys/socket.h>
 #include <stdbool.h>
 
+/* common iproute2 */
 #include "utils.h"
+
+/* ip module */
 #include "ip_common.h"
 
+/* tc module */
+#include <dlfcn.h>
+#include "tc_util.h"
+#include "tc_common.h"
+
+/* bridge module */
+#include "br_common.h"
+
+/* sysrepo */
 #include <sysrepo.h>
 #include "lib/iproute2_cmdgen.h"
 
@@ -33,6 +46,7 @@
 #define LIBDIR "/usr/lib"
 #endif
 
+/* ip definetions */
 int preferred_family = AF_UNSPEC;
 int human_readable;
 int use_iec;
@@ -48,8 +62,21 @@ int max_flush_loops = 10;
 int batch_mode;
 bool do_all;
 
+/* bridge definitions */
+int compress_vlans;
+
+/* tc definitions */
+int show_raw;
+int show_graph;
+bool use_names;
+static void *BODY;	/* cached handle dlopen(NULL) */
+static struct qdisc_util *qdisc_list;
+static struct filter_util *filter_list;
+
+/* common */
 struct rtnl_handle rth = { .fd = -1 };
 
+/* sysrepo */
 static sr_session_ctx_t *sr_session;
 static sr_conn_ctx_t *sr_connection;
 static sr_subscription_ctx_t *sr_sub_ctx;
@@ -82,6 +109,7 @@ static const struct cmd {
     const char *cmd;
     int (*func)(int argc, char **argv);
 } cmds[] = {
+        // ip cmds
         { "address",	do_ipaddr },
         { "addrlabel",	do_ipaddrlabel },
         { "maddress",	do_multiaddr },
@@ -115,8 +143,161 @@ static const struct cmd {
         { "mptcp",	do_mptcp },
         { "ioam",	do_ioam6 },
         { "stats",	do_ipstats },
+        /* bridge cmds, 
+        do_link argv is changed from link to brlink due to conflict with do_iplink argv (line 119) */
+        { "brlink",	do_link },
+        { "fdb",	do_fdb },
+        { "mdb",	do_mdb },
+	    { "vlan",	do_vlan },
+	    { "vni",	do_vni },
+        // tc cmds
+        { "qdisc",	do_qdisc },
+        { "class",	do_class },
+        { "filter",	do_filter },
+        { "chain",	do_chain },
+        { "actions",	do_action },
         { 0 }
 };
+
+/* tc module main depenedenices */
+static int print_noqopt(struct qdisc_util *qu, FILE *f,
+			struct rtattr *opt)
+{
+	if (opt && RTA_PAYLOAD(opt))
+		fprintf(f, "[Unknown qdisc, optlen=%u] ",
+			(unsigned int) RTA_PAYLOAD(opt));
+	return 0;
+}
+
+static int parse_noqopt(struct qdisc_util *qu, int argc, char **argv,
+			struct nlmsghdr *n, const char *dev)
+{
+	if (argc) {
+		fprintf(stderr,
+			"Unknown qdisc \"%s\", hence option \"%s\" is unparsable\n",
+			qu->id, *argv);
+		return -1;
+	}
+	return 0;
+}
+
+static int print_nofopt(struct filter_util *qu, FILE *f, struct rtattr *opt, __u32 fhandle)
+{
+	if (opt && RTA_PAYLOAD(opt))
+		fprintf(f, "fh %08x [Unknown filter, optlen=%u] ",
+			fhandle, (unsigned int) RTA_PAYLOAD(opt));
+	else if (fhandle)
+		fprintf(f, "fh %08x ", fhandle);
+	return 0;
+}
+
+static int parse_nofopt(struct filter_util *qu, char *fhandle,
+			int argc, char **argv, struct nlmsghdr *n)
+{
+	__u32 handle;
+
+	if (argc) {
+		fprintf(stderr,
+			"Unknown filter \"%s\", hence option \"%s\" is unparsable\n",
+			qu->id, *argv);
+		return -1;
+	}
+	if (fhandle) {
+		struct tcmsg *t = NLMSG_DATA(n);
+
+		if (get_u32(&handle, fhandle, 16)) {
+			fprintf(stderr, "Unparsable filter ID \"%s\"\n", fhandle);
+			return -1;
+		}
+		t->tcm_handle = handle;
+	}
+	return 0;
+}
+
+struct qdisc_util *get_qdisc_kind(const char *str)
+{
+	void *dlh;
+	char buf[256];
+	struct qdisc_util *q;
+
+	for (q = qdisc_list; q; q = q->next)
+		if (strcmp(q->id, str) == 0)
+			return q;
+
+	snprintf(buf, sizeof(buf), "%s/q_%s.so", get_tc_lib(), str);
+	dlh = dlopen(buf, RTLD_LAZY);
+	if (!dlh) {
+		/* look in current binary, only open once */
+		dlh = BODY;
+		if (dlh == NULL) {
+			dlh = BODY = dlopen(NULL, RTLD_LAZY);
+			if (dlh == NULL)
+				goto noexist;
+		}
+	}
+
+	snprintf(buf, sizeof(buf), "%s_qdisc_util", str);
+	q = dlsym(dlh, buf);
+	if (q == NULL)
+		goto noexist;
+
+reg:
+	q->next = qdisc_list;
+	qdisc_list = q;
+	return q;
+
+noexist:
+	q = calloc(1, sizeof(*q));
+	if (q) {
+		q->id = strdup(str);
+		q->parse_qopt = parse_noqopt;
+		q->print_qopt = print_noqopt;
+		goto reg;
+	}
+	return q;
+}
+
+
+struct filter_util *get_filter_kind(const char *str)
+{
+	void *dlh;
+	char buf[256];
+	struct filter_util *q;
+
+	for (q = filter_list; q; q = q->next)
+		if (strcmp(q->id, str) == 0)
+			return q;
+
+	snprintf(buf, sizeof(buf), "%s/f_%s.so", get_tc_lib(), str);
+	dlh = dlopen(buf, RTLD_LAZY);
+	if (dlh == NULL) {
+		dlh = BODY;
+		if (dlh == NULL) {
+			dlh = BODY = dlopen(NULL, RTLD_LAZY);
+			if (dlh == NULL)
+				goto noexist;
+		}
+	}
+
+	snprintf(buf, sizeof(buf), "%s_filter_util", str);
+	q = dlsym(dlh, buf);
+	if (q == NULL)
+		goto noexist;
+
+reg:
+	q->next = filter_list;
+	filter_list = q;
+	return q;
+noexist:
+	q = calloc(1, sizeof(*q));
+	if (q) {
+		strncpy(q->id, str, 15);
+		q->parse_fopt = parse_nofopt;
+		q->print_fopt = print_nofopt;
+		goto reg;
+	}
+	return q;
+}
 
 static int do_cmd(const char *argv0, int argc, char **argv)
 {
