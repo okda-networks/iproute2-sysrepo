@@ -14,7 +14,7 @@ EXEC = iproute2-sysrepo
 BIN  = bin
 
 CC        ?= gcc
-LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm
+LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm -ldl -rdynamic
 SUBDIRS   = iproute2
 
 all: src/iproute2_sysrepo.c iproute2/config.mk
