@@ -11,10 +11,10 @@
  * Copyright (C) 2024 Okda Networks, <aaqrbaw@okdanetworks.com>
  */
 
-#include "lyd2cmd_generator.h"
+#include "iproute2_cmdgen.h"
 
 // not implemented yet
-struct cmd_args **generate_cmd_argv(const struct lyd_node *change_node)
+struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
 {
     static struct cmd_args *cmds[CMDS_ARRAY_SIZE] = {NULL};
     return cmds;

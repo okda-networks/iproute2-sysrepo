@@ -18,7 +18,7 @@ jobs:
       - name: add missing packages
         uses: ConorMacBride/install-package@v1
         with:
-          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev cmake make gcc libtool-bin
+          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev
       - name: libyang v2.1.148 from upstream
         uses: actions/checkout@v4
         with:
@@ -32,20 +32,20 @@ jobs:
           repository: 'sysrepo/sysrepo.git'
           ref: 'v2.2.150'
       - name: make sysrepo v2.2.150 from upstream
-        run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && sudo make install
+        run : mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE:String="Release" .. && make -j $(nproc) && sudo make install
       - name: run ldconfig
-        run: sudo ldconfig
+        run : sudo ldconfig
       - name: check sysrepo running ok
-        run: sudo ldconfig && sudo sysrepoctl -l
+        run : sudo ldconfig && sudo sysrepoctl -l
       - name: recursive checkout (with iproute2 submodule)
         uses: actions/checkout@v4
         with:
           submodules: true
       - name: make iproute2-sysrepo
-        run:  CC=gcc make -j $(nproc)
+        run : CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
-        run: ldd bin/iproute2-sysrepo
+        run : ldd bin/iproute2-sysrepo
       - name: basic test ip address like
-        run: bin/iproute2-sysrepo link
+        run : bin/iproute2-sysrepo link
       - name: yanglint
-        run: make check
+        run : make check

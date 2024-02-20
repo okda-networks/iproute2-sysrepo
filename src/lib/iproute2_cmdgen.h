@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-#ifndef IPROUTE2_SYSREPO_LYD2CMD_GENERATOR_H
-#define IPROUTE2_SYSREPO_LYD2CMD_GENERATOR_H
+#ifndef IPROUTE2_SYSREPO_IPROUTE2_CMDGEN_H
+#define IPROUTE2_SYSREPO_IPROUTE2_CMDGEN_H
 
 #include <libyang/libyang.h>
 
@@ -24,6 +24,6 @@ struct cmd_args{
  * @param[in] node Data node diff to generate the argc, argv.
  * @return Array of cmd_args struct.
  */
-struct cmd_args** generate_cmd_argv(const struct lyd_node *change_node);
+struct cmd_args** lyd2cmd_argv(const struct lyd_node *change_node);
 
-#endif// IPROUTE2_SYSREPO_LYD2CMD_GENERATOR_H
+#endif// IPROUTE2_SYSREPO_IPROUTE2_CMDGEN_H

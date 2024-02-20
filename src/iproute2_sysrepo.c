@@ -10,7 +10,7 @@
  *              version.
  *
  * Copyright (C) 2024 Vincent Jardin, <vjardin@free.fr>
- *               2024 Okda Netrworks, <contact@okdanetworks.com>
+ *               2024 Okda Networks, <contact@okdanetworks.com>
  */
 
 /* system includes */
@@ -27,7 +27,7 @@
 #include "ip_common.h"
 
 #include <sysrepo.h>
-#include "lib/lyd2cmd_generator.h"
+#include "lib/iproute2_cmdgen.h"
 
 #ifndef LIBDIR
 #define LIBDIR "/usr/lib"
@@ -144,7 +144,7 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         return SR_ERR_INVAL_ARG;
     }
 
-    ipr2_cmds = generate_cmd_argv(change_dnode);
+    ipr2_cmds = lyd2cmd_argv(change_dnode);
 
     for (int i = 0; ipr2_cmds[i] != NULL; i++) {
         ret = do_cmd(ipr2_cmds[i]->argv[1], ipr2_cmds[i]->argc - 1, ipr2_cmds[i]->argv + 1);
@@ -192,7 +192,6 @@ static void sr_subscribe_config()
     char **ip_module = iproute2_ip_modules;
     int ret;
     while (*ip_module != NULL) {
-        printf("%s: subscribing to module '%s'\n",__func__ ,*ip_module);
         ret = sr_module_change_subscribe(sr_session, *ip_module, NULL,
                                          ip_sr_config_change_cb, NULL,
                                          0, SR_SUBSCR_DEFAULT,
@@ -201,6 +200,10 @@ static void sr_subscribe_config()
             fprintf(stderr,
                     "%s: failed to subscribe to module (%s): %s\n",
                     __func__, *ip_module, sr_strerror(ret));
+        else
+            fprintf(stdout,
+                    "%s: successfully subscribed to module (%s)\n",
+                    __func__, *ip_module);
 
         ++ip_module;
     }
