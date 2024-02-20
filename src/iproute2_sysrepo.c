@@ -126,6 +126,9 @@ static int do_cmd(const char *argv0, int argc, char **argv)
         if (matches(argv0, c->cmd) == 0)
             return -(c->func(argc - 1, argv + 1));
     }
+    fprintf(stderr, "argument \"%s\" is unknown!\n"
+                    "run with no arguments to start the sysrepo integration, "
+                    "or use iproute2's arguments to execute command.\n", argv0);
 
     return EXIT_FAILURE;
 }
@@ -215,7 +218,7 @@ static void sr_subscribe_config()
     }
 }
 
-int sysrepo_init(){
+int sysrepo_start(){
     int ret;
     ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
     if (ret != SR_ERR_OK) {
@@ -244,7 +247,7 @@ cleanup:
 int
 main(int argc, char **argv) {
     if (argc == 1)
-        return sysrepo_init();
+        return sysrepo_start();
 
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
