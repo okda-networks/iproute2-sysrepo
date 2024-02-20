@@ -14,18 +14,24 @@ EXEC = iproute2-sysrepo
 BIN  = bin
 
 CC        ?= gcc
-LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm
+LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm -L/usr/local/lib
 SUBDIRS   = iproute2
 
-all: src/iproute2_sysrepo.c iproute2/config.mk
+IPR2_SR_LIB_SRC = $(wildcard src/lib/*.c)
+IPR2_SR_SRC = $(wildcard src/*.c)
+
+IPR2_SR_LIB_OBJ = $(IPR2_SR_LIB_SRC:.c=.o)
+IPR2_SR_OBJ = $(IPR2_SR_SRC:.c=.o)
+
+
+all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	@set -e; \
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i || exit 1; done && \
 	echo "Building $(BIN)/$(EXEC)" && \
 	rm iproute2/ip/rtmon.o
 	rm iproute2/ip/ip.o
-	$(CC) -c src/iproute2_sysrepo.c -Iiproute2/ip -Iiproute2/include
-	$(CC) -o $(BIN)/$(EXEC) iproute2_sysrepo.o `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
+	$(CC) -o $(BIN)/$(EXEC)  $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
 
@@ -34,7 +40,8 @@ clean:
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i clean || exit 1; done && \
 	rm -f iproute2/config.mk && \
-	rm -f iproute2_sysrepo.o && \
+	rm -f $(IPR2_SR_OBJ) && \
+	rm -f $(IPR2_SR_LIB_OBJ) && \
 	rm -f $(BIN)/$(EXEC)
 
 iproute2/config.mk:
@@ -45,3 +52,9 @@ iproute2/config.mk:
 
 check:
 	yanglint yang/*.yang
+
+$(IPR2_SR_LIB_OBJ): $(IPR2_SR_LIB_SRC)
+	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/include
+
+$(IPR2_SR_OBJ): $(IPR2_SR_SRC)
+	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/include
