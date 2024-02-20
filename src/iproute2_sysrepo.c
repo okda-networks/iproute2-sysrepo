@@ -127,8 +127,8 @@ static int do_cmd(const char *argv0, int argc, char **argv)
             return -(c->func(argc - 1, argv + 1));
     }
     fprintf(stderr, "argument \"%s\" is unknown!\n"
-                    "run with no arguments to start the sysrepo integration, "
-                    "or use iproute2's arguments to execute command.\n", argv0);
+                    "run with no arguments to start iproute2-sysrepo, "
+                    "or use iproute2's arguments to execute iproute2 command.\n", argv0);
 
     return EXIT_FAILURE;
 }
