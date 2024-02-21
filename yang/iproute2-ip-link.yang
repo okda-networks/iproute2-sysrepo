@@ -3,6 +3,7 @@ module iproute2-ip-link {
     namespace "urn:okda:iproute2:ip:link";
     prefix "iplink";
 
+    import iproute2-cmdgen-extensions { prefix ir2cgen; }
     //import ietf-inet-types { prefix inet; }
     //import ietf-yang-types { prefix yang; }
     organization
@@ -127,20 +128,18 @@ module iproute2-ip-link {
             "Virtual tunnel interface.";
     }
 
-    identity other {
-        base link-type;
-        description
-            "generic network interface (e.a eth0, lo1 .. etc)";
-    }
-
-
 
     container links {
+        ir2cgen:cmd-add "ip link add";
+        ir2cgen:cmd-update "ip link set";
+        ir2cgen:cmd-delete "ip link delete";
         description "ip-link - network device configuration";
         list link {
-            key "name";
+        ir2cgen:cmd-start;
+        key "name";
             description "ip-link - network device";
             leaf name {
+                ir2cgen:value-only-on-update;
                 type string;
                 description "link name";
             }

@@ -5,6 +5,7 @@ module iproute2-ip-nexthop {
 
     import ietf-inet-types { prefix inet; }
     import iproute2-ip-link { prefix iplink; }
+    import iproute2-cmdgen-extensions { prefix ir2cgen; }
 
     organization
         "Okda Networks";
@@ -26,13 +27,18 @@ module iproute2-ip-nexthop {
     }
 
     container nexthops{
+        ir2cgen:cmd-add "ip link add";
+        ir2cgen:cmd-update "ip link set";
+        ir2cgen:cmd-delete "ip link delete";
         description
             "iproute2 nexthops configurations";
         list nexthop{
+            ir2cgen:cmd-start;
             key "id";
             description
                 "nexthop configuraton";
             leaf id{
+                ir2cgen:value-only-on-update;
                 description "nexthop id";
                 type uint32;
             }
