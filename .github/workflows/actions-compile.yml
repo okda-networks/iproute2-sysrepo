@@ -48,7 +48,7 @@ jobs:
       - name: basic test ip address like
         run : bin/iproute2-sysrepo ip link
       - name: test ip link add
-        run : sudo bin/iproute2-sysrepo ip add br-slave type dummy; sudo bin/iproute2-sysrepo ip link add br0 type bridge; sudo bin/iproute2-sysrepo ip link set br-slave master br0
+        run : sudo bin/iproute2-sysrepo ip link add br-slave type dummy; sudo bin/iproute2-sysrepo ip link add br0 type bridge; sudo bin/iproute2-sysrepo ip link set br-slave master br0
       - name: basic test bridge link
         run : bin/iproute2-sysrepo bridge link
       - name: basic test tc qdisc
