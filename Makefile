@@ -33,6 +33,11 @@ all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	rm iproute2/ip/ip.o
 	rm iproute2/bridge/bridge.o
 	rm iproute2/tc/tc.o
+	@echo ""
+	@echo "Patching conflicting symbols"
+	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/link.o
+	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/monitor.o
+	@echo ""
 	$(CC) -o $(BIN)/$(EXEC)  $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
