@@ -46,7 +46,17 @@ jobs:
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
       - name: basic test "ip link add/set"
-        run : sudo bin/iproute2-sysrepo ip link add br-slave type dummy; sudo bin/iproute2-sysrepo ip link add br0 type bridge vlan_filtering 1; sudo bin/iproute2-sysrepo ip link set br-slave master br0
+        run : |
+              set -e
+              sudo bin/iproute2-sysrepo ip link add br-slave type dummy
+              sudo bin/iproute2-sysrepo ip link add br0 type bridge vlan_filtering 1
+              if ! sudo bin/iproute2-sysrepo ip link set br-slave master br0; then
+                exit_code=$?
+                if [ "$exit_code" -ne 1 ]; then
+                  echo "Failed: Command failed with unexpected exit code $exit_code"
+                  exit $exit_code
+                fi
+              fi
       - name: basic test "ip link"
         run : bin/iproute2-sysrepo ip link
       - name: basic test "bridge vlan add"
@@ -58,6 +68,14 @@ jobs:
       - name: basic test "tc qdisc"
         run : bin/iproute2-sysrepo tc qdisc
       - name: basic test "bad argv0"
-        run : bin/iproute2-sysrepo notip link
+        run : |
+              sudo bin/iproute2-sysrepo bad-arg || exit_code=$?
+              if [ "$exit_code" -eq 1 ]; then
+                  echo "Passed: exited with code 1"
+                  exit 0
+              else
+                  echo "Failed: did not exit with code 1."
+                  exit 1
+              fi
       - name: yanglint
         run : make check
