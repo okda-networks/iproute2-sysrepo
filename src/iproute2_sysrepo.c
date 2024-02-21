@@ -108,8 +108,7 @@ const char *get_ip_lib_dir(void)
 static const struct cmd {
     const char *cmd;
     int (*func)(int argc, char **argv);
-} cmds[] = {
-        // ip cmds
+} ip_cmds[] = {
         { "address",	do_ipaddr },
         { "addrlabel",	do_ipaddrlabel },
         { "maddress",	do_multiaddr },
@@ -143,14 +142,15 @@ static const struct cmd {
         { "mptcp",	do_mptcp },
         { "ioam",	do_ioam6 },
         { "stats",	do_ipstats },
-        /* bridge cmds, 
-        do_link argv is changed from link to brlink due to conflict with do_iplink argv (line 119) */
-        { "brlink",	do_link },
+        { 0 }
+}, bridge_cmds[] = {
+        { "link",	do_link },
         { "fdb",	do_fdb },
         { "mdb",	do_mdb },
 	    { "vlan",	do_vlan },
 	    { "vni",	do_vni },
-        // tc cmds
+        { 0 }
+}, tc_cmds[] = {
         { "qdisc",	do_qdisc },
         { "class",	do_class },
         { "filter",	do_filter },
@@ -301,11 +301,19 @@ noexist:
 
 static int do_cmd(const char *argv0, int argc, char **argv)
 {
+    const struct cmd *cmds;
     const struct cmd *c;
-
-    for (c = cmds; c->cmd; ++c) {
-        if (matches(argv0, c->cmd) == 0)
-            return -(c->func(argc - 1, argv + 1));
+    if (!strcmp(argv0,"ip"))
+        cmds = ip_cmds;
+    if (!strcmp(argv0,"bridge"))
+        cmds = bridge_cmds;
+    if (!strcmp(argv0,"tc"))
+        cmds = tc_cmds;
+    if (argc > 1){
+        for (c = cmds; c->cmd; ++c) {
+            if (matches(argv[1], c->cmd) == 0)
+                return -(c->func(argc - 2, argv + 2));
+        }
     }
 
     return EXIT_FAILURE;
