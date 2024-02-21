@@ -10,6 +10,7 @@
  *
  * Copyright (C) 2024 Okda Networks, <aaqrbaw@okdanetworks.com>
  */
+
 #include <ctype.h>
 
 #include "iproute2_cmdgen.h"
@@ -24,7 +25,7 @@ typedef enum {
 } oper_t;
 
 
-void copy_argv(char ***dest, char **src, int argc)
+void dup_argv(char ***dest, char **src, int argc)
 {
     *dest = (char **) malloc(argc * sizeof(char *));
     if (*dest == NULL) {
@@ -46,6 +47,7 @@ void free_argv(char **argv, int argc)
     // Free memory for each string
     for (int i = 0; i < argc; i++) {
         free(argv[i]);
+        argv[i] = NULL;
     }
     // Free memory for the array of pointers
     free(argv);
@@ -171,7 +173,7 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx, char **op
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
     }
-    copy_argv(&((cmds)[*cmd_idx]->argv), argv, argc);
+    dup_argv(&((cmds)[*cmd_idx]->argv), argv, argc);
     (cmds)[*cmd_idx]->argc = argc;
     (*cmd_idx)++;
     memset(cmd_line, 0, CMD_LINE_SIZE);
