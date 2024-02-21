@@ -304,7 +304,7 @@ static int do_cmd(int argc, char **argv)
     const struct cmd *cmds;
     const struct cmd *c;
     if (argc < 2) {
-        fprintf(stderr, "incomplete cmd, argc=%d\n", argc);
+        fprintf(stderr, "missing arguments, 2 or more needed, argc=%d\n", argc);
         return EXIT_FAILURE;
     }
 
