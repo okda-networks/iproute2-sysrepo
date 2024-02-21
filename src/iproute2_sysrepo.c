@@ -305,10 +305,15 @@ static int do_cmd(const char *argv0, int argc, char **argv)
     const struct cmd *c;
     if (!strcmp(argv0,"ip"))
         cmds = ip_cmds;
-    if (!strcmp(argv0,"bridge"))
+    else if (!strcmp(argv0,"bridge"))
         cmds = bridge_cmds;
-    if (!strcmp(argv0,"tc"))
+    else if (!strcmp(argv0,"tc"))
         cmds = tc_cmds;
+    else {
+        fprintf(stderr, "Command '%s' is unknown\n",argv0);
+        return EXIT_FAILURE;
+    }
+
     if (argc > 1){
         for (c = cmds; c->cmd; ++c) {
             if (matches(argv[1], c->cmd) == 0)
