@@ -27,9 +27,9 @@ module iproute2-ip-nexthop {
     }
 
     container nexthops{
-        ir2cgen:cmd-add "ip link add";
-        ir2cgen:cmd-update "ip link set";
-        ir2cgen:cmd-delete "ip link delete";
+        ir2cgen:cmd-add "ip nexthop add";
+        ir2cgen:cmd-update "ip nexthop replace";
+        ir2cgen:cmd-delete "ip nexthop del";
         description
             "iproute2 nexthops configurations";
         list nexthop{
