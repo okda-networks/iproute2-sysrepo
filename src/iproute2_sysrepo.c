@@ -15,14 +15,14 @@
  */
 
 /* system includes */
-#include <unistd.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 /* common iproute2 */
 #include "utils.h"
@@ -31,16 +31,16 @@
 #include "ip_common.h"
 
 /* tc module */
-#include <dlfcn.h>
-#include "tc_util.h"
 #include "tc_common.h"
+#include "tc_util.h"
+#include <dlfcn.h>
 
 /* bridge module */
 #include "br_common.h"
 
 /* sysrepo */
-#include <sysrepo.h>
 #include "lib/iproute2_cmdgen.h"
+#include <sysrepo.h>
 
 #ifndef LIBDIR
 #define LIBDIR "/usr/lib"
@@ -69,20 +69,20 @@ int compress_vlans;
 int show_raw;
 int show_graph;
 bool use_names;
-static void *BODY;	/* cached handle dlopen(NULL) */
+static void *BODY; /* cached handle dlopen(NULL) */
 static struct qdisc_util *qdisc_list;
 static struct filter_util *filter_list;
 
 /* common */
-struct rtnl_handle rth = { .fd = -1 };
+struct rtnl_handle rth = {.fd = -1};
 
 /* sysrepo */
 static sr_session_ctx_t *sr_session;
 static sr_conn_ctx_t *sr_connection;
 static sr_subscription_ctx_t *sr_sub_ctx;
-static char *iproute2_ip_modules[] = { "iproute2-ip-link",
-                                       "iproute2-ip-nexthop",
-                                       NULL }; // null terminator
+static char *iproute2_ip_modules[] = {"iproute2-ip-link",
+                                      "iproute2-ip-nexthop",
+                                      NULL};// null terminator
 
 
 volatile int exit_application = 0;
@@ -109,220 +109,211 @@ static const struct cmd {
     const char *cmd;
     int (*func)(int argc, char **argv);
 } ip_cmds[] = {
-        { "address",	do_ipaddr },
-        { "addrlabel",	do_ipaddrlabel },
-        { "maddress",	do_multiaddr },
-        { "route",	do_iproute },
-        { "rule",	do_iprule },
-        { "neighbor",	do_ipneigh },
-        { "neighbour",	do_ipneigh },
-        { "ntable",	do_ipntable },
-        { "ntbl",	do_ipntable },
-        { "link",	do_iplink },
-        { "l2tp",	do_ipl2tp },
-        { "fou",	do_ipfou },
-        { "ila",	do_ipila },
-        { "macsec",	do_ipmacsec },
-        { "tunnel",	do_iptunnel },
-        { "tunl",	do_iptunnel },
-        { "tuntap",	do_iptuntap },
-        { "tap",	do_iptuntap },
-        { "token",	do_iptoken },
-        { "tcpmetrics",	do_tcp_metrics },
-        { "tcp_metrics", do_tcp_metrics },
-        { "monitor",	do_ipmonitor },
-        { "xfrm",	do_xfrm },
-        { "mroute",	do_multiroute },
-        { "mrule",	do_multirule },
-        { "netns",	do_netns },
-        { "netconf",	do_ipnetconf },
-        { "vrf",	do_ipvrf},
-        { "sr",		do_seg6 },
-        { "nexthop",	do_ipnh },
-        { "mptcp",	do_mptcp },
-        { "ioam",	do_ioam6 },
-        { "stats",	do_ipstats },
-        { 0 }
-}, bridge_cmds[] = {
-        { "link",	do_link },
-        { "fdb",	do_fdb },
-        { "mdb",	do_mdb },
-	    { "vlan",	do_vlan },
-	    { "vni",	do_vni },
-        { 0 }
-}, tc_cmds[] = {
-        { "qdisc",	do_qdisc },
-        { "class",	do_class },
-        { "filter",	do_filter },
-        { "chain",	do_chain },
-        { "actions",	do_action },
-        { 0 }
-};
+        {"address", do_ipaddr},
+        {"addrlabel", do_ipaddrlabel},
+        {"maddress", do_multiaddr},
+        {"route", do_iproute},
+        {"rule", do_iprule},
+        {"neighbor", do_ipneigh},
+        {"neighbour", do_ipneigh},
+        {"ntable", do_ipntable},
+        {"ntbl", do_ipntable},
+        {"link", do_iplink},
+        {"l2tp", do_ipl2tp},
+        {"fou", do_ipfou},
+        {"ila", do_ipila},
+        {"macsec", do_ipmacsec},
+        {"tunnel", do_iptunnel},
+        {"tunl", do_iptunnel},
+        {"tuntap", do_iptuntap},
+        {"tap", do_iptuntap},
+        {"token", do_iptoken},
+        {"tcpmetrics", do_tcp_metrics},
+        {"tcp_metrics", do_tcp_metrics},
+        {"monitor", do_ipmonitor},
+        {"xfrm", do_xfrm},
+        {"mroute", do_multiroute},
+        {"mrule", do_multirule},
+        {"netns", do_netns},
+        {"netconf", do_ipnetconf},
+        {"vrf", do_ipvrf},
+        {"sr", do_seg6},
+        {"nexthop", do_ipnh},
+        {"mptcp", do_mptcp},
+        {"ioam", do_ioam6},
+        {"stats", do_ipstats},
+        {0}},
+  bridge_cmds[] = {{"link", do_link}, {"fdb", do_fdb}, {"mdb", do_mdb}, {"vlan", do_vlan}, {"vni", do_vni}, {0}}, tc_cmds[] = {{"qdisc", do_qdisc}, {"class", do_class}, {"filter", do_filter}, {"chain", do_chain}, {"actions", do_action}, {0}};
 
 /* tc module main depenedenices */
 static int print_noqopt(struct qdisc_util *qu, FILE *f,
-			struct rtattr *opt)
+                        struct rtattr *opt)
 {
-	if (opt && RTA_PAYLOAD(opt))
-		fprintf(f, "[Unknown qdisc, optlen=%u] ",
-			(unsigned int) RTA_PAYLOAD(opt));
-	return 0;
+    if (opt && RTA_PAYLOAD(opt))
+        fprintf(f, "[Unknown qdisc, optlen=%u] ",
+                (unsigned int) RTA_PAYLOAD(opt));
+    return 0;
 }
 
 static int parse_noqopt(struct qdisc_util *qu, int argc, char **argv,
-			struct nlmsghdr *n, const char *dev)
+                        struct nlmsghdr *n, const char *dev)
 {
-	if (argc) {
-		fprintf(stderr,
-			"Unknown qdisc \"%s\", hence option \"%s\" is unparsable\n",
-			qu->id, *argv);
-		return -1;
-	}
-	return 0;
+    if (argc) {
+        fprintf(stderr,
+                "Unknown qdisc \"%s\", hence option \"%s\" is unparsable\n",
+                qu->id, *argv);
+        return -1;
+    }
+    return 0;
 }
 
 static int print_nofopt(struct filter_util *qu, FILE *f, struct rtattr *opt, __u32 fhandle)
 {
-	if (opt && RTA_PAYLOAD(opt))
-		fprintf(f, "fh %08x [Unknown filter, optlen=%u] ",
-			fhandle, (unsigned int) RTA_PAYLOAD(opt));
-	else if (fhandle)
-		fprintf(f, "fh %08x ", fhandle);
-	return 0;
+    if (opt && RTA_PAYLOAD(opt))
+        fprintf(f, "fh %08x [Unknown filter, optlen=%u] ",
+                fhandle, (unsigned int) RTA_PAYLOAD(opt));
+    else if (fhandle)
+        fprintf(f, "fh %08x ", fhandle);
+    return 0;
 }
 
 static int parse_nofopt(struct filter_util *qu, char *fhandle,
-			int argc, char **argv, struct nlmsghdr *n)
+                        int argc, char **argv, struct nlmsghdr *n)
 {
-	__u32 handle;
+    __u32 handle;
 
-	if (argc) {
-		fprintf(stderr,
-			"Unknown filter \"%s\", hence option \"%s\" is unparsable\n",
-			qu->id, *argv);
-		return -1;
-	}
-	if (fhandle) {
-		struct tcmsg *t = NLMSG_DATA(n);
+    if (argc) {
+        fprintf(stderr,
+                "Unknown filter \"%s\", hence option \"%s\" is unparsable\n",
+                qu->id, *argv);
+        return -1;
+    }
+    if (fhandle) {
+        struct tcmsg *t = NLMSG_DATA(n);
 
-		if (get_u32(&handle, fhandle, 16)) {
-			fprintf(stderr, "Unparsable filter ID \"%s\"\n", fhandle);
-			return -1;
-		}
-		t->tcm_handle = handle;
-	}
-	return 0;
+        if (get_u32(&handle, fhandle, 16)) {
+            fprintf(stderr, "Unparsable filter ID \"%s\"\n", fhandle);
+            return -1;
+        }
+        t->tcm_handle = handle;
+    }
+    return 0;
 }
 
 struct qdisc_util *get_qdisc_kind(const char *str)
 {
-	void *dlh;
-	char buf[256];
-	struct qdisc_util *q;
+    void *dlh;
+    char buf[256];
+    struct qdisc_util *q;
 
-	for (q = qdisc_list; q; q = q->next)
-		if (strcmp(q->id, str) == 0)
-			return q;
+    for (q = qdisc_list; q; q = q->next)
+        if (strcmp(q->id, str) == 0)
+            return q;
 
-	snprintf(buf, sizeof(buf), "%s/q_%s.so", get_tc_lib(), str);
-	dlh = dlopen(buf, RTLD_LAZY);
-	if (!dlh) {
-		/* look in current binary, only open once */
-		dlh = BODY;
-		if (dlh == NULL) {
-			dlh = BODY = dlopen(NULL, RTLD_LAZY);
-			if (dlh == NULL)
-				goto noexist;
-		}
-	}
+    snprintf(buf, sizeof(buf), "%s/q_%s.so", get_tc_lib(), str);
+    dlh = dlopen(buf, RTLD_LAZY);
+    if (!dlh) {
+        /* look in current binary, only open once */
+        dlh = BODY;
+        if (dlh == NULL) {
+            dlh = BODY = dlopen(NULL, RTLD_LAZY);
+            if (dlh == NULL)
+                goto noexist;
+        }
+    }
 
-	snprintf(buf, sizeof(buf), "%s_qdisc_util", str);
-	q = dlsym(dlh, buf);
-	if (q == NULL)
-		goto noexist;
+    snprintf(buf, sizeof(buf), "%s_qdisc_util", str);
+    q = dlsym(dlh, buf);
+    if (q == NULL)
+        goto noexist;
 
 reg:
-	q->next = qdisc_list;
-	qdisc_list = q;
-	return q;
+    q->next = qdisc_list;
+    qdisc_list = q;
+    return q;
 
 noexist:
-	q = calloc(1, sizeof(*q));
-	if (q) {
-		q->id = strdup(str);
-		q->parse_qopt = parse_noqopt;
-		q->print_qopt = print_noqopt;
-		goto reg;
-	}
-	return q;
+    q = calloc(1, sizeof(*q));
+    if (q) {
+        q->id = strdup(str);
+        q->parse_qopt = parse_noqopt;
+        q->print_qopt = print_noqopt;
+        goto reg;
+    }
+    return q;
 }
 
 
 struct filter_util *get_filter_kind(const char *str)
 {
-	void *dlh;
-	char buf[256];
-	struct filter_util *q;
+    void *dlh;
+    char buf[256];
+    struct filter_util *q;
 
-	for (q = filter_list; q; q = q->next)
-		if (strcmp(q->id, str) == 0)
-			return q;
+    for (q = filter_list; q; q = q->next)
+        if (strcmp(q->id, str) == 0)
+            return q;
 
-	snprintf(buf, sizeof(buf), "%s/f_%s.so", get_tc_lib(), str);
-	dlh = dlopen(buf, RTLD_LAZY);
-	if (dlh == NULL) {
-		dlh = BODY;
-		if (dlh == NULL) {
-			dlh = BODY = dlopen(NULL, RTLD_LAZY);
-			if (dlh == NULL)
-				goto noexist;
-		}
-	}
+    snprintf(buf, sizeof(buf), "%s/f_%s.so", get_tc_lib(), str);
+    dlh = dlopen(buf, RTLD_LAZY);
+    if (dlh == NULL) {
+        dlh = BODY;
+        if (dlh == NULL) {
+            dlh = BODY = dlopen(NULL, RTLD_LAZY);
+            if (dlh == NULL)
+                goto noexist;
+        }
+    }
 
-	snprintf(buf, sizeof(buf), "%s_filter_util", str);
-	q = dlsym(dlh, buf);
-	if (q == NULL)
-		goto noexist;
+    snprintf(buf, sizeof(buf), "%s_filter_util", str);
+    q = dlsym(dlh, buf);
+    if (q == NULL)
+        goto noexist;
 
 reg:
-	q->next = filter_list;
-	filter_list = q;
-	return q;
+    q->next = filter_list;
+    filter_list = q;
+    return q;
 noexist:
-	q = calloc(1, sizeof(*q));
-	if (q) {
-		strncpy(q->id, str, 15);
-		q->parse_fopt = parse_nofopt;
-		q->print_fopt = print_nofopt;
-		goto reg;
-	}
-	return q;
+    q = calloc(1, sizeof(*q));
+    if (q) {
+        strncpy(q->id, str, 15);
+        q->parse_fopt = parse_nofopt;
+        q->print_fopt = print_nofopt;
+        goto reg;
+    }
+    return q;
 }
 
-static int do_cmd(const char *argv0, int argc, char **argv)
+static int do_cmd(int argc, char **argv)
 {
     const struct cmd *cmds;
     const struct cmd *c;
-    if (!strcmp(argv0,"ip"))
-        cmds = ip_cmds;
-    else if (!strcmp(argv0,"bridge"))
-        cmds = bridge_cmds;
-    else if (!strcmp(argv0,"tc"))
-        cmds = tc_cmds;
-    else {
-        fprintf(stderr, "Command '%s' is unknown\n",argv0);
+    if (argc < 2) {
+        fprintf(stderr, "incomplete cmd, argc=%d\n", argc);
         return EXIT_FAILURE;
     }
 
-    if (argc > 1){
-        for (c = cmds; c->cmd; ++c) {
-            if (matches(argv[1], c->cmd) == 0)
-                return -(c->func(argc - 2, argv + 2));
-        }
+    if (!strcmp(argv[0], "ip"))
+        cmds = ip_cmds;
+    else if (!strcmp(argv[0], "bridge"))
+        cmds = bridge_cmds;
+    else if (!strcmp(argv[0], "tc"))
+        cmds = tc_cmds;
+    else {
+        fprintf(stderr, "Command '%s' is unknown\n", argv[0]);
+        return EXIT_FAILURE;
     }
+
+    for (c = cmds; c->cmd; ++c) {
+        if (matches(argv[1], c->cmd) == 0)
+            return -(c->func(argc - 2, argv + 2));
+    }
+
     fprintf(stderr, "argument \"%s\" is unknown!\n"
                     "run with no arguments to start iproute2-sysrepo, "
-                    "or use iproute2's arguments to execute iproute2 command.\n", argv0);
+                    "or use iproute2's arguments to execute iproute2 command.\n",
+            argv[0]);
 
     return EXIT_FAILURE;
 }
@@ -344,10 +335,11 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
     ipr2_cmds = lyd2cmd_argv(change_dnode);
 
     for (int i = 0; ipr2_cmds[i] != NULL; i++) {
-        ret = do_cmd(ipr2_cmds[i]->argv[1], ipr2_cmds[i]->argc - 1, ipr2_cmds[i]->argv + 1);
+        ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         if (ret != EXIT_SUCCESS)// TODO: add rollback functionality.
             return SR_ERR_INTERNAL;
     }
+
     return SR_ERR_OK;
 }
 
@@ -412,7 +404,8 @@ static void sr_subscribe_config()
     }
 }
 
-int sysrepo_start(){
+int sysrepo_start()
+{
     int ret;
     ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
     if (ret != SR_ERR_OK) {
@@ -438,15 +431,15 @@ cleanup:
     return EXIT_SUCCESS;
 }
 
-int
-main(int argc, char **argv) {
-    if (argc == 1)
-        return sysrepo_start();
-
+int main(int argc, char **argv)
+{
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
 
-    int ret = do_cmd(argv[1], argc - 1, argv + 1);
+    if (argc == 1)
+        return sysrepo_start();
+
+    int ret = do_cmd(argc - 1, argv + 1);
     rtnl_close(&rth);
     return ret;
 }
