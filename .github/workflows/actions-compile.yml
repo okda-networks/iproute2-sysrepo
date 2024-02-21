@@ -46,12 +46,12 @@ jobs:
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
       - name: basic test ip address like
-        run : bin/iproute2-sysrepo link
+        run : bin/iproute2-sysrepo ip link
       - name: test ip link add
         run : sudo bin/iproute2-sysrepo bridge ip add br-slave type dummy; sudo bin/iproute2-sysrepo ip link add br0 type bridge; sudo bin/iproute2-sysrepo ip link set br-slave master br0
       - name: basic test bridge link
         run : bin/iproute2-sysrepo bridge link
       - name: basic test tc qdisc
-        run : bin/iproute2-sysrepo qdisc
+        run : bin/iproute2-sysrepo tc qdisc
       - name: yanglint
         run : make check
