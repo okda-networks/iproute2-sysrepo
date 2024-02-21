@@ -299,30 +299,35 @@ noexist:
 	return q;
 }
 
-static int do_cmd(const char *argv0, int argc, char **argv)
+static int do_cmd(int argc, char **argv)
 {
     const struct cmd *cmds;
     const struct cmd *c;
-    if (!strcmp(argv0,"ip"))
-        cmds = ip_cmds;
-    else if (!strcmp(argv0,"bridge"))
-        cmds = bridge_cmds;
-    else if (!strcmp(argv0,"tc"))
-        cmds = tc_cmds;
-    else {
-        fprintf(stderr, "Command '%s' is unknown\n",argv0);
+    if (argc < 2) {
+        fprintf(stderr, "missing arguments, 2 or more needed, argc=%d\n", argc);
         return EXIT_FAILURE;
     }
 
-    if (argc > 1){
-        for (c = cmds; c->cmd; ++c) {
-            if (matches(argv[1], c->cmd) == 0)
-                return -(c->func(argc - 2, argv + 2));
-        }
+    if (!strcmp(argv[0], "ip"))
+        cmds = ip_cmds;
+    else if (!strcmp(argv[0], "bridge"))
+        cmds = bridge_cmds;
+    else if (!strcmp(argv[0], "tc"))
+        cmds = tc_cmds;
+    else {
+        fprintf(stderr, "Command '%s' is unknown\n", argv[0]);
+        return EXIT_FAILURE;
     }
+
+    for (c = cmds; c->cmd; ++c) {
+        if (matches(argv[1], c->cmd) == 0)
+            return -(c->func(argc - 2, argv + 2));
+    }
+
     fprintf(stderr, "argument \"%s\" is unknown!\n"
                     "run with no arguments to start iproute2-sysrepo, "
-                    "or use iproute2's arguments to execute iproute2 command.\n", argv0);
+                    "or use iproute2's arguments to execute iproute2 command.\n",
+            argv[0]);
 
     return EXIT_FAILURE;
 }
@@ -344,10 +349,11 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
     ipr2_cmds = lyd2cmd_argv(change_dnode);
 
     for (int i = 0; ipr2_cmds[i] != NULL; i++) {
-        ret = do_cmd(ipr2_cmds[i]->argv[1], ipr2_cmds[i]->argc - 1, ipr2_cmds[i]->argv + 1);
+        ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         if (ret != EXIT_SUCCESS)// TODO: add rollback functionality.
             return SR_ERR_INTERNAL;
     }
+
     return SR_ERR_OK;
 }
 
@@ -412,7 +418,8 @@ static void sr_subscribe_config()
     }
 }
 
-int sysrepo_start(){
+int sysrepo_start()
+{
     int ret;
     ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
     if (ret != SR_ERR_OK) {
@@ -438,15 +445,15 @@ cleanup:
     return EXIT_SUCCESS;
 }
 
-int
-main(int argc, char **argv) {
-    if (argc == 1)
-        return sysrepo_start();
-
+int main(int argc, char **argv)
+{
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
 
-    int ret = do_cmd(argv[1], argc - 1, argv + 1);
+    if (argc == 1)
+        return sysrepo_start();
+
+    int ret = do_cmd(argc - 1, argv + 1);
     rtnl_close(&rth);
     return ret;
 }
