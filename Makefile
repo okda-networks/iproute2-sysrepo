@@ -14,7 +14,7 @@ EXEC = iproute2-sysrepo
 BIN  = bin
 
 CC        ?= gcc
-LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm -L/usr/local/lib
+LDFLAGS   = -lsysrepo -lbpf -lelf -lmnl -lbsd -lcap -lselinux -lm -ldl -rdynamic -L/usr/local/lib
 SUBDIRS   = iproute2
 
 IPR2_SR_LIB_SRC = $(wildcard src/lib/*.c)
@@ -31,7 +31,14 @@ all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	echo "Building $(BIN)/$(EXEC)" && \
 	rm iproute2/ip/rtmon.o
 	rm iproute2/ip/ip.o
-	$(CC) -o $(BIN)/$(EXEC)  $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
+	rm iproute2/bridge/bridge.o
+	rm iproute2/tc/tc.o
+	@echo ""
+	@echo "Patching conflicting symbols"
+	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/link.o
+	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/monitor.o
+	@echo ""
+	$(CC) -o $(BIN)/$(EXEC)  $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
 
@@ -54,7 +61,7 @@ check:
 	yanglint yang/*.yang
 
 $(IPR2_SR_LIB_OBJ): $(IPR2_SR_LIB_SRC)
-	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/include
+	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
 
 $(IPR2_SR_OBJ): $(IPR2_SR_SRC)
-	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/include
+	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
