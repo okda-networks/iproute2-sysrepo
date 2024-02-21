@@ -48,10 +48,7 @@ jobs:
       - name: basic test ip address like
         run : bin/iproute2-sysrepo link
       - name: basic test bridge link
-        run : bin/iproute2-sysrepo link add br-slave type dummy
-        run : bin/iproute2-sysrepo link add br0 type bridge
-        run : bin/iproute2-sysrepo link set br-slave master br0
-        run : bin/iproute2-sysrepo brlink
+        run : bin/iproute2-sysrepo link add br-slave type dummy; bin/iproute2-sysrepo link add br0 type bridge; bin/iproute2-sysrepo link set br-slave master br0; bin/iproute2-sysrepo brlink
       - name: basic test tc qdisc
         run : bin/iproute2-sysrepo qdisc
       - name: yanglint
