@@ -5,6 +5,7 @@ module iproute2-ip-nexthop {
 
     import ietf-inet-types { prefix inet; }
     import iproute2-ip-link { prefix iplink; }
+    import iproute2-cmdgen-extensions { prefix ir2cgen; }
 
     organization
         "Okda Networks";
@@ -26,13 +27,18 @@ module iproute2-ip-nexthop {
     }
 
     container nexthops{
+        ir2cgen:cmd-add "ip nexthop add";
+        ir2cgen:cmd-update "ip nexthop replace";
+        ir2cgen:cmd-delete "ip nexthop del";
         description
             "iproute2 nexthops configurations";
         list nexthop{
+            ir2cgen:cmd-start;
             key "id";
             description
                 "nexthop configuraton";
             leaf id{
+                ir2cgen:value-only-on-update;
                 description "nexthop id";
                 type uint32;
             }
@@ -62,14 +68,14 @@ module iproute2-ip-nexthop {
 
             }
             leaf blackhole {
-                default false;
-                description " specify if this is blackhole nexthop, which discards all traffic sent to it.";
+                ir2cgen:flag;
+                description "specify if this is blackhole nexthop, which discards all traffic sent to it.";
                 type boolean;
                 when "not(../dev) and not(../ipv6) and not(../ipv4)";
             }
-            leaf online {
+            leaf onlink {
+                ir2cgen:flag;
                 type boolean;
-                default false;
                 description "Indicates that the nexthop is directly reachable on the link.";
             }
             choice encap {
@@ -135,6 +141,7 @@ module iproute2-ip-nexthop {
                 }
             }
             leaf fdb {
+                ir2cgen:flag;
                 type boolean;
                 description "nexthop and nexthop groups for use with layer-2 fdb entries.
                 A fdb nexthop group can only have fdb nexthops. Example: Used to represent a vxlan remote

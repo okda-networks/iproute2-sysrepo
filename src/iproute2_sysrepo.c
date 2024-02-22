@@ -353,12 +353,30 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
     }
 
     ipr2_cmds = lyd2cmd_argv(change_dnode);
-
-    for (int i = 0; ipr2_cmds[i] != NULL; i++) {
-        ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
-        if (ret != EXIT_SUCCESS)// TODO: add rollback functionality.
-            return SR_ERR_INTERNAL;
+    if (ipr2_cmds == NULL){
+        fprintf(stderr,
+                "%s: failed to generate commands for the change \n",
+                __func__);
+        return EXIT_FAILURE;
     }
+    for (int i = 0; ipr2_cmds[i] != NULL; i++) {
+        fprintf(stdout,"%s: executing command: ",__func__ );
+        for (int k = 0; k < ipr2_cmds[i]->argc; k++) {
+            printf("%s", ipr2_cmds[i]->argv[k]);
+            if (i < ipr2_cmds[i]->argc - 1) {
+                printf(" ");
+            }
+        }
+        fprintf(stdout,"\n");
+
+        ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
+        if (ret != EXIT_SUCCESS) {
+            // TODO: add rollback functionality.
+            free(ipr2_cmds);
+            return SR_ERR_INTERNAL;
+        }
+    }
+    free(ipr2_cmds);
 
     return SR_ERR_OK;
 }
@@ -369,24 +387,49 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id,
                            sr_event_t sr_ev, uint32_t request_id,
                            void *private_data)
 {
+    sr_change_iter_t *it;
     int ret;
+    struct lyd_node *root_dnode;
     const struct lyd_node *dnode;
+    sr_change_oper_t sr_op;
+
+    ret = sr_get_changes_iter(session, "//*", &it);
+    if (ret != SR_ERR_OK) {
+        fprintf(stderr,
+                "%s: sr_get_changes_iter() failed for \"%s\"",
+                __func__, module_name);
+        return ret;
+    }
+
+    // we don't iterate through all changes, we just get the first changed node, then find it's root.
+    // this root will have all the changes. NOTE: this approach will not work if the yang has more than
+    // root containers. which is not the case in iproute2-yang modules.
+    ret = sr_get_change_tree_next(session, it, &sr_op,
+                            &dnode, NULL,
+                            NULL, NULL);
+    if (ret != SR_ERR_OK){
+        fprintf(stderr, "%s: failed to get next change node: %s\n",
+                __func__ ,sr_strerror(ret));
+        return SR_ERR_INTERNAL;
+    }
+
+    root_dnode = (struct lyd_node *) dnode;
+    while (root_dnode->parent != NULL)
+        root_dnode = (struct lyd_node *) root_dnode->parent;
+
     switch (sr_ev) {
         case SR_EV_ENABLED:
         case SR_EV_CHANGE:
-            dnode = sr_get_changes(session);
-            ret = ip_sr_config_change_cb_prepare(dnode);
+            ret = ip_sr_config_change_cb_apply(root_dnode);
             break;
         case SR_EV_DONE:
-            dnode = sr_get_change_diff(session);
-            ret = ip_sr_config_change_cb_apply(dnode);
-            break;
+            // TODO: add cleanup functionality.
         case SR_EV_ABORT:
             // TODO: add abort event functionality.
         case SR_EV_RPC:
             // TODO: rpc support for iproute2 commands.
         case SR_EV_UPDATE:
-            return 0;
+            return SR_ERR_OK;
         default:
             fprintf(stderr, "%s: unexpected sysrepo event: %u\n", __func__,
                     sr_ev);

@@ -1,0 +1,68 @@
+module iproute2-cmdgen-extensions {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:cmdgen:extensions";
+    prefix "ir2cgen";
+
+    organization
+        "Okda networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+        "This module provide extensions to parse yang data to ip route cmd";
+
+    extension cmd-start {
+        description
+            "define at which node a new cmd start, typically used in the first list in the schema, example
+            ir2cmd:cmd-start";
+
+    }
+
+    extension cmd-add {
+        description
+            "define the add cmd prefix , typically used in the first container, example
+            ir2cmd:cmd-add \"ip link add\" ";
+        argument "cmd";
+
+    }
+    extension cmd-delete {
+        description
+            "define the delete cmd prefix , typically used in the first container, example
+            ir2cmd:cmd-add \"ip link delete\" ";
+        argument "cmd";
+
+    }
+    extension cmd-update {
+        description
+            "define the update cmd prefix , typically used in the first container, example
+            ir2cmd:cmd-add \"ip link set\" ";
+        argument "cmd";
+
+    }
+
+    extension arg-name {
+        description
+            "iproute2 cmd generator will use the leaf name as argname when generating the cmd, to override this use
+            arg-name extension";
+        argument "arg-name";
+    }
+
+    extension flag {
+        description
+            "iproute2 cmd generator will use the leaf name only, ususally used for flags where the leaf type will be bool,
+            e.g \"ip nexthop add id 100 blackhole\" (blackhole is flag, and it's type is bool in yang)";
+    }
+
+    extension value-only{
+        description
+            "instruct iproute2 to drop the leaf name (key) when generating the cmd, example \"ip link add dummy0 up\"";
+    }
+
+    extension value-only-on-update{
+        description
+            "instruct iproute2 to drop the leaf name (key) when generating the update cmd";
+    }
+
+}
