@@ -304,7 +304,10 @@ static int do_cmd(int argc, char **argv)
     const struct cmd *cmds;
     const struct cmd *c;
     if (argc < 2) {
-        fprintf(stderr, "missing arguments, 2 or more needed, argc=%d\n", argc);
+        fprintf(stderr, "Missing arguments, 2 or more are needed.\n"
+                        "\nPossible execution options:\n"
+                        "1- Run with no arguments to start iproute2-sysrepo.\n"
+                        "2- Run with individual iproute2 commands arguments.\n");
         return EXIT_FAILURE;
     }
 
@@ -315,7 +318,10 @@ static int do_cmd(int argc, char **argv)
     else if (!strcmp(argv[0], "tc"))
         cmds = tc_cmds;
     else {
-        fprintf(stderr, "Command '%s' is unknown\n", argv[0]);
+        fprintf(stderr, "Unknown argument \"%s\".\n"
+                        "\nPossible execution options:\n"
+                        "1- Run with no arguments to start iproute2-sysrepo.\n"
+                        "2- Run with individual iproute2 commands arguments.\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -324,10 +330,10 @@ static int do_cmd(int argc, char **argv)
             return -(c->func(argc - 2, argv + 2));
     }
 
-    fprintf(stderr, "argument \"%s\" is unknown!\n"
-                    "run with no arguments to start iproute2-sysrepo, "
-                    "or use iproute2's arguments to execute iproute2 command.\n",
-            argv[0]);
+    fprintf(stderr, "Unknown argument \"%s\".\n"
+                    "\nPossible execution options:\n"
+                    "1- Run with no arguments to start iproute2-sysrepo.\n"
+                    "2- Run with individual iproute2 commands arguments.\n", argv[1]);
 
     return EXIT_FAILURE;
 }
@@ -394,6 +400,7 @@ static void sr_subscribe_config()
 {
     char **ip_module = iproute2_ip_modules;
     int ret;
+    fprintf(stdout,"Subscribing to sysrepo modules config updates:\n");
     while (*ip_module != NULL) {
         ret = sr_module_change_subscribe(sr_session, *ip_module, NULL,
                                          ip_sr_config_change_cb, NULL,
