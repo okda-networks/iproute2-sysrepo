@@ -4,15 +4,15 @@
 ret=0
 
 # Step 1: Install YANG Modules
-for yang_file in yang/*.yang; do
-    echo "Installing $yang_file..."
-    # Install the YANG module
-    sysrepoctl -i "$yang_file" -s ./yang || ret=$?
-    if [ $ret -ne 0 ]; then
-        echo "Error: Failed to install $yang_file"
-        exit $ret
-    fi
-done
+#for yang_file in yang/*.yang; do
+#    echo "Installing $yang_file..."
+#    # Install the YANG module
+#    sysrepoctl -i "$yang_file" -s ./yang || ret=$?
+#    if [ $ret -ne 0 ]; then
+#        echo "Error: Failed to install $yang_file"
+#        exit $ret
+#    fi
+#done
 
 
 # Step 2: Start iproute2-sysrepo
@@ -21,7 +21,7 @@ sysrepo_pid=$!
 sleep 0.5
 
 # Iterate over all .sh files in the current directory
-for test_script in tests/*.sh; do
+for test_script in tests/cases/*.sh; do
     # Check if the file is executable and has the .sh extension
     if [ -x "$test_script" ] && [[ "$test_script" == *.sh ]]; then
         echo "#############################################"

@@ -24,7 +24,7 @@ echo "[1] Test Link CREATE"
 echo "---------------------"
 
 # Step 1: Add IP links to RUNNING data store
-sysrepocfg -d running --edit  tests/test_ip_link_data.xml || ret=$?
+sysrepocfg -d running --edit  tests/cases/test_ip_link_data.xml || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     echo "TEST-ERROR: failed to create links in sysrepo datastore"
@@ -83,15 +83,15 @@ echo "---------------------"
 sysrepocfg -C startup -d running -m iproute2-ip-link || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
-    echo "TEST-ERROR: failed to delete IP links"
+    echo "TEST-ERROR: failed to delete IP links from sysrepo"
     exit "$ret"
 fi
 
 # Step 2: check if interface deleted by iproute2-sysrepo
 if ! ip link show testIf0 >/dev/null 2>&1 && ! ip link show testIf1 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP links testIf0 and testIf1 are deleted successfully"
+    echo "TEST-INFO: IP links testIf0 and testIf1 are deleted successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to delete IP links testIf0 and testIf1"
+    echo "TEST-ERROR: Failed to delete IP links testIf0 and testIf1 (FAIL)"
     exit 1
 fi
 
