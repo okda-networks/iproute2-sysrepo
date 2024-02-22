@@ -4,16 +4,16 @@
 ret=0
 
 # Step 1: Install YANG Modules
-sysrepoctl -i yang/*.yang -s ./yang
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to install YANG modules."
-    ret=1
-fi
+for yang_file in yang/*.yang; do
+    echo "Installing $yang_file..."
+    # Install the YANG module
+    sysrepoctl -i "$yang_file" -s ./yang || ret=$?
+    if [ $ret -ne 0 ]; then
+        echo "Error: Failed to install $yang_file"
+        exit $ret
+    fi
+done
 
-# Exit if sysrepoctl failed
-if [ $ret -ne 0 ]; then
-    exit $ret
-fi
 
 # Step 2: Start iproute2-sysrepo
 ./bin/iproute2-sysrepo 2>&1 &
