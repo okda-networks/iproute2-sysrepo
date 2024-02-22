@@ -180,7 +180,6 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx, char **op
     free_argv(argv, argc);
 }
 
-// not implemented yet
 struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
 {
     char *result;

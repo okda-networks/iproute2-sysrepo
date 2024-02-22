@@ -354,7 +354,6 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         return EXIT_FAILURE;
     }
     for (int i = 0; ipr2_cmds[i] != NULL; i++) {
-        // <delete>
         fprintf(stdout,"%s: executing command: ",__func__ );
         for (int k = 0; k < ipr2_cmds[i]->argc; k++) {
             printf("%s", ipr2_cmds[i]->argv[k]);
@@ -363,7 +362,6 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
             }
         }
         fprintf(stdout,"\n");
-        // </delete>
 
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         if (ret != EXIT_SUCCESS)// TODO: add rollback functionality.
