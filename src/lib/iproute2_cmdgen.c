@@ -12,6 +12,7 @@
  */
 
 #include <ctype.h>
+#include <bsd/string.h>
 
 #include "iproute2_cmdgen.h"
 
@@ -88,15 +89,21 @@ char *strip_yang_iden_prefix(const char *input)
 {
     const char *colon_pos = strchr(input, ':');
     if (colon_pos != NULL) {
+        // Calculate the length of the substring after the colon
+        size_t len = strlen(colon_pos + 1);
+
         // Allocate memory for output string
-        char *output = malloc(strlen(colon_pos + 1) + 1);
+        char *output = malloc(len + 1);
         if (output == NULL) {
             fprintf(stderr, "Memory allocation failed\n");
             exit(EXIT_FAILURE);
         }
-        strcpy(output, colon_pos + 1);
+
+        // Copy the substring after the colon.
+        strlcpy(output, colon_pos + 1, len + 1);
+
         // Remove leading and trailing whitespace
-        char *end = output + strlen(output) - 1;
+        char *end = output + len - 1;
         while (end > output && isspace((unsigned char) *end)) {
             *end-- = '\0';
         }
@@ -233,7 +240,6 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx, char **op
 
 struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
 {
-    int ret;
     char *result;
     int cmd_idx = 0;
     char cmd_line[CMD_LINE_SIZE] = {0};
@@ -288,7 +294,7 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
                         __func__, next->schema->name);
                 return NULL;
             }
-            strcpy(cmd_line, oper2cmd_prefix[op_val]);
+            strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
         } else if (next->schema->nodetype != LYS_CONTAINER) {
             // not a startcmd, get key-value pair and apped to cmd_line
 
@@ -317,12 +323,12 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
                     value = (char *) lyd_get_value(next);
             next_iter:
                 if (key != NULL) {
-                    strcat(cmd_line, " ");
-                    strcat(cmd_line, key);
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, key, sizeof(cmd_line));
                 }
                 if (value != NULL){
-                    strcat(cmd_line, " ");
-                    strcat(cmd_line, value);
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, value, sizeof(cmd_line));
                 }
 
             }
