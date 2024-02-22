@@ -5,8 +5,6 @@
     </link>
     <link>
         <name>testIf1</name>
-        <numtxqueues>10</numtxqueues>
-        <numrxqueues>11</numrxqueues>
         <type>dummy</type>
     </link>
 </links>
