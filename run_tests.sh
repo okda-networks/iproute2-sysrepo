@@ -4,7 +4,7 @@
 ret=0
 
 # Step 1: Install YANG Modules
-sysrepoctl -i /yang/*.yang -s ./yang
+sysrepoctl -i yang/*.yang -s ./yang
 if [ $? -ne 0 ]; then
     echo "Error: Failed to install YANG modules."
     ret=1
