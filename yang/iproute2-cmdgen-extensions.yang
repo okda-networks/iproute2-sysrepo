@@ -49,6 +49,17 @@ module iproute2-cmdgen-extensions {
         argument "arg-name";
     }
 
+    extension flag {
+        description
+            "iproute2 cmd generator will use the leaf name only, ususally used for flags where the leaf type will be bool,
+            e.g \"ip nexthop add id 100 blackhole\" (blackhole is flag, and it's type is bool in yang)";
+    }
+
+    extension value-only{
+        description
+            "instruct iproute2 to drop the leaf name (key) when generating the cmd, example \"ip link add dummy0 up\"";
+    }
+
     extension value-only-on-update{
         description
             "instruct iproute2 to drop the leaf name (key) when generating the update cmd";

@@ -135,8 +135,8 @@ module iproute2-ip-link {
         ir2cgen:cmd-delete "ip link delete";
         description "ip-link - network device configuration";
         list link {
-        ir2cgen:cmd-start;
-        key "name";
+            ir2cgen:cmd-start;
+            key "name";
             description "ip-link - network device";
             leaf name {
                 ir2cgen:value-only-on-update;
@@ -190,12 +190,19 @@ module iproute2-ip-link {
                 This is especially used for BIG TCP to allow the size of a merged IPv4 GSO packet on
                 this device greater than 65536.";
             }
+            leaf admin-status{
+                description "set admin status for the link";
+                type enumeration {
+                    enum "up";
+                    enum "down";
+                }
+            }
             leaf index {
                 type uint64;
                 description "specifies the desired index of the new virtual device.
                 The link creation fails, if the index is busy.";
             }
-        choice netns {
+            choice netns {
                 description "create the device in the network namespace associated with process
                 PID or the name NETNSNAME or the file NETNSFILE.";
                 case process-id {

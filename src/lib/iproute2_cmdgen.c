@@ -18,12 +18,40 @@
 #define CMD_LINE_SIZE 1024
 
 typedef enum {
-    ADD,
-    DELETE,
-    UPDATE,
-    UNKNOWN,
+    ADD_OPR,
+    DELETE_OPR,
+    UPDATE_OPR,
+    UNKNOWN_OPR,
 } oper_t;
 
+typedef enum {
+    // list extensions
+    CMD_START_EXT,
+    CMD_ADD_EXT,
+    CMD_DELETE_EXT,
+    CMD_UPDATE_EXT,
+
+    // leaf extensions
+    ARG_NAME_EXT,
+    FLAG_EXT,
+    VALUE_ONLY_EXT,
+    VALUE_ONLY_ON_UPDATE_EXT
+
+
+} extension_t;
+
+char *yang_ext_map[] = {
+        [CMD_START_EXT] = "cmd-start",
+        [CMD_ADD_EXT] = "cmd-add",
+        [CMD_DELETE_EXT] = "cmd-delete",
+        [CMD_UPDATE_EXT] = "cmd-update",
+
+        // leaf extensions
+        [ARG_NAME_EXT] = "arg-name",
+        [FLAG_EXT] = "flag",
+        [VALUE_ONLY_EXT] = "value-only",
+        [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
+};
 
 void dup_argv(char ***dest, char **src, int argc)
 {
@@ -93,14 +121,14 @@ oper_t get_operation(struct lyd_node *dnode)
         if (!strcmp("operation", next->name)) {
             operation = lyd_get_meta_value(next);
             if (!strcmp("create", operation))
-                return ADD;
+                return ADD_OPR;
             if (!strcmp("delete", operation))
-                return DELETE;
+                return DELETE_OPR;
             if (!strcmp("replace", operation) || !strcmp("none", operation))// for updated list the operation is none.
-                return UPDATE;
+                return UPDATE_OPR;
         }
     }
-    return UNKNOWN;
+    return UNKNOWN_OPR;
 }
 
 /*
@@ -118,6 +146,29 @@ int is_startcmd_node(struct lyd_node *dnode)
         }
     }
     return 0;
+}
+
+/*
+ * this function search if the provided ex_t exist in the node,
+ * if not exist it return EXIT_FAILURE, if exist return EXIT_SUCCESS,
+ * if value is not NULL, the extension value will be dup to value.
+ */
+int get_extension(extension_t ex_t, const struct lyd_node *dnode, char **value)
+{
+    struct lysc_ext_instance *ys_extenstions = dnode->schema->exts;
+    if (ys_extenstions == NULL)
+        return EXIT_FAILURE;
+
+    LY_ARRAY_COUNT_TYPE i;
+    LY_ARRAY_FOR(ys_extenstions, i)
+    {
+        if (!strcmp(ys_extenstions[i].def->name, yang_ext_map[ex_t])) {
+            if (value != NULL)
+                *value = strdup(ys_extenstions[i].argument);
+            return EXIT_SUCCESS;
+        }
+    }
+    return EXIT_FAILURE;
 }
 
 /*
@@ -182,43 +233,43 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx, char **op
 
 struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
 {
+    int ret;
     char *result;
+    int cmd_idx = 0;
+    char cmd_line[CMD_LINE_SIZE] = {0};
+    struct cmd_args **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_args *));
+
     lyd_print_mem(&result, change_node, LYD_XML, 0);
     printf("--%s", result);
 
-    struct cmd_args **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_args *));
     if (cmds == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         return NULL;
     }
-    int cmd_idx = 0;
-    char cmd_line[CMD_LINE_SIZE] = {0};
 
     // this will hold the add, update and delete cmd prefixes.
     char *oper2cmd_prefix[3] = {NULL};
 
     // first get the add, update, delete cmds prefixis from schema extensions
-    const struct lysc_node *schema = change_node->schema;
-    LY_ARRAY_COUNT_TYPE i;
-    LY_ARRAY_FOR(schema->exts, i)
-    {
-        if (schema->exts != NULL) {
-            if (!strcmp(schema->exts[i].def->name, "cmd-add"))
-                oper2cmd_prefix[ADD] = strdup(schema->exts[i].argument);
-            else if (!strcmp(schema->exts[i].def->name, "cmd-update"))
-                oper2cmd_prefix[UPDATE] = strdup(schema->exts[i].argument);
-            else if (!strcmp(schema->exts[i].def->name, "cmd-delete"))
-                oper2cmd_prefix[DELETE] = strdup(schema->exts[i].argument);
-        }
-    }
-
-    if (oper2cmd_prefix[ADD] == NULL || oper2cmd_prefix[UPDATE] == NULL || oper2cmd_prefix[DELETE] == NULL) {
-        fprintf(stderr, "%s: one or more required cmd extension not found, "
-                        "make sure root container has ir2cgen:cmd-add, ir2cgen:cmd-update "
-                        "and ir2cgen:cmd-delete extensions\n",
+    if (get_extension(CMD_ADD_EXT, change_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: cmd-add extension is missing from root container "
+                        "make sure root container has ir2cgen:cmd-add\n",
                 __func__);
         return NULL;
     }
+    if (get_extension(CMD_DELETE_EXT, change_node, &oper2cmd_prefix[DELETE_OPR]) != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: cmd-delete extension is missing from root container "
+                        "make sure root container has ir2cgen:cmd-delete\n",
+                __func__);
+        return NULL;
+    }
+    if (get_extension(CMD_UPDATE_EXT, change_node, &oper2cmd_prefix[UPDATE_OPR]) != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: ir2cgen:cmd-update extension is missing from root container "
+                        "make sure root container has ir2cgen:cmd-update\n",
+                __func__);
+        return NULL;
+    }
+
 
     oper_t op_val;
     struct lyd_node *next;
@@ -232,7 +283,7 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
 
             // prepare for new command
             op_val = get_operation(next);
-            if (op_val == UNKNOWN) {
+            if (op_val == UNKNOWN_OPR) {
                 fprintf(stderr, "%s: unknown operation for startcmd node (%s) \n",
                         __func__, next->schema->name);
                 return NULL;
@@ -240,17 +291,41 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
             strcpy(cmd_line, oper2cmd_prefix[op_val]);
         } else if (next->schema->nodetype != LYS_CONTAINER) {
             // not a startcmd, get key-value pair and apped to cmd_line
-            char *value = (char *) lyd_get_value(next);
-            strcat(cmd_line, " ");
-            strcat(cmd_line, next->schema->name);
-            strcat(cmd_line, " ");
+
             if (next->schema->nodetype == LYS_LEAF) {
-                LY_DATA_TYPE type = ((struct lysc_node_leaf *) next->schema)->type->basetype;
+                char *key=NULL, *value = NULL;
+                // if list operation is delete, get the keys only
+                if (op_val == DELETE_OPR && !lysc_is_key(next->schema))
+                    goto next_iter;
+                // if FLAG extension, add schema name to the cmd and go to next iter.
+                if (get_extension(FLAG_EXT, next, NULL) == EXIT_SUCCESS) {
+                    if (!strcmp("true", lyd_get_value(next)))
+                        value = strdup(next->schema->name);
+                    goto next_iter;
+                }
+                // if value only, don't include the schema->name (key) in the command.
+                if (get_extension(VALUE_ONLY_EXT, next, NULL) == EXIT_SUCCESS)
+                    goto next_iter;
+                else
+                    key = strdup(next->schema->name);
+                // set the value
                 // special case for identity leaf, where the module prefix might be added (e.g iproute-link:vti)
-                                    if (type == LY_TYPE_IDENT)
-                                        value = strip_yang_iden_prefix(lyd_get_value(next));
+                LY_DATA_TYPE type = ((struct lysc_node_leaf *) next->schema)->type->basetype;
+                if (type == LY_TYPE_IDENT)
+                    value = strip_yang_iden_prefix(lyd_get_value(next));
+                else
+                    value = (char *) lyd_get_value(next);
+            next_iter:
+                if (key != NULL) {
+                    strcat(cmd_line, " ");
+                    strcat(cmd_line, key);
+                }
+                if (value != NULL){
+                    strcat(cmd_line, " ");
+                    strcat(cmd_line, value);
+                }
+
             }
-            strcat(cmd_line, value);
         }
         LYD_TREE_DFS_END(change_node, next);
     }
