@@ -151,15 +151,23 @@ module iproute2-ip-link {
                 type identityref {
                     base link-type;
                 }
-                description "specifies the type of the new device";
+                description "specifies the type of the device";
             }
+
+            leaf mtu {
+                type uint16{
+                    range "64..9000";
+                }
+                description "specifies the mtu size for the device";
+            }
+
             leaf numtxqueues {
                 type uint32;
-                description "specifies the number of transmit queues for new device.";
+                description "specifies the number of transmit queues for device.";
             }
             leaf numrxqueues {
                 type uint32;
-                description "specifies the number of receive queues for new device.";
+                description "specifies the number of receive queues for device.";
             }
             leaf gso_max_size {
                 type uint32;
@@ -176,7 +184,7 @@ module iproute2-ip-link {
             leaf gso_max_segs {
                 type uint32;
                 description "specifies the recommended maximum number of a Generic Segment
-                Offload segments the new device should accept.";
+                Offload segments the device should accept.";
             }
             leaf gro_max_size {
                 type uint32;

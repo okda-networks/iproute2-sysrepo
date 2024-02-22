@@ -244,6 +244,10 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
     int cmd_idx = 0;
     char cmd_line[CMD_LINE_SIZE] = {0};
     struct cmd_args **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_args *));
+    // Set all elements of the array to NULL
+    for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
+        cmds[i] = NULL;
+    }
 
     lyd_print_mem(&result, change_node, LYD_XML, 0);
     printf("--%s", result);

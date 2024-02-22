@@ -364,9 +364,14 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         fprintf(stdout,"\n");
 
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
-        if (ret != EXIT_SUCCESS)// TODO: add rollback functionality.
+        if (ret != EXIT_SUCCESS) {
+            // TODO: add rollback functionality.
+            free(ipr2_cmds);
             return SR_ERR_INTERNAL;
+        }
     }
+    free(ipr2_cmds);
+
     return SR_ERR_OK;
 }
 
