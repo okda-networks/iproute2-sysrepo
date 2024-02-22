@@ -307,7 +307,7 @@ static int do_cmd(int argc, char **argv)
         fprintf(stderr, "Missing arguments, 2 or more are needed.\n"
                         "\nPossible execution options:\n"
                         "1- Run with no arguments to start iproute2-sysrepo.\n"
-                        "2- Run with indiviual iproute2 commands arguments.\n");
+                        "2- Run with individual iproute2 commands arguments.\n");
         return EXIT_FAILURE;
     }
 
@@ -321,7 +321,7 @@ static int do_cmd(int argc, char **argv)
         fprintf(stderr, "Unknown argument \"%s\".\n"
                         "\nPossible execution options:\n"
                         "1- Run with no arguments to start iproute2-sysrepo.\n"
-                        "2- Run with indiviual iproute2 commands arguments.\n", argv[0]);
+                        "2- Run with individual iproute2 commands arguments.\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -333,7 +333,7 @@ static int do_cmd(int argc, char **argv)
     fprintf(stderr, "Unknown argument \"%s\".\n"
                     "\nPossible execution options:\n"
                     "1- Run with no arguments to start iproute2-sysrepo.\n"
-                    "2- Run with indiviual iproute2 commands arguments.\n", argv[1]);
+                    "2- Run with individual iproute2 commands arguments.\n", argv[1]);
 
     return EXIT_FAILURE;
 }
@@ -400,6 +400,7 @@ static void sr_subscribe_config()
 {
     char **ip_module = iproute2_ip_modules;
     int ret;
+    fprintf(stdout,"Subscribing to sysrepo modules config updates:\n");
     while (*ip_module != NULL) {
         ret = sr_module_change_subscribe(sr_session, *ip_module, NULL,
                                          ip_sr_config_change_cb, NULL,
