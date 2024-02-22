@@ -78,6 +78,6 @@ jobs:
                   exit 1
               fi
       - name: run iproute2-sysrepo tests
-        run : chmod +x run_tests.sh && sudo ./tests/run_tests.sh
+        run : chmod +x tests/run_tests.sh && sudo ./tests/run_tests.sh
       - name: yanglint
         run : make check
