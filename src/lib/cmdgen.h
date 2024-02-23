@@ -45,7 +45,7 @@ struct cmd_args** lyd2cmds_argv(const struct lyd_node *change_node);
  * @param[in] node Data node diff to generate the argc, argv.
  * @return Array of cmd_args struct.
  */
-struct cmd_args* lyd2rollback_cmds(struct cmd_args **ipr2_cmds);
+struct cmd_args* generate_rollback_cmds(struct cmd_args **ipr2_cmds);
 oper_t get_operation(const struct lyd_node *dnode);
 
 #endif// IPROUTE2_SYSREPO_CMDGEN_H
