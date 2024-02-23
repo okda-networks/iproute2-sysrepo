@@ -70,6 +70,7 @@ int compress_vlans;
 int show_raw;
 int show_graph;
 bool use_names;
+
 static void *BODY;	/* cached handle dlopen(NULL) */
 static struct qdisc_util *qdisc_list;
 static struct filter_util *filter_list;
@@ -85,13 +86,13 @@ static char *iproute2_ip_modules[] = { "iproute2-ip-link",
                                        "iproute2-ip-nexthop",
                                        NULL }; // null terminator
 
-
 volatile int exit_application = 0;
 jmp_buf jbuf;
 int jump_set = 0;
+
 void exist_cb(void){
     if (jump_set)
-        longjmp(jbuf,1);
+        longjmp(jbuf,EXIT_FAILURE);
 }
 
 static void sigint_handler(__attribute__((unused)) int signum)
@@ -508,12 +509,17 @@ cleanup:
 
 int main(int argc, char **argv)
 {
+    int ret;
+
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
-    atexit(exist_cb);
-    if (argc == 1)
+
+    if (argc == 1) {
+        atexit(exist_cb);
         return sysrepo_start();
-    int ret = do_cmd(argc - 1, argv + 1);
+    } else
+        ret = do_cmd(argc - 1, argv + 1);
+
     rtnl_close(&rth);
     return ret;
 }
