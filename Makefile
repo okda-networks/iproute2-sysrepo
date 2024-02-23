@@ -38,7 +38,7 @@ all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/link.o
 	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/monitor.o
 	@echo ""
-	$(CC) -o $(BIN)/$(EXEC)  $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
+	$(CC) -o $(BIN)/$(EXEC) $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
 
@@ -60,9 +60,9 @@ iproute2/config.mk:
 check:
 	yanglint yang/*.yang
 
-$(IPR2_SR_LIB_OBJ): $(IPR2_SR_LIB_SRC)
+src/lib/%.o: src/lib/%.c
 	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
 
-$(IPR2_SR_OBJ): $(IPR2_SR_SRC)
-	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
 
+src/%.o: $(IPR2_SR_SRC) $(IPR2_SR_LIB_OBJ)
+	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include

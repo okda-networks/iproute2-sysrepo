@@ -14,7 +14,7 @@
 #include <ctype.h>
 #include <bsd/string.h>
 
-#include "iproute2_cmdgen.h"
+#include "cmdgen.h"
 
 #define CMD_LINE_SIZE 1024
 
@@ -139,7 +139,7 @@ oper_t get_operation(struct lyd_node *dnode)
 }
 
 /*
- * return true if the node has ir2cgen:cmd-start extension.
+ * return true if the node has ipr2cgen:cmd-start extension.
  */
 int is_startcmd_node(struct lyd_node *dnode)
 {
@@ -215,7 +215,8 @@ void parse_command(const char *command, int *argc, char ***argv)
     free(cmd_copy);
 }
 
-void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx, char **oper2cmd_prefix)
+void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx,
+                 char **oper2cmd_prefix, const struct lyd_node *start_dnode)
 {
     int argc;
     char **argv;
@@ -233,12 +234,13 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx, char **op
     }
     dup_argv(&((cmds)[*cmd_idx]->argv), argv, argc);
     (cmds)[*cmd_idx]->argc = argc;
+    (cmds)[*cmd_idx]->cmd_start_dnode = start_dnode;
     (*cmd_idx)++;
     memset(cmd_line, 0, CMD_LINE_SIZE);
     free_argv(argv, argc);
 }
 
-struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
+struct cmd_args **lyd2cmds_argv(const struct lyd_node *change_node)
 {
     char *result;
     int cmd_idx = 0;
@@ -263,19 +265,19 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
     // first get the add, update, delete cmds prefixis from schema extensions
     if (get_extension(CMD_ADD_EXT, change_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
         fprintf(stderr, "%s: cmd-add extension is missing from root container "
-                        "make sure root container has ir2cgen:cmd-add\n",
+                        "make sure root container has ipr2cgen:cmd-add\n",
                 __func__);
         return NULL;
     }
     if (get_extension(CMD_DELETE_EXT, change_node, &oper2cmd_prefix[DELETE_OPR]) != EXIT_SUCCESS) {
         fprintf(stderr, "%s: cmd-delete extension is missing from root container "
-                        "make sure root container has ir2cgen:cmd-delete\n",
+                        "make sure root container has ipr2cgen:cmd-delete\n",
                 __func__);
         return NULL;
     }
     if (get_extension(CMD_UPDATE_EXT, change_node, &oper2cmd_prefix[UPDATE_OPR]) != EXIT_SUCCESS) {
-        fprintf(stderr, "%s: ir2cgen:cmd-update extension is missing from root container "
-                        "make sure root container has ir2cgen:cmd-update\n",
+        fprintf(stderr, "%s: ipr2cgen:cmd-update extension is missing from root container "
+                        "make sure root container has ipr2cgen:cmd-update\n",
                 __func__);
         return NULL;
     }
@@ -285,11 +287,11 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
     struct lyd_node *next;
     LYD_TREE_DFS_BEGIN(change_node, next)
     {
-        // if this is startcmd node (schema has ir2cgen:cmd-start), then start building a new command
+        // if this is startcmd node (schema has ipr2cgen:cmd-start), then start building a new command
         if (is_startcmd_node(next)) {
             // check if the cmd is not empty (first cmd)
             if (cmd_line[0] != 0)
-                add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix);
+                add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix, next);
 
             // prepare for new command
             op_val = get_operation(next);
@@ -340,7 +342,7 @@ struct cmd_args **lyd2cmd_argv(const struct lyd_node *change_node)
         LYD_TREE_DFS_END(change_node, next);
     }
     if (cmd_line[0] != 0)
-        add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix);
+        add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix,next);
 
     return cmds;
 }

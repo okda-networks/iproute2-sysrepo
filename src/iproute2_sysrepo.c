@@ -39,8 +39,8 @@
 #include "br_common.h"
 
 /* sysrepo */
+#include "lib/cmdgen.h"
 #include <sysrepo.h>
-#include "lib/iproute2_cmdgen.h"
 
 #ifndef LIBDIR
 #define LIBDIR "/usr/lib"
@@ -352,7 +352,7 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         return SR_ERR_INVAL_ARG;
     }
 
-    ipr2_cmds = lyd2cmd_argv(change_dnode);
+    ipr2_cmds = lyd2cmds_argv(change_dnode);
     if (ipr2_cmds == NULL){
         fprintf(stderr,
                 "%s: failed to generate commands for the change \n",

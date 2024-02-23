@@ -20,7 +20,7 @@ done
 sysrepo_pid=$!
 sleep 0.5
 
-# Iterate over all .sh files in the current directory
+# Iterate over all case/*.sh files
 for test_script in tests/cases/*.sh; do
     # Check if the file is executable and has the .sh extension
     if [ -x "$test_script" ] && [[ "$test_script" == *.sh ]]; then

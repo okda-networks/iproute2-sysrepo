@@ -5,7 +5,7 @@ module iproute2-ip-nexthop {
 
     import ietf-inet-types { prefix inet; }
     import iproute2-ip-link { prefix iplink; }
-    import iproute2-cmdgen-extensions { prefix ir2cgen; }
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
 
     organization
         "Okda Networks";
@@ -27,18 +27,18 @@ module iproute2-ip-nexthop {
     }
 
     container nexthops{
-        ir2cgen:cmd-add "ip nexthop add";
-        ir2cgen:cmd-update "ip nexthop replace";
-        ir2cgen:cmd-delete "ip nexthop del";
+        ipr2cgen:cmd-add "ip nexthop add";
+        ipr2cgen:cmd-update "ip nexthop replace";
+        ipr2cgen:cmd-delete "ip nexthop del";
         description
             "iproute2 nexthops configurations";
         list nexthop{
-            ir2cgen:cmd-start;
+            ipr2cgen:cmd-start;
             key "id";
             description
                 "nexthop configuraton";
             leaf id{
-                ir2cgen:value-only-on-update;
+                ipr2cgen:value-only-on-update;
                 description "nexthop id";
                 type uint32;
             }
@@ -68,13 +68,13 @@ module iproute2-ip-nexthop {
 
             }
             leaf blackhole {
-                ir2cgen:flag;
+                ipr2cgen:flag;
                 description "specify if this is blackhole nexthop, which discards all traffic sent to it.";
                 type boolean;
                 when "not(../dev) and not(../ipv6) and not(../ipv4)";
             }
             leaf onlink {
-                ir2cgen:flag;
+                ipr2cgen:flag;
                 type boolean;
                 description "Indicates that the nexthop is directly reachable on the link.";
             }
@@ -141,7 +141,7 @@ module iproute2-ip-nexthop {
                 }
             }
             leaf fdb {
-                ir2cgen:flag;
+                ipr2cgen:flag;
                 type boolean;
                 description "nexthop and nexthop groups for use with layer-2 fdb entries.
                 A fdb nexthop group can only have fdb nexthops. Example: Used to represent a vxlan remote
