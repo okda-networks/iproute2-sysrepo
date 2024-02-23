@@ -19,13 +19,6 @@
 #define CMD_LINE_SIZE 1024
 
 typedef enum {
-    ADD_OPR,
-    DELETE_OPR,
-    UPDATE_OPR,
-    UNKNOWN_OPR,
-} oper_t;
-
-typedef enum {
     // list extensions
     CMD_START_EXT,
     CMD_ADD_EXT,
@@ -118,11 +111,15 @@ char *strip_yang_iden_prefix(const char *input)
 }
 
 
-oper_t get_operation(struct lyd_node *dnode)
+oper_t get_operation(const struct lyd_node *dnode)
 {
 
     struct lyd_meta *next;
     const char *operation;
+    if (dnode == NULL){
+        fprintf(stderr,"Failed to extract change operaiton, lyd_node is NULL");
+        return UNKNOWN_OPR;
+    }
     LY_LIST_FOR(dnode->meta, next)
     {
         if (!strcmp("operation", next->name)) {
@@ -284,11 +281,12 @@ struct cmd_args **lyd2cmds_argv(const struct lyd_node *change_node)
 
 
     oper_t op_val;
-    struct lyd_node *next;
+    struct lyd_node *next, *startcmd_node;
     LYD_TREE_DFS_BEGIN(change_node, next)
     {
         // if this is startcmd node (schema has ipr2cgen:cmd-start), then start building a new command
         if (is_startcmd_node(next)) {
+            startcmd_node = next;
             // check if the cmd is not empty (first cmd)
             if (cmd_line[0] != 0)
                 add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix, next);
@@ -342,7 +340,7 @@ struct cmd_args **lyd2cmds_argv(const struct lyd_node *change_node)
         LYD_TREE_DFS_END(change_node, next);
     }
     if (cmd_line[0] != 0)
-        add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix,next);
+        add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix, startcmd_node);
 
     return cmds;
 }

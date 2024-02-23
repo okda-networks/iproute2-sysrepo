@@ -7,6 +7,17 @@
 #define CMDS_ARRAY_SIZE 1024
 
 /**
+ * @brief data struct to store cmd operation.
+ *
+ */
+typedef enum {
+    ADD_OPR,
+    DELETE_OPR,
+    UPDATE_OPR,
+    UNKNOWN_OPR,
+} oper_t;
+
+/**
  * @brief data struct to store the int argc,char **argv pair.
  *
  * this struct can be easily used by
@@ -34,6 +45,7 @@ struct cmd_args** lyd2cmds_argv(const struct lyd_node *change_node);
  * @param[in] node Data node diff to generate the argc, argv.
  * @return Array of cmd_args struct.
  */
-struct cmd_args* lyd2rollbackcmd_argv(const struct lyd_node *change_node);
+struct cmd_args* lyd2rollback_cmds(struct cmd_args **ipr2_cmds);
+oper_t get_operation(const struct lyd_node *dnode);
 
 #endif// IPROUTE2_SYSREPO_CMDGEN_H

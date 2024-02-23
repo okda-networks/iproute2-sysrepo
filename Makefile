@@ -51,6 +51,12 @@ clean:
 	rm -f $(IPR2_SR_LIB_OBJ) && \
 	rm -f $(BIN)/$(EXEC)
 
+clean_srmod:
+	@set -e; \
+	rm -f $(IPR2_SR_OBJ) && \
+	rm -f $(IPR2_SR_LIB_OBJ) && \
+	rm -f $(BIN)/$(EXEC)
+
 iproute2/config.mk:
 	@set -e; \
 	cd iproute2 && \
