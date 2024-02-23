@@ -45,7 +45,7 @@ typedef enum {
 /**
  * @brief data struct to store command information.
  */
-struct cmd_info{
+struct cmd_info {
     int argc;
     char **argv;
     const struct lyd_node *cmd_start_dnode; /** lyd change node where the command starts
@@ -59,7 +59,7 @@ struct cmd_info{
  * @param[in] change_node lyd_node of change data.
  * @return cmd_info array.
  */
-struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
+struct cmd_info **lyd2cmds(const struct lyd_node *change_node);
 
 /**
  * @brief convert change cmd info to rollback cmd info.
@@ -68,7 +68,7 @@ struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
  * @param[in] change_node lyd_node of change data.
  * @return cmd_info rollback cmd.
  */
-struct cmd_info* lyd2rollback_cmd(const struct lyd_node *change_node);
+struct cmd_info *lyd2rollback_cmd(const struct lyd_node *change_node);
 
 /**
  * get the yang operation from the lyd_node (create, replace, delete)

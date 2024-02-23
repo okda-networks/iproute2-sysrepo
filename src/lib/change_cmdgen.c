@@ -11,8 +11,8 @@
  * Copyright (C) 2024 Okda Networks, <aaqrbaw@okdanetworks.com>
  */
 
-#include <ctype.h>
 #include <bsd/string.h>
+#include <ctype.h>
 
 #include "cmdgen.h"
 
@@ -231,7 +231,7 @@ void parse_command(const char *command, int *argc, char ***argv)
  * @param [in,out] cmds array of cmd_info.
  * @param [in,out] cmd_idx current index of cmds.
  */
-void add_command(char *cmd_line,const struct lyd_node *start_dnode,
+void add_command(char *cmd_line, const struct lyd_node *start_dnode,
                  struct cmd_info **cmds, int *cmd_idx)
 {
     int argc;
@@ -339,7 +339,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
             if (get_extension(VALUE_ONLY_EXT, next, NULL) == EXIT_SUCCESS)
                 goto next_iter;
 
-             // if arg_name extension, key will be set to the arg-name value.
+            // if arg_name extension, key will be set to the arg-name value.
             if (get_extension(ARG_NAME_EXT, next, &key) == EXIT_SUCCESS) {
                 if (key == NULL) {
                     fprintf(stderr, "%s: ipr2cgen:arg-name extension found but failed to "
@@ -371,7 +371,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
         LYD_TREE_DFS_END(change_node, next);
     }
     if (cmd_line[0] != 0)
-        add_command(cmd_line,startcmd_node,cmds,&cmd_idx);
+        add_command(cmd_line, startcmd_node, cmds, &cmd_idx);
 
     return cmds;
 }
