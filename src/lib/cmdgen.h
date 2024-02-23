@@ -7,33 +7,51 @@
 #define CMDS_ARRAY_SIZE 1024
 
 /**
- * @brief data struct to store the int argc,char **argv pair.
+ * @brief data struct to store cmd operation.
  *
- * this struct can be easily used by
- * iproute2::do_cmd(argc,argv)
  */
-struct cmd_args{
+typedef enum {
+    ADD_OPR,
+    DELETE_OPR,
+    UPDATE_OPR,
+    UNKNOWN_OPR,
+} oper_t;
+
+/**
+ * @brief data struct to store command information.
+ */
+struct cmd_info{
     int argc;
     char **argv;
-    const struct lyd_node *cmd_start_dnode;
+    const struct lyd_node *cmd_start_dnode; /** lyd change node where the command starts
+                                                ipr2gen:cmd-start) */
 };
 
 /**
- * @brief generate argc,argv commands out of the lyd_node (diff).
+ * @brief generate list of commands info from the lyd_node (diff).
  *
  *
- * @param[in] node Data node diff to generate the argc, argv.
- * @return Array of cmd_args struct.
+ * @param[in] change_node lyd_node of change data.
+ * @return cmd_info array.
  */
-struct cmd_args** lyd2cmds_argv(const struct lyd_node *change_node);
+struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
 
 /**
- * @brief generate argc,argv rollback command out of the lyd_node (diff).
+ * @brief convert change cmd info to rollback cmd info.
  *
  *
- * @param[in] node Data node diff to generate the argc, argv.
- * @return Array of cmd_args struct.
+ * @param[in] change_node lyd_node of change data.
+ * @return cmd_info rollback cmd.
  */
-struct cmd_args* lyd2rollbackcmd_argv(const struct lyd_node *change_node);
+struct cmd_info* lyd2rollback_cmd(const struct lyd_node *change_node);
+
+/**
+ * @brief get the change operation from change lyd_node.
+ *
+ *
+ * @param[in] lyd_node change node.
+ * @return oper_t
+ */
+oper_t get_operation(const struct lyd_node *dnode);
 
 #endif// IPROUTE2_SYSREPO_CMDGEN_H
