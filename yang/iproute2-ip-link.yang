@@ -144,6 +144,7 @@ module iproute2-ip-link {
                 description "link name";
             }
             leaf device {
+                ipr2cgen:arg-name "link";
                 type string;
                 description "specifies the physical device to act operate on";
             }

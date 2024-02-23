@@ -54,12 +54,14 @@ module iproute2-ip-nexthop {
                 container ipv4 {
                     description "ipv4 nexthop";
                     leaf address {
+                        ipr2cgen:arg-name "via";
                         description "ipv4 nexthop address";
                         type inet:ipv4-address;
                     }
                 }
                 container ipv6 {
                     description "ipv6 nexthop";
+                    ipr2cgen:arg-name "via";
                     leaf address {
                         description "ipv6 nexthop address";
                         type inet:ipv6-address;
