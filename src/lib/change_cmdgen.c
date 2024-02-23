@@ -18,22 +18,6 @@
 
 #define CMD_LINE_SIZE 1024
 
-typedef enum {
-    // list extensions
-    CMD_START_EXT,
-    CMD_ADD_EXT,
-    CMD_DELETE_EXT,
-    CMD_UPDATE_EXT,
-
-    // leaf extensions
-    ARG_NAME_EXT,
-    FLAG_EXT,
-    VALUE_ONLY_EXT,
-    VALUE_ONLY_ON_UPDATE_EXT
-
-
-} extension_t;
-
 char *yang_ext_map[] = {
         [CMD_START_EXT] = "cmd-start",
         [CMD_ADD_EXT] = "cmd-add",
