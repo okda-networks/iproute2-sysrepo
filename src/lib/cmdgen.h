@@ -40,10 +40,10 @@ struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
  * @brief convert change cmd info to rollback cmd info.
  *
  *
- * @param[in] cmd_info change cmd info to be converted
+ * @param[in] change_node lyd_node of change data.
  * @return cmd_info rollback cmd.
  */
-struct cmd_info* get_rollback_cmd(struct cmd_info *ipr2_cmds);
+struct cmd_info* lyd2rollback_cmd(const struct lyd_node *change_node);
 
 /**
  * @brief get the change operation from change lyd_node.
