@@ -11,8 +11,8 @@
  * Copyright (C) 2024 Okda Networks, <aaqrbaw@okdanetworks.com>
  */
 
-#include <bsd/string.h>
 #include <ctype.h>
+#include <bsd/string.h>
 
 #include "cmdgen.h"
 
