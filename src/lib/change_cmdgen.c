@@ -18,6 +18,19 @@
 
 #define CMD_LINE_SIZE 1024
 
+char *yang_ext_map[] = {
+        [CMD_START_EXT] = "cmd-start",
+        [CMD_ADD_EXT] = "cmd-add",
+        [CMD_DELETE_EXT] = "cmd-delete",
+        [CMD_UPDATE_EXT] = "cmd-update",
+
+        // leaf extensions
+        [ARG_NAME_EXT] = "arg-name",
+        [FLAG_EXT] = "flag",
+        [VALUE_ONLY_EXT] = "value-only",
+        [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
+};
+
 void dup_argv(char ***dest, char **src, int argc)
 {
     *dest = (char **) malloc(argc * sizeof(char *));

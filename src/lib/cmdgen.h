@@ -7,6 +7,11 @@
 #define CMDS_ARRAY_SIZE 1024
 
 /**
+ * extension to extension name map.
+ */
+extern char *yang_ext_map[];
+
+/**
  * @brief data struct to store cmd operation.
  *
  */
@@ -36,22 +41,6 @@ typedef enum {
 
 
 } extension_t;
-
-/**
- * extension to extension name map.
- */
-char *yang_ext_map[] = {
-        [CMD_START_EXT] = "cmd-start",
-        [CMD_ADD_EXT] = "cmd-add",
-        [CMD_DELETE_EXT] = "cmd-delete",
-        [CMD_UPDATE_EXT] = "cmd-update",
-
-        // leaf extensions
-        [ARG_NAME_EXT] = "arg-name",
-        [FLAG_EXT] = "flag",
-        [VALUE_ONLY_EXT] = "value-only",
-        [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
-};
 
 /**
  * @brief data struct to store command information.
