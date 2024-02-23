@@ -113,13 +113,8 @@ char *strip_yang_iden_prefix(const char *input)
 
 oper_t get_operation(const struct lyd_node *dnode)
 {
-
     struct lyd_meta *next;
     const char *operation;
-    if (dnode == NULL){
-        fprintf(stderr,"Failed to extract change operaiton, lyd_node is NULL");
-        return UNKNOWN_OPR;
-    }
     LY_LIST_FOR(dnode->meta, next)
     {
         if (!strcmp("operation", next->name)) {
@@ -212,7 +207,7 @@ void parse_command(const char *command, int *argc, char ***argv)
     free(cmd_copy);
 }
 
-void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx,
+void add_command(char *cmd_line, struct cmd_info **cmds, int *cmd_idx,
                  char **oper2cmd_prefix, const struct lyd_node *start_dnode)
 {
     int argc;
@@ -223,7 +218,7 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx,
         free_argv(argv, argc);
         return;
     }
-    (cmds)[*cmd_idx] = malloc(sizeof(struct cmd_args));
+    (cmds)[*cmd_idx] = malloc(sizeof(struct cmd_info));
 
     if ((cmds)[*cmd_idx] == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
@@ -237,12 +232,12 @@ void add_command(char *cmd_line, struct cmd_args **cmds, int *cmd_idx,
     free_argv(argv, argc);
 }
 
-struct cmd_args **lyd2cmds_argv(const struct lyd_node *change_node)
+struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
 {
     char *result;
     int cmd_idx = 0;
     char cmd_line[CMD_LINE_SIZE] = {0};
-    struct cmd_args **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_args *));
+    struct cmd_info **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_info *));
     // Set all elements of the array to NULL
     for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
         cmds[i] = NULL;
@@ -289,7 +284,7 @@ struct cmd_args **lyd2cmds_argv(const struct lyd_node *change_node)
             startcmd_node = next;
             // check if the cmd is not empty (first cmd)
             if (cmd_line[0] != 0)
-                add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix, next);
+                add_command(cmd_line, cmds, &cmd_idx, oper2cmd_prefix, startcmd_node);
 
             // prepare for new command
             op_val = get_operation(next);

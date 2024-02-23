@@ -347,12 +347,12 @@ int ip_sr_config_change_cb_prepare(const struct lyd_node *dnode)
 int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
 {
     int ret;
-    struct cmd_args **ipr2_cmds;
+    struct cmd_info **ipr2_cmds;
     if (change_dnode == NULL) {
         return SR_ERR_INVAL_ARG;
     }
 
-    ipr2_cmds = lyd2cmds_argv(change_dnode);
+    ipr2_cmds = lyd2cmds(change_dnode);
     if (ipr2_cmds == NULL){
         fprintf(stderr,
                 "%s: failed to generate commands for the change \n",
