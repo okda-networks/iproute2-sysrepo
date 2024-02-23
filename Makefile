@@ -25,44 +25,46 @@ IPR2_SR_OBJ = $(IPR2_SR_SRC:.c=.o)
 
 
 all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
-	@set -e; \
-	for i in $(SUBDIRS); do \
-	$(MAKE) -C $$i || exit 1; done && \
-	echo "Building $(BIN)/$(EXEC)" && \
-	rm iproute2/ip/rtmon.o
-	rm iproute2/ip/ip.o
-	rm iproute2/bridge/bridge.o
-	rm iproute2/tc/tc.o
-	@echo ""
-	@echo "Patching conflicting symbols"
-	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/link.o
-	objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/monitor.o
-	@echo ""
-	$(CC) -o $(BIN)/$(EXEC)  $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
-	@echo ""
-	@echo "Make complete"
+    @set -e; \
+    for i in $(SUBDIRS); do \
+    $(MAKE) -C $$i || exit 1; done && \
+    echo "Building $(BIN)/$(EXEC)" && \
+    rm iproute2/ip/rtmon.o
+    rm iproute2/ip/ip.o
+    rm iproute2/bridge/bridge.o
+    rm iproute2/tc/tc.o
+    @echo ""
+    @echo "Patching conflicting symbols"
+    objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/link.o
+    objcopy --redefine-sym print_linkinfo=br_print_linkinfo iproute2/bridge/monitor.o
+    @echo ""
+    $(CC) -o $(BIN)/$(EXEC) $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
+    @echo ""
+    @echo "Make complete"
 
 clean:
-	@set -e; \
-	for i in $(SUBDIRS); do \
-	$(MAKE) -C $$i clean || exit 1; done && \
-	rm -f iproute2/config.mk && \
-	rm -f $(IPR2_SR_OBJ) && \
-	rm -f $(IPR2_SR_LIB_OBJ) && \
-	rm -f $(BIN)/$(EXEC)
+    @set -e; \
+    for i in $(SUBDIRS); do \
+    $(MAKE) -C $$i clean || exit 1; done && \
+    rm -f iproute2/config.mk && \
+    rm -f $(IPR2_SR_OBJ) && \
+    rm -f $(IPR2_SR_LIB_OBJ) && \
+    rm -f $(BIN)/$(EXEC)
 
 iproute2/config.mk:
-	@set -e; \
-	cd iproute2 && \
-	./configure && \
-	cd ..
+    @set -e; \
+    cd iproute2 && \
+    ./configure && \
+    cd ..
 
 check:
-	yanglint yang/*.yang
+    yanglint yang/*.yang
 
-$(IPR2_SR_LIB_OBJ): $(IPR2_SR_LIB_SRC)
-	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
+src/lib/%.o: src/lib/%.c
+    $(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
 
-$(IPR2_SR_OBJ): $(IPR2_SR_SRC)
-	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
+
+src/%.o: $(IPR2_SR_SRC) $(IPR2_SR_LIB_OBJ)
+    $(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
+
 
