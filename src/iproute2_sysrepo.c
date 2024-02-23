@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <setjmp.h>
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -86,6 +87,12 @@ static char *iproute2_ip_modules[] = { "iproute2-ip-link",
 
 
 volatile int exit_application = 0;
+jmp_buf jbuf;
+int jump_set = 0;
+void exist_cb(void){
+    if (jump_set)
+        longjmp(jbuf,1);
+}
 
 static void sigint_handler(__attribute__((unused)) int signum)
 {
@@ -324,7 +331,11 @@ static int do_cmd(int argc, char **argv)
                         "2- Run with individual iproute2 commands arguments.\n", argv[0]);
         return EXIT_FAILURE;
     }
-
+    jump_set = 1;
+    if (setjmp(jbuf)){
+        fprintf(stderr, "iproute exited with error, failed to apply changes..\n");
+        return EXIT_FAILURE;
+    }
     for (c = cmds; c->cmd; ++c) {
         if (matches(argv[1], c->cmd) == 0)
             return -(c->func(argc - 2, argv + 2));
@@ -499,10 +510,9 @@ int main(int argc, char **argv)
 {
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
-
+    atexit(exist_cb);
     if (argc == 1)
         return sysrepo_start();
-
     int ret = do_cmd(argc - 1, argv + 1);
     rtnl_close(&rth);
     return ret;
