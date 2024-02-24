@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <setjmp.h>
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -86,6 +87,14 @@ static char *iproute2_ip_modules[] = { "iproute2-ip-link",
 
 
 volatile int exit_application = 0;
+static jmp_buf jbuf;
+static int jump_set = 0;
+
+static void exit_cb(void)
+{
+    if (jump_set)
+        longjmp(jbuf, EXIT_FAILURE);
+}
 
 static void sigint_handler(__attribute__((unused)) int signum)
 {
@@ -368,7 +377,12 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
             }
         }
         fprintf(stdout,"\n");
-
+        jump_set = 1;
+        if (setjmp(jbuf)) {
+            // iproute2 exited, return exit failure.
+            jump_set =0 ;
+            return EXIT_FAILURE;
+        }
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         if (ret != EXIT_SUCCESS) {
             // TODO: add rollback functionality.
@@ -497,13 +511,17 @@ cleanup:
 
 int main(int argc, char **argv)
 {
+    int ret;
+
     if (rtnl_open(&rth, 0) < 0)
         return EXIT_FAILURE;
 
-    if (argc == 1)
+    if (argc == 1) {
+        atexit(exit_cb);
         return sysrepo_start();
+    } else
+        ret = do_cmd(argc - 1, argv + 1);
 
-    int ret = do_cmd(argc - 1, argv + 1);
     rtnl_close(&rth);
     return ret;
 }
