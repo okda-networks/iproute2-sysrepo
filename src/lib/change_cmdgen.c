@@ -12,11 +12,8 @@
  */
 
 #include <ctype.h>
-#include <bsd/string.h>
 
 #include "cmdgen.h"
-
-#define CMD_LINE_SIZE 1024
 
 char *yang_ext_map[] = {
         [CMD_START_EXT] = "cmd-start",

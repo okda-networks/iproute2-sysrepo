@@ -67,7 +67,7 @@ check:
 	yanglint yang/*.yang
 
 src/lib/%.o: src/lib/%.c
-	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
+	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include -Isrc/
 
 
 src/%.o: $(IPR2_SR_SRC) $(IPR2_SR_LIB_OBJ)

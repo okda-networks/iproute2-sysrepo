@@ -42,6 +42,8 @@
 #include "lib/cmdgen.h"
 #include <sysrepo.h>
 
+#include "iproute2_sysrepo.h"
+
 #ifndef LIBDIR
 #define LIBDIR "/usr/lib"
 #endif
@@ -77,9 +79,10 @@ static struct filter_util *filter_list;
 struct rtnl_handle rth = { .fd = -1 };
 
 /* sysrepo */
-static sr_session_ctx_t *sr_session;
-static sr_conn_ctx_t *sr_connection;
-static sr_subscription_ctx_t *sr_sub_ctx;
+sr_session_ctx_t *sr_session;
+sr_conn_ctx_t *sr_connection;
+sr_subscription_ctx_t *sr_sub_ctx;
+
 static char *iproute2_ip_modules[] = { "iproute2-ip-link",
                                        "iproute2-ip-nexthop",
                                        NULL }; // null terminator
@@ -370,6 +373,7 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         fprintf(stdout,"\n");
 
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
+        lyd2rollback_cmd(ipr2_cmds[i]->cmd_start_dnode);
         if (ret != EXIT_SUCCESS) {
             // TODO: add rollback functionality.
             free(ipr2_cmds);
