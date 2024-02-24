@@ -77,7 +77,7 @@ static struct filter_util *filter_list;
 struct rtnl_handle rth = { .fd = -1 };
 
 /* sysrepo */
-static sr_session_ctx_t *sr_session;
+sr_session_ctx_t *sr_session;
 static sr_conn_ctx_t *sr_connection;
 static sr_subscription_ctx_t *sr_sub_ctx;
 static char *iproute2_ip_modules[] = { "iproute2-ip-link",
