@@ -3,8 +3,10 @@
 #define IPROUTE2_SYSREPO_CMDGEN_H
 
 #include <libyang/libyang.h>
+#include <bsd/string.h>
 
 #define CMDS_ARRAY_SIZE 1024
+#define CMD_LINE_SIZE 1024
 
 /**
  * extension to extension name map.
