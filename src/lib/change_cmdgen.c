@@ -333,11 +333,9 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
             }
 
             // if value only extension, don't include the schema->name (key) in the command.
-            if (get_extension(VALUE_ONLY_EXT, next, NULL) == EXIT_SUCCESS)
-                goto next_iter;
-
+            if (get_extension(VALUE_ONLY_EXT, next, NULL) == EXIT_SUCCESS);
              // if arg_name extension, key will be set to the arg-name value.
-            if (get_extension(ARG_NAME_EXT, next, &key) == EXIT_SUCCESS) {
+            else if (get_extension(ARG_NAME_EXT, next, &key) == EXIT_SUCCESS) {
                 if (key == NULL) {
                     fprintf(stderr, "%s: ipr2cgen:arg-name extension found but failed to "
                                     "get the arg-name value for node \"%s\"\n",
