@@ -373,7 +373,6 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         fprintf(stdout,"\n");
 
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
-        lyd2rollback_cmd(ipr2_cmds[i]->cmd_start_dnode);
         if (ret != EXIT_SUCCESS) {
             // TODO: add rollback functionality.
             free(ipr2_cmds);
