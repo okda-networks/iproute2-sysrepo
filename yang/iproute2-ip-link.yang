@@ -201,6 +201,7 @@ module iproute2-ip-link {
             }
             leaf admin-status{
                 description "set admin status for the link";
+                ipr2cgen:value-only;
                 type enumeration {
                     enum "up";
                     enum "down";
@@ -217,6 +218,7 @@ module iproute2-ip-link {
                 case process-id {
                     description "create the device in the network namespace associated with process";
                     leaf pid {
+                        ipr2cgen:arg-name "netns";
                         type uint64;
                         description "process id";
                     }
@@ -224,6 +226,7 @@ module iproute2-ip-link {
                 case name {
                     description "create the device in the network namespace associated with name NETNSNAME";
                     leaf netnsname {
+                        ipr2cgen:arg-name "netns";
                         type string;
                         description "network namespace name";
                     }
@@ -231,6 +234,7 @@ module iproute2-ip-link {
                 case file {
                     description "create the device in the network namespace associated with file NETNSFILE";
                     leaf netnsfile {
+                        ipr2cgen:arg-name "netns";
                         type string;
                         description "network namespace file";
                     }
