@@ -4,6 +4,7 @@ module iproute2-ip-link {
     prefix "iplink";
 
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+    import iproute2-ip-netns { prefix ipnetns; }
     //import ietf-inet-types { prefix inet; }
     //import ietf-yang-types { prefix yang; }
     organization
@@ -227,7 +228,7 @@ module iproute2-ip-link {
                     description "create the device in the network namespace associated with name NETNSNAME";
                     leaf netnsname {
                         ipr2cgen:arg-name "netns";
-                        type string;
+                        type ipnetns:netns-ref;
                         description "network namespace name";
                     }
                 }

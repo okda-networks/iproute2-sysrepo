@@ -83,6 +83,7 @@ static sr_conn_ctx_t *sr_connection;
 static sr_subscription_ctx_t *sr_sub_ctx;
 static char *iproute2_ip_modules[] = { "iproute2-ip-link",
                                        "iproute2-ip-nexthop",
+                                       "iproute2-ip-netns",
                                        NULL }; // null terminator
 
 

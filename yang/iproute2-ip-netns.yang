@@ -1,0 +1,55 @@
+module iproute2-ip-netns {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:ip:netns";
+    prefix "ipnetns";
+
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+
+    organization
+        "Okda Networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+        "This module contain the iproute2 network namesapce (ip netns) configurations,
+        this is module contains all IP-NETNS(8) related configs,
+        refer to https://manpages.debian.org/jessie/iproute2/ip-netns.8.en.html";
+
+    revision "2024-02-24" {
+        description "Revision 1";
+        reference
+            "YANG model for iproute2 ip network namespace case.";
+    }
+
+    typedef netns-ref {
+        type leafref {
+            path "/ipnetns:netnses/ipnetns:netns/ipnetns:name";
+        }
+        description
+            "This type is used by data models that need to reference
+            network namespaces.";
+    }
+
+    container netnses{
+        ipr2cgen:cmd-add "ip netns add";
+        ipr2cgen:cmd-delete "ip netns del";
+        ipr2cgen:cmd-update ""; // netsn has no update operation, but cmd-update is required.
+        description
+            "iproute2 netns configurations";
+        list netns{
+            ipr2cgen:cmd-start;
+            key "name";
+            description
+                "netns configuraton";
+            leaf name{
+                ipr2cgen:value-only;
+                description "network namespace name";
+                type string;
+            }
+        }
+    }
+}
+
+
