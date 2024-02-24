@@ -512,17 +512,17 @@ cleanup:
 
 int main(int argc, char **argv)
 {
-    int ret;
+  int ret;
 
-    if (rtnl_open(&rth, 0) < 0)
-        return EXIT_FAILURE;
+  if (rtnl_open(&rth, 0) < 0)
+    return EXIT_FAILURE;
 
-    if (argc == 1) {
-        atexit(exist_cb);
-        return sysrepo_start();
-    } else
-        ret = do_cmd(argc - 1, argv + 1);
+  if (argc == 1) {
+    atexit(exist_cb);
+    return sysrepo_start();
+  } else
+    ret = do_cmd(argc - 1, argv + 1);
 
-    rtnl_close(&rth);
-    return ret;
+  rtnl_close(&rth);
+  return ret;
 }
