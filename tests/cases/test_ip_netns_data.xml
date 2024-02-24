@@ -1,0 +1,8 @@
+<netnses xmlns="urn:okda:iproute2:ip:netns">
+    <netns>
+        <name>vpn10</name>
+    </netns>
+    <netns>
+        <name>vpn20</name>
+    </netns>
+</netnses>

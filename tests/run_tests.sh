@@ -43,8 +43,10 @@ wait $sysrepo_pid
 
 # Check if the previous steps encountered any errors
 if [ $ret -ne 0 ]; then
-    echo "Error: One or more test scripts failed."
+    echo "TEST-ERROR: One or more test scripts failed. (FAIL)"
     exit $ret
+else
+   echo "TEST-INFO: All Tests Completed Successfully (PASS)"
 fi
 
 # Exit with return value
