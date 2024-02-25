@@ -64,5 +64,11 @@ module iproute2-cmdgen-extensions {
         description
             "instruct iproute2 to drop the leaf name (key) when generating the update cmd";
     }
+    extension on-update-include{
+        description
+            "instruct iproute2 to include the leaf(s) specified by arg-name (coma ',' separated) to be included
+            on update cmd";
+        argument "args-names";
+    }
 
 }

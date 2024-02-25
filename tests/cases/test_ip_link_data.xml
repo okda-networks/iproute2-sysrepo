@@ -7,4 +7,13 @@
         <name>testIf1</name>
         <type>dummy</type>
     </link>
+    <link>
+        <name>vlan10</name>
+        <device>testIf1</device>
+        <type>vlan</type>
+        <vlan xmlns="urn:okda:iproute2:ip:link:vlan:ext">
+            <protocol>802.1q</protocol>
+            <id>10</id>
+        </vlan>
+    </link>
 </links>
