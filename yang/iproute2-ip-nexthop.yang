@@ -15,7 +15,6 @@ module iproute2-ip-nexthop {
         <aaqrabaw@okdanetworks.com>";
 
     description
-
         "This module contain the iproute2 'ip nexthop' configurations ,
         this is module contains all IP-NEXTHOP(8) related configs,
         refer to https://manpages.debian.org/experimental/iproute2/ip-nexthop.8.en.html";
@@ -97,14 +96,17 @@ module iproute2-ip-nexthop {
                     }
                 }
             }
-            list group {
-                key "id weight";
-                description "create a nexthop group. Group specification is id with an optional weight";
+        container group {
+            description "create a nexthop group. Group specification is id with an optional weight";
+            list nh {
+                key "id";
+                ipr2cgen:group-list-with-separator "/";
+                ipr2cgen:group-leafs-values-separator ",";
                 leaf id{
                     type leafref {
-                        path "../../id";
+                        path "../../../id";
                     }
-                    must ". != ../../id" {
+                    must ". != ../../../id" {
                         error-message "Cannot reference the current nexthop ID, you can use other nexthops ids";
                     }
                     description "specify the nexthop id you want to add to this next";
@@ -113,6 +115,7 @@ module iproute2-ip-nexthop {
                     description "nexthop weight for this member";
                     type uint16;
                 }
+            }
                 leaf type {
                     default "mpath";
                     type enumeration {

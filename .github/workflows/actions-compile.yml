@@ -77,7 +77,8 @@ jobs:
                   echo "Failed: did not exit with code 1."
                   exit 1
               fi
+      - name: yanglint
+        run: make check
       - name: run iproute2-sysrepo tests
         run : chmod +x tests/run_tests.sh && sudo ./tests/run_tests.sh
-      - name: yanglint
-        run : make check
+
