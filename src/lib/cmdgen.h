@@ -3,6 +3,7 @@
 #define IPROUTE2_SYSREPO_CMDGEN_H
 
 #include <libyang/libyang.h>
+#include <sysrepo.h>
 #include <bsd/string.h>
 
 #define CMDS_ARRAY_SIZE 1024
@@ -39,8 +40,10 @@ typedef enum {
     ARG_NAME_EXT,
     FLAG_EXT,
     VALUE_ONLY_EXT,
-    VALUE_ONLY_ON_UPDATE_EXT
+    VALUE_ONLY_ON_UPDATE_EXT,
 
+    //other
+    ON_UPDATE_INCLUDE
 
 } extension_t;
 

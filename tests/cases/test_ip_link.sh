@@ -46,6 +46,15 @@ else
     echo "TEST-ERROR: Failed to create IP link testIf1 (FAIL)"
     exit 1
 fi
+
+# Step 4: Check if IP vlan10 is created
+if ip link show vlan10 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP link vlan10 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create IP link vlan10 (FAIL)"
+    exit 1
+fi
+
 sleep 0.2
 ####################################################################
 # Test: Update IP Links
@@ -72,6 +81,26 @@ else
     exit 1
 fi
 
+# Step 3: Check if the qos-map for IP vlan10 is updated by iproute2-sysrepo
+sysrepocfg -S '/iproute2-ip-link:links/link[name="vlan10"]/iproute2-ip-link-vlan-ext:vlan/egress-qos-map' --value 10:31
+
+# Step 4: Run the ip command and extract the egress-qos-map
+# Run the ip command and extract the egress-qos-map
+egress_qos_map=$(ip -d link show vlan10 | grep -oP 'egress-qos-map \{\s*\K[^\}]+')
+
+# Check if egress_qos_map is empty
+if [ -z "$egress_qos_map" ]; then
+    echo "TEST-ERROR: Failed to retrieve egress-qos-map for vlan10"
+    exit 1
+fi
+
+# Check if the egress-qos-map contains the expected value "10:7"
+if [[ "$egress_qos_map" =~ "10:7" ]]; then
+    echo "TEST-INFO: egress-qos-map updated on vlan10  (OK)"
+else
+    echo "TEST-ERROR: egress-qos-map for vlan10 is incorrect (FAIL)"
+    exit 1
+fi
 ####################################################################
 # Test: Delete IP Links
 ####################################################################
@@ -79,7 +108,12 @@ echo "--------------------"
 echo "[3] Test Link DELETE"
 echo "---------------------"
 
-# Step 1: delete data from sysrepo
+# step 1: work arround to delete the vlan10 first
+sysrepocfg -C  tests/cases/test_ip_link_data2.xml -d running
+sleep 0.1
+sysrepocfg -d running --edit  tests/cases/test_ip_link_data2.xml || ret=$?
+
+# Step 2: delete testif0 and testif1 from sysrepo
 sysrepocfg -C startup -d running -m iproute2-ip-link || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
@@ -87,7 +121,7 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     exit "$ret"
 fi
 
-# Step 2: check if interface deleted by iproute2-sysrepo
+# Step 3: check if interface deleted by iproute2-sysrepo
 if ! ip link show testIf0 >/dev/null 2>&1 && ! ip link show testIf1 >/dev/null 2>&1; then
     echo "TEST-INFO: IP links testIf0 and testIf1 are deleted successfully (OK)"
 else

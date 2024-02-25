@@ -51,5 +51,3 @@ module iproute2-ip-netns {
         }
     }
 }
-
-

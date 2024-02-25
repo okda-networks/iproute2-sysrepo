@@ -15,6 +15,10 @@
 
 #include "cmdgen.h"
 
+#define CMD_KEY_VALUE_SIZE 24
+
+extern sr_session_ctx_t *sr_session;
+
 char *yang_ext_map[] = {
         [CMD_START_EXT] = "cmd-start",
         [CMD_ADD_EXT] = "cmd-add",
@@ -26,6 +30,7 @@ char *yang_ext_map[] = {
         [FLAG_EXT] = "flag",
         [VALUE_ONLY_EXT] = "value-only",
         [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
+        [ON_UPDATE_INCLUDE] = "on-update-include"
 };
 
 void dup_argv(char ***dest, char **src, int argc)
@@ -252,9 +257,61 @@ void add_command(char *cmd_line,const struct lyd_node *start_dnode,
     memset(cmd_line, 0, CMD_LINE_SIZE);
     free_argv(argv, argc);
 }
+/**
+ * create cmd line for single cmd key, value pair,
+ * this function will check all ipr2cgen extension to create correct key, value pair.
+ * @param [in] dnode data node to generate the key, value argument from.
+ * @param [in] curr_op_val current operation value for the startcmd node (create, del, update)
+ * @param [out] key the parsed/extracted command argument key.
+ * @param [out] value the parsed/extracted command argument value.
+ * @return EXIST_SUCCESS, EXIST_FAILURE.
+ */
+int creat_cmd_key_and_value(struct lyd_node *dnode, oper_t curr_op_val, char **key, char **value)
+{
+
+    // leaf and leaf-list nodes contain data.
+    if (dnode->schema->nodetype != LYS_LEAF && dnode->schema->nodetype != LYS_LEAFLIST)
+        return EXIT_FAILURE;
+
+    if (key == NULL)
+        key = malloc(sizeof(char *));
+    // if list operation is delete, get the keys only
+    if (curr_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
+        return EXIT_SUCCESS;
+
+    // if FLAG extension, add schema name to the cmd and go to next iter.
+    if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
+        if (!strcmp("true", lyd_get_value(dnode)))
+            *key = strdup(dnode->schema->name);
+        return EXIT_SUCCESS;
+    }
+    // if value only extension, don't include the schema->name (key) in the command.
+    if (get_extension(VALUE_ONLY_EXT, dnode, NULL) == EXIT_SUCCESS);
+    // if arg_name extension, key will be set to the arg-name value.
+    else if (get_extension(ARG_NAME_EXT, dnode, key) == EXIT_SUCCESS) {
+        if (key == NULL) {
+            fprintf(stderr, "%s: ipr2cgen:arg-name extension found but failed to "
+                            "get the arg-name value for node \"%s\"\n",
+                    __func__, dnode->schema->name);
+            return EXIT_FAILURE;
+        }
+    } else
+        *key = strdup(dnode->schema->name);
+
+    // set the value
+    // special case for identity leaf, where the module prefix might be added (e.g iproute-link:vti)
+    LY_DATA_TYPE type = ((struct lysc_node_leaf *) dnode->schema)->type->basetype;
+    if (type == LY_TYPE_IDENT)
+        *value = strip_yang_iden_prefix(lyd_get_value(dnode));
+    else
+        *value = (char *) strdup(lyd_get_value(dnode));
+    return EXIT_SUCCESS;
+}
+
 
 struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
 {
+    int ret;
     char *result;
     int cmd_idx = 0;
     char cmd_line[CMD_LINE_SIZE] = {0};
@@ -296,18 +353,18 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
         return NULL;
     }
 
-    oper_t op_val;
+    oper_t op_val=UNKNOWN_OPR;
     struct lyd_node *next, *startcmd_node;
     LYD_TREE_DFS_BEGIN(change_node, next)
     {
-        LY_DATA_TYPE type;
+       char *on_update_include=NULL;
+       char *key = NULL, *value = NULL;
         // if this is startcmd node (schema has ipr2cgen:cmd-start), then start building a new command
-        if (is_startcmd_node(next)) {
+        if (is_startcmd_node(next)) { // start node
             startcmd_node = next;
             // check if the cmd is not empty (first cmd)
             if (cmd_line[0] != 0)
                 add_command(cmd_line, startcmd_node, cmds, &cmd_idx);
-
 
             // prepare for new command
             op_val = get_operation(next);
@@ -318,49 +375,79 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
                 return NULL;
             }
             strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
-        } else if (next->schema->nodetype == LYS_LEAF) {
-            char *key = NULL, *value = NULL;
-
-            // if list operation is delete, get the keys only
-            if (op_val == DELETE_OPR && !lysc_is_key(next->schema))
-                goto next_iter;
-
-            // if FLAG extension, add schema name to the cmd and go to next iter.
-            if (get_extension(FLAG_EXT, next, NULL) == EXIT_SUCCESS) {
-                if (!strcmp("true", lyd_get_value(next)))
-                    key = strdup(next->schema->name);
-                goto next_iter;
+        } else if ((op_val == UPDATE_OPR) &&
+                   get_extension(ON_UPDATE_INCLUDE, next, &on_update_include) == EXIT_SUCCESS) {
+            // capture the on-update-include ext,
+            if (on_update_include == NULL) {
+                fprintf(stderr, "%s: ON_UPDATE_INCLUDE extension found,"
+                                "but failed to retrieve the arg-name list from ON_UPDATE_INCLUDE extension for node \"%s\" \n",
+                        __func__, next->schema->name);
+                free_cmds_info(cmds);
+                return NULL;
             }
 
-            // if value only extension, don't include the schema->name (key) in the command.
-            if (get_extension(VALUE_ONLY_EXT, next, NULL) == EXIT_SUCCESS);
-             // if arg_name extension, key will be set to the arg-name value.
-            else if (get_extension(ARG_NAME_EXT, next, &key) == EXIT_SUCCESS) {
-                if (key == NULL) {
-                    fprintf(stderr, "%s: ipr2cgen:arg-name extension found but failed to "
-                                    "get the arg-name value for node \"%s\"\n",
-                            __func__, next->schema->name);
+            // get all the on_update_include arg-names, fetch them from sr, and add them to the cmd_line.
+            // args-names format = arg1, arg2, ... argn
+            char *token;
+
+            // Get the first arg
+            token = strtok(on_update_include, ",");
+            while (token != NULL) {
+                key = NULL;
+                value = NULL;
+                char xpath[512] = {0};
+                lyd_path(startcmd_node, LYD_PATH_STD, xpath, 512);
+                strlcat(xpath, "/", sizeof(xpath));
+                strlcat(xpath, token, sizeof(xpath));
+                sr_data_t *include_node_sr_data;
+                // get the dnode from sr
+
+                sr_get_node(sr_session, xpath, 0, &include_node_sr_data);
+
+                if (include_node_sr_data == NULL) {
+                    fprintf(stderr, "%s: failed to get include node data from sysrepo ds."
+                                    "include node name = \"%s\"\n",
+                            __func__, token);
                     free_cmds_info(cmds);
                     return NULL;
                 }
-            } else
-                key = strdup(next->schema->name);
+                ret = creat_cmd_key_and_value(include_node_sr_data->tree, op_val, &key, &value);
+                if (ret != EXIT_SUCCESS) {
+                    free_cmds_info(cmds);
+                    return NULL;
+                }
+                if (key != NULL) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, key, sizeof(cmd_line));
+                    free(key);
+                }
+                if (value != NULL) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, value, sizeof(cmd_line));
+                    free(value);
+                }
+                // get next token.
+                token = strtok(NULL, ",");
+            }
 
-            // set the value
-            // special case for identity leaf, where the module prefix might be added (e.g iproute-link:vti)
-            type = ((struct lysc_node_leaf *) next->schema)->type->basetype;
-            if (type == LY_TYPE_IDENT)
-                value = strip_yang_iden_prefix(lyd_get_value(next));
-            else
-                value = (char *) lyd_get_value(next);
-        next_iter:
+        } else if (next->schema->nodetype == LYS_LEAF || next->schema->nodetype == LYS_LEAFLIST){
+            key = NULL;
+            value = NULL;
+            ret = creat_cmd_key_and_value(next, op_val, &key, &value);
+            if (ret != EXIT_SUCCESS) {
+                free_cmds_info(cmds);
+                return NULL;
+            }
+
             if (key != NULL) {
                 strlcat(cmd_line, " ", sizeof(cmd_line));
                 strlcat(cmd_line, key, sizeof(cmd_line));
+                free(key);
             }
             if (value != NULL) {
                 strlcat(cmd_line, " ", sizeof(cmd_line));
                 strlcat(cmd_line, value, sizeof(cmd_line));
+                free(value);
             }
         }
         LYD_TREE_DFS_END(change_node, next);

@@ -5,8 +5,7 @@ module iproute2-ip-link {
 
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-netns { prefix ipnetns; }
-    //import ietf-inet-types { prefix inet; }
-    //import ietf-yang-types { prefix yang; }
+
     organization
         "Okda Networks";
 
@@ -129,6 +128,11 @@ module iproute2-ip-link {
             "Virtual tunnel interface.";
     }
 
+    identity vlan {
+        base link-type;
+        description
+            "VLAN device.";
+    }
 
     container links {
         ipr2cgen:cmd-add "ip link add";
@@ -145,8 +149,12 @@ module iproute2-ip-link {
                 description "link name";
             }
             leaf device {
+                must "../device != ../name" {
+                error-message "Cannot reference the current link name, you can use other links";
+                }
                 ipr2cgen:arg-name "link";
-                type string;
+                type link-ref;
+
                 description "specifies the physical device to act operate on";
             }
             leaf type {

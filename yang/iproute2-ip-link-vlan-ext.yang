@@ -3,6 +3,7 @@ module iproute2-ip-link-vlan-ext {
     namespace "urn:okda:iproute2:ip:link:vlan:ext";
     prefix "iplinkvlan";
 
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-link {prefix iplink;}
 
 
@@ -25,16 +26,17 @@ module iproute2-ip-link-vlan-ext {
             "YANG model for iproute2 ip link vlan extension case.";
     }
 
-    identity vlan {
-        base iplink:link-type;
-        description
-            "VLAN device.";
-    }
+
 
     augment "/iplink:links/iplink:link" {
         description "adding vlan type paramters";
         container vlan {
-            when "../iplink:type = 'iplinkvlan:vlan'";
+            ipr2cgen:on-update-include "type";
+            when "../iplink:type = 'iplink:vlan'";
+            must "../iplink:device" {
+                description "VLAN configuration requires 'device' to be set";
+                error-message "VLAN configuration is not allowed without specifying 'device'";
+            }
             description "vlan type interface paramters";
             leaf protocol {
                 description "VLAN_PROTO - either 802.1Q or 802.1ad.";

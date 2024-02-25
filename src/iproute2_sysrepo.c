@@ -380,8 +380,9 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         fprintf(stdout,"\n");
         jump_set = 1;
         if (setjmp(jbuf)) {
-            // iproute2 exited, return exit failure.
+            // iproute2 exited, reset jump, and set exit callback.
             jump_set =0 ;
+            atexit(exit_cb);
             return EXIT_FAILURE;
         }
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
