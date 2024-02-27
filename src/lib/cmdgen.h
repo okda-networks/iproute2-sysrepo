@@ -19,41 +19,45 @@ extern char *yang_ext_map[];
  *
  */
 typedef enum {
-    ADD_OPR,
-    DELETE_OPR,
-    UPDATE_OPR,
-    UNKNOWN_OPR,
+	ADD_OPR,
+	DELETE_OPR,
+	UPDATE_OPR,
+	UNKNOWN_OPR,
 } oper_t;
 
 /**
  * definition of yang's extension_t.
  */
 typedef enum {
-    // list extensions
-    CMD_START_EXT,
-    // root container extensions
-    CMD_ADD_EXT,
-    CMD_DELETE_EXT,
-    CMD_UPDATE_EXT,
+	// list extensions
+	CMD_START_EXT,
+	GROUP_LIST_WITH_SEPARATOR,
+	GROUP_LEAFS_VALUES_SEPARATOR,
 
-    // leaf extensions
-    ARG_NAME_EXT,
-    FLAG_EXT,
-    VALUE_ONLY_EXT,
-    VALUE_ONLY_ON_UPDATE_EXT,
+	// root container extensions
+	CMD_ADD_EXT,
+	CMD_DELETE_EXT,
+	CMD_UPDATE_EXT,
 
-    //other
-    ON_UPDATE_INCLUDE
+	// leaf extensions
+	ARG_NAME_EXT,
+	FLAG_EXT,
+	VALUE_ONLY_EXT,
+	VALUE_ONLY_ON_UPDATE_EXT,
+
+	//other
+	ON_UPDATE_INCLUDE
 
 } extension_t;
 
 /**
  * @brief data struct to store command information.
  */
-struct cmd_info{
-    int argc;
-    char **argv;
-    const struct lyd_node *cmd_start_dnode; /** lyd change node where the command starts
+struct cmd_info {
+	int argc;
+	char **argv;
+	const struct lyd_node
+		*cmd_start_dnode; /** lyd change node where the command starts
                                                 ipr2gen:cmd-start) */
 };
 
@@ -70,7 +74,7 @@ void free_cmds_info(struct cmd_info **cmds_info);
  * @param[in] change_node lyd_node of change data.
  * @return cmd_info array.
  */
-struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
+struct cmd_info **lyd2cmds(const struct lyd_node *change_node);
 
 /**
  * @brief convert change cmd info to rollback cmd info.
@@ -79,7 +83,7 @@ struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
  * @param[in] change_node lyd_node of change data.
  * @return cmd_info rollback cmd.
  */
-struct cmd_info* lyd2rollback_cmd(const struct lyd_node *change_node);
+struct cmd_info *lyd2rollback_cmd(const struct lyd_node *change_node);
 
 /**
  * get the yang operation from the lyd_node (create, replace, delete)
@@ -97,4 +101,4 @@ oper_t get_operation(const struct lyd_node *dnode);
  */
 int get_extension(extension_t ex_t, const struct lyd_node *dnode, char **value);
 
-#endif// IPROUTE2_SYSREPO_CMDGEN_H
+#endif // IPROUTE2_SYSREPO_CMDGEN_H

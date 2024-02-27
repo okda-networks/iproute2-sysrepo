@@ -31,7 +31,7 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     exit "$ret"
 fi
 
-# Step 2: Check if IP 2 is created
+# Step 2: Check if nh id 1 is created
 if ip nexthop show id 1 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 1 created successfully (OK)"
 else
@@ -39,13 +39,22 @@ else
     exit 1
 fi
 
-# Step 3: Check if IP testIf1 is created
+# Step 3: Check if nh id 2 is created
 if ip nexthop show id 2 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 2 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 2 (FAIL)"
     exit 1
 fi
+
+# Step 4: Check if nh id 12 is created
+if ip nexthop show id 12 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP nexthop id 12 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create IP nexthop 2 (FAIL)"
+    exit 1
+fi
+
 sleep 0.2
 ####################################################################
 # Test: Update IP nexthops
@@ -82,6 +91,11 @@ echo "--------------------"
 echo "[3] Test nexthop DELETE"
 echo "---------------------"
 
+# step 0: work arround to delete the nexthop id 12 first
+sysrepocfg -C  tests/cases/test_ip_nexthop_data2.xml -d running
+sleep 0.1
+sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data2.xml || ret=$?
+
 # Step 1: delete data from sysrepo
 sysrepocfg -C startup -d running -m iproute2-ip-nexthop || ret=$?
 # Check if sysrepocfg command failed
@@ -91,12 +105,13 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
 fi
 
 # Step 2: check if interface deleted by iproute2-sysrepo
-if ! ip nexthop show id 1 >/dev/null 2>&1 && ! ip nexthop show id 2 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthops 1 and 2 are deleted successfully (OK)"
+if ! ip nexthop show id 1 >/dev/null 2>&1 && ! ip nexthop show id 2 >/dev/null 2>&1 && ! ip nexthop show id 12 >/dev/null 2>&1 ; then
+    echo "TEST-INFO: IP nexthops 1, 2 and 12 are deleted successfully (OK)"
 else
     echo "TEST-ERROR: Failed to delete IP nexthops 2 and 1 (FAIL)"
     exit 1
 fi
+
 
 
 # Exit with return value
