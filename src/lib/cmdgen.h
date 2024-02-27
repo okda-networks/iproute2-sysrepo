@@ -5,6 +5,7 @@
 #include <libyang/libyang.h>
 #include <sysrepo.h>
 #include <bsd/string.h>
+#include <stdbool.h>
 
 #define CMDS_ARRAY_SIZE 1024
 #define CMD_LINE_SIZE 1024
