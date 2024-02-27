@@ -58,6 +58,12 @@ struct cmd_info{
 };
 
 /**
+ * free the all the cmd_info.
+ * @param cmds_info array of cmd_info struct.
+ */
+void free_cmds_info(struct cmd_info **cmds_info);
+
+/**
  * @brief generate list of commands info from the lyd_node (diff).
  *
  *
