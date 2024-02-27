@@ -70,5 +70,20 @@ module iproute2-cmdgen-extensions {
             on update cmd";
         argument "args-names";
     }
+    extension replace-on-update{
+        description
+            "instruct iproute2 to get all leafs in sysrepo, compare it with the changed leaf, and apply the diff.
+            typically used where iproute2 cmd require a replace for update, example tc filter, and ip nexthop group";
+    }
+    extension group-list-with-separator{
+        description
+            "instruct iproute2 to group all the list enteries together with the separator specified";
+    argument "separator";
+    }
+    extension group-leafs-values-separator{
+        description
+            "instruct iproute2 to group the leafs values inside the list/container to be groupd with separator specified";
+    argument "separator";
+    }
 
 }
