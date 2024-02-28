@@ -98,4 +98,12 @@ oper_t get_operation(const struct lyd_node *dnode);
  */
 int get_extension(extension_t ex_t, const struct lyd_node *dnode, char **value);
 
+/**
+ * get the target node from sysrepo running ds,
+ * @param  [in] startcmd_node start cmd_node,
+ * @param  [in] node_name node name to be fetched from sr.
+ * @return [out] lyd_node found.
+ */
+struct lyd_node * get_node_from_sr(const struct lyd_node *startcmd_node, char *node_name);
+
 #endif// IPROUTE2_SYSREPO_CMDGEN_H

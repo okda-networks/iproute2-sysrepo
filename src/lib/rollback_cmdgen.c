@@ -49,7 +49,7 @@ char **get_prefix_cmds(const struct lyd_node *root_node, char **oper2cmd_prefix)
 }
 
 int lyd_leaf2arg(struct lyd_node *element, bool only_lyd_list_keys, char **arg_name, char **arg_value) {
-    if (only_lyd_list_keys && !lysc_is_key(element->schema)){
+    if (only_lyd_list_keys && !lysc_is_key(element->schema)) {
         *arg_name = NULL;
         *arg_value = NULL;
         return EXIT_SUCCESS;
@@ -63,7 +63,7 @@ int lyd_leaf2arg(struct lyd_node *element, bool only_lyd_list_keys, char **arg_n
     }
     
     /* set arg_value */
-    if (element->schema->nodetype == LYS_LEAF){
+    if (element->schema->nodetype == LYS_LEAF) {
         LY_DATA_TYPE type = ((struct lysc_node_leaf *)element->schema)->type->basetype;
         if (type == LY_TYPE_IDENT) {
             *arg_value = strdup(get_identityref_value(lyd_get_value(element)));
@@ -79,7 +79,7 @@ int lyd_leaf2arg(struct lyd_node *element, bool only_lyd_list_keys, char **arg_n
 
 int lyd_leaf2rollback_arg(struct lyd_node *element, bool only_lyd_list_keys, char **arg_name, char **arg_value) {
     
-    if (only_lyd_list_keys && !lysc_is_key(element->schema)){
+    if (only_lyd_list_keys && !lysc_is_key(element->schema)) {
         *arg_name = NULL;
         *arg_value = NULL;
         return EXIT_SUCCESS;
@@ -94,7 +94,7 @@ int lyd_leaf2rollback_arg(struct lyd_node *element, bool only_lyd_list_keys, cha
     
     /* set arg_value */
 
-    if (element->schema->nodetype == LYS_LEAF || element->schema->nodetype == LYS_LEAFLIST){
+    if (element->schema->nodetype == LYS_LEAF || element->schema->nodetype == LYS_LEAFLIST) {
         
         struct lyd_meta *meta_prev_value, *meta_default_value;
         /* "orig-value" metadata contains the previous value */
@@ -129,7 +129,7 @@ int lyd_leaf2rollback_arg(struct lyd_node *element, bool only_lyd_list_keys, cha
 }
 
 
-struct lyd_node *sr_get_xpath_lyd(char * xpath){
+struct lyd_node *sr_get_xpath_lyd(char * xpath) {
     sr_data_t *subtree = NULL;
     int error = 0;
 	error = sr_get_subtree(sr_session, xpath, 0, &subtree);
@@ -198,55 +198,60 @@ struct cmd_info* lyd2rollback_cmd(const struct lyd_node *startcmd_node) {
                 // add everything in fetched node
                 break;
             case UPDATE_OPR:
-                // add leafs arg_name and previous value (pay attention to flag)
-                if (element->schema->nodetype == LYS_LEAF || element->schema->nodetype == LYS_LEAFLIST){
-                    lyd_leaf2rollback_arg(element, false, &arg_name, &arg_value);
-                }
                 // add include-on-update leafs
                 if (element->schema->nodetype == LYS_CONTAINER || element->schema->nodetype == LYS_LIST) {
-                    if (get_extension(ON_UPDATE_INCLUDE, element, &on_update_include) == EXIT_SUCCESS){
+                    printf("node name %s\n",element->schema->name);
+                    if (get_extension(ON_UPDATE_INCLUDE, element, &on_update_include) == EXIT_SUCCESS) {
                         if (on_update_include == NULL) {
                             fprintf(stderr, "%s: ON_UPDATE_INCLUDE extension found,"
                                             "but failed to retrieve the arg-name list from ON_UPDATE_INCLUDE extension for node \"%s\" \n",
                                     __func__, element->schema->name);
                             return NULL;
                         }
-                    }
-                    char *token;
-                    token = strtok(on_update_include, ",");
-                    
-                    while (token != NULL) {
-                        struct lyd_node *node = sr_get_lyd_node_by_name(token,element);
-                        lyd_leaf2arg(node, false, &arg_name, &arg_value);
-                        if (arg_name != NULL) {
-                            strlcat(cmd_line, " ", sizeof(cmd_line));
-                            strlcat(cmd_line, arg_name, sizeof(cmd_line));
-                            arg_name = NULL;
+                        printf("incl %s\n", on_update_include);
+                        char *token;
+                        // Get the first arg
+                        token = strtok(on_update_include, ",");
+                        while (token != NULL) {
+                            struct lyd_node *include_node = get_node_from_sr(startcmd_node,token);
+                            if (include_node == NULL)
+                                return NULL;
+                            lyd_leaf2arg(include_node, false, &arg_name, &arg_value);
+                            if (arg_name != NULL) {
+                                strlcat(cmd_line, " ", sizeof(cmd_line));
+                                strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                                arg_name = NULL;
                             }
-                        if (arg_value != NULL) {
-                            strlcat(cmd_line, " ", sizeof(cmd_line));
-                            strlcat(cmd_line, arg_value, sizeof(cmd_line));
-                            arg_value = NULL;
+                            if (arg_value != NULL) {
+                                strlcat(cmd_line, " ", sizeof(cmd_line));
+                                strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                                arg_value = NULL;
+                            }
+                            // get next token.
+                            token = strtok(NULL, ",");
                         }
                     }
-                    goto next_iter;
+                }
+                
+                // add leafs arg_name and previous value (pay attention to flag)
+                if (element->schema->nodetype == LYS_LEAF || element->schema->nodetype == LYS_LEAFLIST){
+                    lyd_leaf2rollback_arg(element, false, &arg_name, &arg_value);
+                }
+                if (arg_name != NULL) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                    arg_name = NULL;
+                }
+                if (arg_value != NULL) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                    arg_value = NULL;
                 }
                 break;
             }
-
-update_cmd:
-            if (arg_name != NULL) {
-                strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, arg_name, sizeof(cmd_line));
-                }
-            if (arg_value != NULL) {
-                strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, arg_value, sizeof(cmd_line));
-            }
-next_iter:
         LYD_TREE_DFS_END(startcmd_node, element);
     }
-
+    
     if (cmd_line)
         printf("result rollback cmd: %s\n",cmd_line);
 }
