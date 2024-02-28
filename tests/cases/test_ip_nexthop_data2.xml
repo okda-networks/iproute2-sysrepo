@@ -18,18 +18,4 @@
         </ipv4>
         <fdb>true</fdb>
     </nexthop>
-    <nexthop>
-        <id>12</id>
-        <group>
-            <nh>
-                <id>2</id>
-                <weight>3</weight>
-            </nh>
-            <nh>
-                <id>3</id>
-                <weight>4</weight>
-            </nh>
-        </group>
-        <fdb>true</fdb>
-    </nexthop>
 </nexthops>

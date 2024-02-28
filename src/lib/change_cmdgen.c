@@ -15,14 +15,14 @@
 
 #include "cmdgen.h"
 
-#define CMD_KEY_VALUE_SIZE 24
-
 extern sr_session_ctx_t *sr_session;
 
 char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [CMD_ADD_EXT] = "cmd-add",
                          [CMD_DELETE_EXT] = "cmd-delete",
                          [CMD_UPDATE_EXT] = "cmd-update",
+                         [GROUP_LIST_WITH_SEPARATOR] = "group-list-with-separator",
+                         [GROUP_LEAFS_VALUES_SEPARATOR] = "group-leafs-values-separator",
 
                          // leaf extensions
                          [ARG_NAME_EXT] = "arg-name",
@@ -258,42 +258,30 @@ void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line,
     memset(cmd_line, 0, CMD_LINE_SIZE);
     free_argv(argv, argc);
 }
-/**
- * create cmd line for single cmd key, value pair,
- * this function will check all ipr2cgen extension to create correct key, value pair.
- * @param [in] dnode data node to generate the key, value argument from.
- * @param [in] curr_op_val current operation value for the startcmd node (create, del, update)
- * @param [out] key the parsed/extracted command argument key.
- * @param [out] value the parsed/extracted command argument value.
- * @return EXIST_SUCCESS, EXIST_FAILURE.
- */
-int creat_cmd_key_and_value(struct lyd_node *dnode, oper_t curr_op_val, char **key, char **value)
-{
-    // leaf and leaf-list nodes contain data.
-    if (dnode->schema->nodetype != LYS_LEAF && dnode->schema->nodetype != LYS_LEAFLIST) {
-        fprintf(stderr, "%s: not a leaf or leaf-list, node \"%s\"\n ", __func__,
-                dnode->schema->name);
-        return EXIT_FAILURE;
-    }
 
-    if (key == NULL)
-        key = malloc(sizeof(char *));
+/**
+ * create argument name from dnoe
+ * @param [in] dnode lyd_node
+ * @param [in] curr_op_val starnode op_val
+ * @param [out] value the captured arg name
+ * @return EXIT_SUCCESS or EXIT_FAILURE
+ */
+int creat_cmd_arg_name(struct lyd_node *dnode, oper_t curr_op_val, char **key)
+{
     // if list operation is delete, get the keys only
     if (curr_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
         return EXIT_SUCCESS;
 
-    // if FLAG extension, add schema name to the cmd and go to next iter.
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
         if (!strcmp("true", lyd_get_value(dnode)))
             *key = strdup(dnode->schema->name);
         return EXIT_SUCCESS;
     }
-    // if value only extension, don't include the schema->name (key) in the command.
+
     if (get_extension(VALUE_ONLY_EXT, dnode, NULL) == EXIT_SUCCESS)
-        ;
-    // if arg_name extension, key will be set to the arg-name value.
-    else if (get_extension(ARG_NAME_EXT, dnode, key) == EXIT_SUCCESS) {
-        if (key == NULL) {
+        return EXIT_SUCCESS;
+    if (get_extension(ARG_NAME_EXT, dnode, key) == EXIT_SUCCESS) {
+        if (*key == NULL) {
             fprintf(stderr,
                     "%s: ipr2cgen:arg-name extension found but failed to "
                     "get the arg-name value for node \"%s\"\n",
@@ -302,15 +290,70 @@ int creat_cmd_key_and_value(struct lyd_node *dnode, oper_t curr_op_val, char **k
         }
     } else
         *key = strdup(dnode->schema->name);
-
-    // set the value
-    // special case for identity leaf, where the module prefix might be added (e.g iproute-link:vti)
-    LY_DATA_TYPE type = ((struct lysc_node_leaf *)dnode->schema)->type->basetype;
-    if (type == LY_TYPE_IDENT)
-        *value = strip_yang_iden_prefix(lyd_get_value(dnode));
-    else
-        *value = (char *)strdup(lyd_get_value(dnode));
     return EXIT_SUCCESS;
+}
+
+/**
+ * create argument value from dnoe
+ * @param [in] dnode lyd_node
+ * @param [in] curr_op_val starnode op_val
+ * @param [out] value the captured arg value value
+ */
+void creat_cmd_arg_value(struct lyd_node *dnode, oper_t curr_op_val, char **value)
+{
+    // if list operation is delete, get the keys only
+    if (curr_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
+        return;
+
+    // if FLAG extension, add schema name to the cmd and go to next iter.
+    if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
+        return;
+    }
+    if (value == NULL)
+        value = malloc(sizeof(char *));
+    // if list and grouping group the values.
+    if (dnode->schema->nodetype == LYS_LIST) {
+        char *group_list_separator = NULL;
+        char *group_leafs_values_separator = NULL;
+        if ((get_extension(GROUP_LIST_WITH_SEPARATOR, dnode, &group_list_separator) ==
+             EXIT_SUCCESS) &&
+            (get_extension(GROUP_LEAFS_VALUES_SEPARATOR, dnode, &group_leafs_values_separator) ==
+             EXIT_SUCCESS)) {
+            // add space
+            char temp_value[50] = { 0 };
+
+            strlcat(temp_value, " ", sizeof(temp_value));
+            struct lyd_node *list_first_entry = lyd_first_sibling(dnode);
+            struct lyd_node *list_next;
+
+            // loop through the list.
+            LY_LIST_FOR(list_first_entry, list_next)
+            {
+                struct lyd_node *list_first_leaf = lyd_child(list_next);
+                struct lyd_node *leaf_next = NULL;
+                // loop through the list entries and add them to cmd_line with the specified separator
+                LY_LIST_FOR(list_first_leaf, leaf_next)
+                {
+                    strlcat(temp_value, lyd_get_value(leaf_next), sizeof(temp_value));
+                    if (leaf_next->next != NULL)
+                        strlcat(temp_value, group_leafs_values_separator, sizeof(temp_value));
+                }
+                // add the list separator.
+                if (list_next->next != NULL &&
+                    !strcmp(list_next->next->schema->name, list_next->schema->name))
+                    strlcat(temp_value, group_list_separator, sizeof(temp_value));
+            }
+            *value = strdup(temp_value);
+        }
+    } else {
+        // if INDENT type remove the module name from the value (example: ip-link-type:dummy)
+        // this strip ip-link-type.
+        LY_DATA_TYPE type = ((struct lysc_node_leaf *)dnode->schema)->type->basetype;
+        if (type == LY_TYPE_IDENT)
+            *value = strip_yang_iden_prefix(lyd_get_value(dnode));
+        else
+            *value = (char *)strdup(lyd_get_value(dnode));
+    }
 }
 
 /**
@@ -355,6 +398,8 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
     LYD_TREE_DFS_BEGIN(startcmd_node, next)
     {
         char *on_update_include = NULL;
+        char *group_list_separator = NULL;
+        char *group_leafs_values_separator = NULL;
         char *key = NULL, *value = NULL;
         switch (next->schema->nodetype) {
         case LYS_LIST:
@@ -363,11 +408,11 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                 get_extension(ON_UPDATE_INCLUDE, next, &on_update_include) == EXIT_SUCCESS) {
                 // capture the on-update-include ext,
                 if (on_update_include == NULL) {
-                    fprintf(
-                        stderr,
-                        "%s: ON_UPDATE_INCLUDE extension found,"
-                        "but failed to retrieve the arg-name list from ON_UPDATE_INCLUDE extension for node \"%s\" \n",
-                        __func__, next->schema->name);
+                    fprintf(stderr,
+                            "%s: ON_UPDATE_INCLUDE extension found,"
+                            "but failed to retrieve the arg-name list from ON_UPDATE_INCLUDE "
+                            "extension for node \"%s\" \n",
+                            __func__, next->schema->name);
                     return NULL;
                 }
                 // get all the on_update_include arg-names, fetch them from sr, and add them to the cmd_line.
@@ -383,13 +428,16 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                     struct lyd_node *include_node = get_node_from_sr(startcmd_node, token);
                     if (include_node == NULL)
                         return NULL;
-                    ret = creat_cmd_key_and_value(include_node, op_val, &key, &value);
+
+                    creat_cmd_arg_value(include_node, op_val, &value);
+                    ret = creat_cmd_arg_name(include_node, op_val, &key);
                     if (ret != EXIT_SUCCESS) {
                         fprintf(stderr,
-                                "%s: failed to create creat_cmd_key_and_value for node \"%s\".\n",
+                                "%s: failed to create creat_cmd_arg_name for node \"%s\".\n",
                                 __func__, next->schema->name);
                         return NULL;
                     }
+
                     if (key != NULL) {
                         strlcat(cmd_line, " ", sizeof(cmd_line));
                         strlcat(cmd_line, key, sizeof(cmd_line));
@@ -403,19 +451,70 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                     // get next token.
                     token = strtok(NULL, ",");
                 }
+                break;
+
+            } else if ((get_extension(GROUP_LIST_WITH_SEPARATOR, next, &group_list_separator) ==
+                        EXIT_SUCCESS) &&
+                       (get_extension(GROUP_LEAFS_VALUES_SEPARATOR, next,
+                                      &group_leafs_values_separator) == EXIT_SUCCESS)) {
+                if (group_list_separator == NULL) {
+                    fprintf(stderr,
+                            "%s: failed to get group_list_separator"
+                            " for node \"%s\".\n",
+                            __func__, next->schema->name);
+                    return NULL;
+                }
+                if (group_leafs_values_separator == NULL) {
+                    fprintf(stderr,
+                            "%s: failed to get group_leafs_values_separator"
+                            " for node \"%s\".\n",
+                            __func__, next->schema->name);
+                    return NULL;
+                }
+                creat_cmd_arg_value(next, op_val, &value);
+                ret = creat_cmd_arg_name(next, op_val, &key);
+                if (ret != EXIT_SUCCESS) {
+                    fprintf(stderr, "%s: failed to create creat_cmd_arg_name for node \"%s\".\n",
+                            __func__, next->schema->name);
+                    return NULL;
+                }
+                if (key != NULL) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, key, sizeof(cmd_line));
+                    free(key);
+                }
+                if (value != NULL) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, value, sizeof(cmd_line));
+                    free(value);
+                }
+                const char *grouped_schema_name = next->schema->name;
+                // skip the collected list info. while the next is not null and the next node is
+                // same node schema name, then move next.
+                while (next->next != NULL) {
+                    if (!strcmp(next->schema->name, grouped_schema_name))
+                        next = next->next;
+                    else
+                        break;
+                }
             }
-            break;
+            // next might be skipped,
+            // if after skip, the node type of next is leaf or leaflist then continue to
+            // leaf and leaflist cases to capture the arg_name arg_value for that node.
+            if (next->schema->nodetype != LYS_LEAF && next->schema->nodetype != LYS_LEAFLIST)
+                break;
         case LYS_LEAF:
         case LYS_LEAFLIST:
+
             key = NULL;
             value = NULL;
-            ret = creat_cmd_key_and_value(next, op_val, &key, &value);
+            creat_cmd_arg_value(next, op_val, &value);
+            ret = creat_cmd_arg_name(next, op_val, &key);
             if (ret != EXIT_SUCCESS) {
-                fprintf(stderr, "%s: failed to create creat_cmd_key_and_value for node \"%s\".\n",
+                fprintf(stderr, "%s: failed to create creat_cmd_arg_name for node \"%s\".\n",
                         __func__, next->schema->name);
                 return NULL;
             }
-
             if (key != NULL) {
                 strlcat(cmd_line, " ", sizeof(cmd_line));
                 strlcat(cmd_line, key, sizeof(cmd_line));
@@ -482,6 +581,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
     oper_t op_val;
     struct lyd_node *next, *startcmd_node, *child_node;
     child_node = lyd_child(change_node);
+    // loop through children of the root node.
     LY_LIST_FOR(child_node, next)
     {
         if (next->schema->nodetype == LYS_LIST) {

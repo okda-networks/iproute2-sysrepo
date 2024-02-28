@@ -31,6 +31,9 @@ typedef enum {
 typedef enum {
     // list extensions
     CMD_START_EXT,
+    GROUP_LIST_WITH_SEPARATOR,
+    GROUP_LEAFS_VALUES_SEPARATOR,
+
     // root container extensions
     CMD_ADD_EXT,
     CMD_DELETE_EXT,
@@ -50,7 +53,7 @@ typedef enum {
 /**
  * @brief data struct to store command information.
  */
-struct cmd_info{
+struct cmd_info {
     int argc;
     char **argv;
     const struct lyd_node *cmd_start_dnode; /** lyd change node where the command starts
@@ -70,7 +73,7 @@ void free_cmds_info(struct cmd_info **cmds_info);
  * @param[in] change_node lyd_node of change data.
  * @return cmd_info array.
  */
-struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
+struct cmd_info **lyd2cmds(const struct lyd_node *change_node);
 
 /**
  * @brief convert change cmd info to rollback cmd info.
@@ -79,7 +82,7 @@ struct cmd_info** lyd2cmds(const struct lyd_node *change_node);
  * @param[in] change_node lyd_node of change data.
  * @return cmd_info rollback cmd.
  */
-struct cmd_info* lyd2rollback_cmd(const struct lyd_node *change_node);
+struct cmd_info *lyd2rollback_cmd(const struct lyd_node *change_node);
 
 /**
  * get the yang operation from the lyd_node (create, replace, delete)
@@ -97,4 +100,4 @@ oper_t get_operation(const struct lyd_node *dnode);
  */
 int get_extension(extension_t ex_t, const struct lyd_node *dnode, char **value);
 
-#endif// IPROUTE2_SYSREPO_CMDGEN_H
+#endif // IPROUTE2_SYSREPO_CMDGEN_H
