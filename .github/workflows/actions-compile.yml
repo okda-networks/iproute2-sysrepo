@@ -18,7 +18,7 @@ jobs:
       - name: add missing packages
         uses: ConorMacBride/install-package@v1
         with:
-          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev
+          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev clang-format
       - name: libyang v2.1.148 from upstream
         uses: actions/checkout@v4
         with:
@@ -41,22 +41,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+      - name: check code format
+        run: clang-format --dry-run --Werror src/*.c && clang-format --dry-run --Werror src/lib/*.c
       - name: make iproute2-sysrepo
         run : CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
       - name: basic test "ip link add/set"
         run : |
-              set -e
-              sudo bin/iproute2-sysrepo ip link add br-slave type dummy
-              sudo bin/iproute2-sysrepo ip link add br0 type bridge vlan_filtering 1
-              if ! sudo bin/iproute2-sysrepo ip link set br-slave master br0; then
-                exit_code=$?
-                if [ "$exit_code" -ne 1 ]; then
-                  echo "Failed: Command failed with unexpected exit code $exit_code"
-                  exit $exit_code
-                fi
-              fi
+          set -e
+          sudo bin/iproute2-sysrepo ip link add br-slave type dummy
+          sudo bin/iproute2-sysrepo ip link add br0 type bridge vlan_filtering 1
+          if ! sudo bin/iproute2-sysrepo ip link set br-slave master br0; then
+            exit_code=$?
+            if [ "$exit_code" -ne 1 ]; then
+              echo "Failed: Command failed with unexpected exit code $exit_code"
+              exit $exit_code
+            fi
+          fi
       - name: basic test "ip link"
         run : bin/iproute2-sysrepo ip link
       - name: basic test "bridge vlan add"
@@ -69,16 +71,15 @@ jobs:
         run : bin/iproute2-sysrepo tc qdisc
       - name: basic test "bad argv0"
         run : |
-              sudo bin/iproute2-sysrepo bad-arg || exit_code=$?
-              if [ "$exit_code" -eq 1 ]; then
-                  echo "Passed: exited with code 1"
-                  exit 0
-              else
-                  echo "Failed: did not exit with code 1."
-                  exit 1
-              fi
+          sudo bin/iproute2-sysrepo bad-arg || exit_code=$?
+          if [ "$exit_code" -eq 1 ]; then
+              echo "Passed: exited with code 1"
+              exit 0
+          else
+              echo "Failed: did not exit with code 1."
+              exit 1
+          fi
       - name: yanglint
         run: make check
       - name: run iproute2-sysrepo tests
         run : chmod +x tests/run_tests.sh && sudo ./tests/run_tests.sh
-
