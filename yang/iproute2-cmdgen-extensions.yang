@@ -78,12 +78,12 @@ module iproute2-cmdgen-extensions {
     extension group-list-with-separator{
         description
             "instruct iproute2 to group all the list enteries together with the separator specified";
-    argument "separator";
+        argument "separator";
     }
     extension group-leafs-values-separator{
         description
             "instruct iproute2 to group the leafs values inside the list/container to be groupd with separator specified";
-    argument "separator";
+        argument "separator";
     }
 
 }

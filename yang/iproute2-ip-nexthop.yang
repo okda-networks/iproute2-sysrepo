@@ -96,26 +96,27 @@ module iproute2-ip-nexthop {
                     }
                 }
             }
-        container group {
-            description "create a nexthop group. Group specification is id with an optional weight";
-            list nh {
-                key "id";
-                ipr2cgen:group-list-with-separator "/";
-                ipr2cgen:group-leafs-values-separator ",";
-                leaf id{
-                    type leafref {
-                        path "../../../id";
+            container group {
+                description "create a nexthop group. Group specification is id with an optional weight";
+                list nh {
+                    key "id weight";
+                    ipr2cgen:group-list-with-separator "/";
+                    ipr2cgen:group-leafs-values-separator ",";
+                    ipr2cgen:arg-name "group";
+                    leaf id{
+                        type leafref {
+                            path "/ipnh:nexthops/nexthop/id";
+                        }
+                        must ". != ../../../id" {
+                            error-message "Cannot reference the current nexthop ID, you can use other nexthops ids";
+                        }
+                        description "specify the nexthop id you want to add to this next";
                     }
-                    must ". != ../../../id" {
-                        error-message "Cannot reference the current nexthop ID, you can use other nexthops ids";
+                    leaf weight {
+                        description "nexthop weight for this member";
+                        type uint16;
                     }
-                    description "specify the nexthop id you want to add to this next";
                 }
-                leaf weight {
-                    description "nexthop weight for this member";
-                    type uint16;
-                }
-            }
                 leaf type {
                     default "mpath";
                     type enumeration {
@@ -157,5 +158,3 @@ module iproute2-ip-nexthop {
 
     }
 }
-
-
