@@ -17,6 +17,42 @@
 
 extern sr_session_ctx_t *sr_session;
 
+/**
+ * @brief data struct to store cmd operation.
+ *
+ */
+typedef enum {
+    ADD_OPR,
+    DELETE_OPR,
+    UPDATE_OPR,
+    UNKNOWN_OPR,
+} oper_t;
+
+/**
+ * definition of yang's extension_t.
+ */
+typedef enum {
+    // list extensions
+    CMD_START_EXT,
+    GROUP_LIST_WITH_SEPARATOR,
+    GROUP_LEAFS_VALUES_SEPARATOR,
+
+    // root container extensions
+    CMD_ADD_EXT,
+    CMD_DELETE_EXT,
+    CMD_UPDATE_EXT,
+
+    // leaf extensions
+    ARG_NAME_EXT,
+    FLAG_EXT,
+    VALUE_ONLY_EXT,
+    VALUE_ONLY_ON_UPDATE_EXT,
+
+    //other
+    ON_UPDATE_INCLUDE
+
+} extension_t;
+
 char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [CMD_ADD_EXT] = "cmd-add",
                          [CMD_DELETE_EXT] = "cmd-delete",
@@ -121,22 +157,22 @@ char *strip_yang_iden_prefix(const char *input)
  */
 oper_t get_operation(const struct lyd_node *dnode)
 {
-    struct lyd_meta *next;
+    struct lyd_meta *dnode_meta = NULL;
     const char *operation;
-    LY_LIST_FOR(dnode->meta, next)
-    {
-        if (!strcmp("operation", next->name)) {
-            operation = lyd_get_meta_value(next);
-            if (!strcmp("create", operation))
-                return ADD_OPR;
-            if (!strcmp("delete", operation))
-                return DELETE_OPR;
-            if (!strcmp("replace", operation) ||
-                !strcmp("none",
-                        operation)) // for updated list the operation is none.
-                return UPDATE_OPR;
-        }
+    dnode_meta = lyd_find_meta(dnode->meta, NULL, "yang:operation");
+    if (dnode_meta == NULL) {
+        fprintf(stderr, "%s: failed to get operation meta from dnode \"%s\"\n", __func__,
+                dnode->schema->name);
+        return UNKNOWN_OPR;
     }
+    operation = lyd_get_meta_value(dnode_meta);
+    if (!strcmp("create", operation))
+        return ADD_OPR;
+    if (!strcmp("delete", operation))
+        return DELETE_OPR;
+    if (!strcmp("replace", operation) ||
+        !strcmp("none", operation)) // for updated list the operation is none.
+        return UPDATE_OPR;
     return UNKNOWN_OPR;
 }
 
@@ -231,17 +267,20 @@ void parse_command(const char *command, int *argc, char ***argv)
  *  @param [in,out] cmds array of cmd_info.
  * @param [in,out] cmd_idx current index of cmds.
  * @param [in] cmd_line command line string "ip link add name lo0 type dummy"
+ * @param [in] cmd_line_rb the rollback command line string.
  * @param [in] start_dnode start_cmd node to be added to the cmd_info struct.
  */
-void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line,
+void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_line_rb,
                  const struct lyd_node *start_dnode)
 {
-    int argc;
-    char **argv;
+    int argc, argc_rb;
+    char **argv, **argv_rb;
     parse_command(cmd_line, &argc, &argv);
+    parse_command(cmd_line_rb, &argc_rb, &argv_rb);
     if (*cmd_idx >= CMDS_ARRAY_SIZE) {
         fprintf(stderr, "process_command: cmds exceeded MAX allowed commands per transaction\n");
         free_argv(argv, argc);
+        free_argv(argv_rb, argc_rb);
         return;
     }
     (cmds)[*cmd_idx] = malloc(sizeof(struct cmd_info));
@@ -249,14 +288,16 @@ void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line,
     if ((cmds)[*cmd_idx] == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         free_argv(argv, argc);
+        free_argv(argv_rb, argc_rb);
         return;
     }
     dup_argv(&((cmds)[*cmd_idx]->argv), argv, argc);
+    dup_argv(&((cmds)[*cmd_idx]->rollback_argv), argv_rb, argc_rb);
     (cmds)[*cmd_idx]->argc = argc;
-    (cmds)[*cmd_idx]->cmd_start_dnode = start_dnode;
+    (cmds)[*cmd_idx]->rollback_argc = argc_rb;
     (*cmd_idx)++;
-    memset(cmd_line, 0, CMD_LINE_SIZE);
     free_argv(argv, argc);
+    free_argv(argv_rb, argc_rb);
 }
 
 /**
@@ -266,7 +307,7 @@ void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line,
  * @param [out] value the captured arg name
  * @return EXIT_SUCCESS or EXIT_FAILURE
  */
-int creat_cmd_arg_name(struct lyd_node *dnode, oper_t curr_op_val, char **key)
+int creat_cmd_arg_name(struct lyd_node *dnode, oper_t curr_op_val, char **arg_name)
 {
     // if list operation is delete, get the keys only
     if (curr_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
@@ -274,14 +315,14 @@ int creat_cmd_arg_name(struct lyd_node *dnode, oper_t curr_op_val, char **key)
 
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
         if (!strcmp("true", lyd_get_value(dnode)))
-            *key = strdup(dnode->schema->name);
+            *arg_name = strdup(dnode->schema->name);
         return EXIT_SUCCESS;
     }
 
     if (get_extension(VALUE_ONLY_EXT, dnode, NULL) == EXIT_SUCCESS)
         return EXIT_SUCCESS;
-    if (get_extension(ARG_NAME_EXT, dnode, key) == EXIT_SUCCESS) {
-        if (*key == NULL) {
+    if (get_extension(ARG_NAME_EXT, dnode, arg_name) == EXIT_SUCCESS) {
+        if (*arg_name == NULL) {
             fprintf(stderr,
                     "%s: ipr2cgen:arg-name extension found but failed to "
                     "get the arg-name value for node \"%s\"\n",
@@ -289,7 +330,7 @@ int creat_cmd_arg_name(struct lyd_node *dnode, oper_t curr_op_val, char **key)
             return EXIT_FAILURE;
         }
     } else
-        *key = strdup(dnode->schema->name);
+        *arg_name = strdup(dnode->schema->name);
     return EXIT_SUCCESS;
 }
 
@@ -299,7 +340,7 @@ int creat_cmd_arg_name(struct lyd_node *dnode, oper_t curr_op_val, char **key)
  * @param [in] curr_op_val starnode op_val
  * @param [out] value the captured arg value value
  */
-void creat_cmd_arg_value(struct lyd_node *dnode, oper_t curr_op_val, char **value)
+void creat_cmd_arg_value(struct lyd_node *dnode, oper_t curr_op_val, char **arg_value)
 {
     // if list operation is delete, get the keys only
     if (curr_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
@@ -309,8 +350,8 @@ void creat_cmd_arg_value(struct lyd_node *dnode, oper_t curr_op_val, char **valu
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
         return;
     }
-    if (value == NULL)
-        value = malloc(sizeof(char *));
+    if (arg_value == NULL)
+        arg_value = malloc(sizeof(char *));
     // if list and grouping group the values.
     if (dnode->schema->nodetype == LYS_LIST) {
         char *group_list_separator = NULL;
@@ -343,16 +384,16 @@ void creat_cmd_arg_value(struct lyd_node *dnode, oper_t curr_op_val, char **valu
                     !strcmp(list_next->next->schema->name, list_next->schema->name))
                     strlcat(temp_value, group_list_separator, sizeof(temp_value));
             }
-            *value = strdup(temp_value);
+            *arg_value = strdup(temp_value);
         }
     } else {
         // if INDENT type remove the module name from the value (example: ip-link-type:dummy)
         // this strip ip-link-type.
         LY_DATA_TYPE type = ((struct lysc_node_leaf *)dnode->schema)->type->basetype;
         if (type == LY_TYPE_IDENT)
-            *value = strip_yang_iden_prefix(lyd_get_value(dnode));
+            *arg_value = strip_yang_iden_prefix(lyd_get_value(dnode));
         else
-            *value = (char *)strdup(lyd_get_value(dnode));
+            *arg_value = (char *)strdup(lyd_get_value(dnode));
     }
 }
 
@@ -400,7 +441,7 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
         char *on_update_include = NULL;
         char *group_list_separator = NULL;
         char *group_leafs_values_separator = NULL;
-        char *key = NULL, *value = NULL;
+        char *arg_name = NULL, *arg_value = NULL;
         switch (next->schema->nodetype) {
         case LYS_LIST:
         case LYS_CONTAINER:
@@ -422,15 +463,15 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                 // Get the first arg
                 token = strtok(on_update_include, ",");
                 while (token != NULL) {
-                    key = NULL;
-                    value = NULL;
+                    arg_name = NULL;
+                    arg_value = NULL;
 
                     struct lyd_node *include_node = get_node_from_sr(startcmd_node, token);
                     if (include_node == NULL)
                         return NULL;
 
-                    creat_cmd_arg_value(include_node, op_val, &value);
-                    ret = creat_cmd_arg_name(include_node, op_val, &key);
+                    creat_cmd_arg_value(include_node, op_val, &arg_value);
+                    ret = creat_cmd_arg_name(include_node, op_val, &arg_name);
                     if (ret != EXIT_SUCCESS) {
                         fprintf(stderr,
                                 "%s: failed to create creat_cmd_arg_name for node \"%s\".\n",
@@ -438,15 +479,15 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                         return NULL;
                     }
 
-                    if (key != NULL) {
+                    if (arg_name != NULL) {
                         strlcat(cmd_line, " ", sizeof(cmd_line));
-                        strlcat(cmd_line, key, sizeof(cmd_line));
-                        free(key);
+                        strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                        free(arg_name);
                     }
-                    if (value != NULL) {
+                    if (arg_value != NULL) {
                         strlcat(cmd_line, " ", sizeof(cmd_line));
-                        strlcat(cmd_line, value, sizeof(cmd_line));
-                        free(value);
+                        strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                        free(arg_value);
                     }
                     // get next token.
                     token = strtok(NULL, ",");
@@ -471,22 +512,22 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                             __func__, next->schema->name);
                     return NULL;
                 }
-                creat_cmd_arg_value(next, op_val, &value);
-                ret = creat_cmd_arg_name(next, op_val, &key);
+                creat_cmd_arg_value(next, op_val, &arg_value);
+                ret = creat_cmd_arg_name(next, op_val, &arg_name);
                 if (ret != EXIT_SUCCESS) {
                     fprintf(stderr, "%s: failed to create creat_cmd_arg_name for node \"%s\".\n",
                             __func__, next->schema->name);
                     return NULL;
                 }
-                if (key != NULL) {
+                if (arg_name != NULL) {
                     strlcat(cmd_line, " ", sizeof(cmd_line));
-                    strlcat(cmd_line, key, sizeof(cmd_line));
-                    free(key);
+                    strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                    free(arg_name);
                 }
-                if (value != NULL) {
+                if (arg_value != NULL) {
                     strlcat(cmd_line, " ", sizeof(cmd_line));
-                    strlcat(cmd_line, value, sizeof(cmd_line));
-                    free(value);
+                    strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                    free(arg_value);
                 }
                 const char *grouped_schema_name = next->schema->name;
                 // skip the collected list info. while the next is not null and the next node is
@@ -506,24 +547,24 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
         case LYS_LEAF:
         case LYS_LEAFLIST:
 
-            key = NULL;
-            value = NULL;
-            creat_cmd_arg_value(next, op_val, &value);
-            ret = creat_cmd_arg_name(next, op_val, &key);
+            arg_name = NULL;
+            arg_value = NULL;
+            creat_cmd_arg_value(next, op_val, &arg_value);
+            ret = creat_cmd_arg_name(next, op_val, &arg_name);
             if (ret != EXIT_SUCCESS) {
                 fprintf(stderr, "%s: failed to create creat_cmd_arg_name for node \"%s\".\n",
                         __func__, next->schema->name);
                 return NULL;
             }
-            if (key != NULL) {
+            if (arg_name != NULL) {
                 strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, key, sizeof(cmd_line));
-                free(key);
+                strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                free(arg_name);
             }
-            if (value != NULL) {
+            if (arg_value != NULL) {
                 strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, value, sizeof(cmd_line));
-                free(value);
+                strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                free(arg_value);
             }
             break;
         }
@@ -532,11 +573,37 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
     return strdup(cmd_line);
 }
 
+char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
+{
+    oper_t op_val;
+    char cmd_line[CMD_LINE_SIZE] = { 0 };
+
+    // prepare for new command
+    op_val = get_operation(startcmd_node);
+    if (op_val == UNKNOWN_OPR) {
+        fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
+                startcmd_node->schema->name);
+        return NULL;
+    }
+    // add cmd prefix to the cmd_line
+    strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
+    // get the cmd args for the startcmd_node
+    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val);
+    if (cmd_args == NULL) {
+        fprintf(stderr, "%s: failed to create cmdline arguments for node \"%s\" \n", __func__,
+                startcmd_node->schema->name);
+        return NULL;
+    }
+    strlcat(cmd_line, cmd_args, sizeof(cmd_line));
+    free(cmd_args);
+    return strdup(cmd_line);
+}
+
 struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
 {
     char *result;
     int cmd_idx = 0;
-    char cmd_line[CMD_LINE_SIZE] = { 0 };
+    char *cmd_line = NULL, *rollback_cmd_line = NULL;
 
     lyd_print_mem(&result, change_node, LYD_XML, 0);
     printf("--%s", result);
@@ -578,36 +645,35 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
         return NULL;
     }
 
-    oper_t op_val;
-    struct lyd_node *next, *startcmd_node, *child_node;
+    struct lyd_node *next, *child_node, *rollback_dnode;
     child_node = lyd_child(change_node);
     // loop through children of the root node.
     LY_LIST_FOR(child_node, next)
     {
         if (next->schema->nodetype == LYS_LIST) {
-            if (is_startcmd_node(next)) { // start node
-                startcmd_node = next;
-                // prepare for new command
-                op_val = get_operation(startcmd_node);
-                if (op_val == UNKNOWN_OPR) {
-                    fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
-                            startcmd_node->schema->name);
+            if (is_startcmd_node(next)) {
+                cmd_line = lyd2cmd_line(next, oper2cmd_prefix);
+                if (cmd_line == NULL) {
+                    fprintf(stderr, "%s: failed to genrate ipr2 cmd for node \"%s\" \n", __func__,
+                            next->schema->name);
                     free_cmds_info(cmds);
                     return NULL;
                 }
-                // add cmd prefix to the cmd_line
-                strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
-                // get the cmd args for the startcmd_node
-                char *cmd_args = lyd2cmdline_args(startcmd_node, op_val);
-                if (cmd_args == NULL) {
-                    fprintf(stderr, "%s: failed to create cmdline arguments for node \"%s\" \n",
-                            __func__, next->schema->name);
+                // get the rollback node.
+                lyd_diff_reverse_all(next, &rollback_dnode);
+                // the reversed node come with no parent, so we need to set the parent
+                // for the rollback so we can fetch data from sr, otherwise the fetch will fail.
+                rollback_dnode->parent = next->parent;
+                rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
+                if (rollback_cmd_line == NULL) {
+                    fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n",
+                            __func__, rollback_dnode->schema->name);
                     free_cmds_info(cmds);
                     return NULL;
                 }
-                strlcat(cmd_line, cmd_args, sizeof(cmd_line));
-                add_command(cmds, &cmd_idx, cmd_line, startcmd_node);
-                free(cmd_args);
+                add_command(cmds, &cmd_idx, cmd_line, rollback_cmd_line, next);
+                free(cmd_line);
+                free(rollback_cmd_line);
             }
         }
     }
