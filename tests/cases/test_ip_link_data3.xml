@@ -1,0 +1,7 @@
+<links xmlns="urn:okda:iproute2:ip:link">
+    <link>
+        <name>testIf0</name>
+        <mtu>1100</mtu>
+        <type>dummy</type>
+    </link>
+</links>

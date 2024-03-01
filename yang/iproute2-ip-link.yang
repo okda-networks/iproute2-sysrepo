@@ -150,60 +150,62 @@ module iproute2-ip-link {
             }
             leaf device {
                 must "../device != ../name" {
-                error-message "Cannot reference the current link name, you can use other links";
+                    error-message "Cannot reference the current link name, you can use other links";
                 }
                 ipr2cgen:arg-name "link";
                 type link-ref;
 
                 description "specifies the physical device to act operate on";
             }
-            leaf type {
-                type identityref {
-                    base link-type;
-                }
-                description "specifies the type of the device";
-            }
 
             leaf mtu {
                 type uint16{
                     range "64..9000";
                 }
+                default 1500;
                 description "specifies the mtu size for the device";
             }
 
             leaf numtxqueues {
                 type uint32;
+                default 1;
                 description "specifies the number of transmit queues for device.";
             }
             leaf numrxqueues {
                 type uint32;
+                default 1;
                 description "specifies the number of receive queues for device.";
             }
             leaf gso_max_size {
                 type uint32;
+                default 65536;
                 description "BYTES: specifies the recommended maximum size of a Generic Segment Offload packet
                 the new device should accept. This is also used to enable BIG TCP for IPv6 on
                 this device when the size is greater than 65536.";
             }
             leaf gso_ipv4_max_size {
                 type uint32;
+                default 65536;
                 description "BYTES: specifies the recommended maximum size of a IPv4 Generic Segment Offload
                 packet the new device should accept. This is especially used to enable BIG TCP for
                 IPv4 on this device by setting to a size greater than 65536.";
             }
             leaf gso_max_segs {
                 type uint32;
+                default 65535;
                 description "specifies the recommended maximum number of a Generic Segment
                 Offload segments the device should accept.";
             }
             leaf gro_max_size {
                 type uint32;
+                default 65536;
                 description "specifies the maximum size of a packet built by GRO stack on this device.
                 This is also used for BIG TCP to allow the size of a merged IPv6 GSO
                 packet on this device greater than 65536.";
             }
             leaf gro_ipv4_max_size {
                 type uint32;
+                default 65536;
                 description "specifies the maximum size of a IPv4 packet built by GRO stack on this device.
                 This is especially used for BIG TCP to allow the size of a merged IPv4 GSO packet on
                 this device greater than 65536.";
@@ -215,6 +217,7 @@ module iproute2-ip-link {
                     enum "up";
                     enum "down";
                 }
+                default "down";
             }
             leaf index {
                 type uint64;
@@ -249,8 +252,13 @@ module iproute2-ip-link {
                     }
                 }
             }
+            leaf type {
+                type identityref {
+                    base link-type;
+                }
+                description "specifies the type of the device";
+            }
 
         }
     }
-
 }

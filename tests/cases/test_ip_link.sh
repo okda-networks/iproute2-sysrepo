@@ -129,6 +129,68 @@ else
     exit 1
 fi
 
+####################################################################
+# Test: test rollback on failure.
+####################################################################
+
+echo "----------------------"
+echo "[2] Test Link ROLLBACK"
+echo "----------------------"
+
+# Step 1: create a interface using ip link directly
+ip link add testIf1 type dummy
+
+# Step 2: create a 2 dummy interface using ip route2
+# one of the two is "testIf1" which created previously.
+# this will trigger "RTNETLINK answers: File exists" error
+# and the other interface should be deleted by rollback.
+
+sysrepocfg -d running --edit  tests/cases/test_ip_link_data2.xml >/dev/null 2>&1
+
+# Step 3: make sure the created interface is deleted.
+if ! ip link show testIf0 >/dev/null 2>&1; then
+   echo "TEST-INFO: rollback successful, interface testIf0 deleted successfully (OK)"
+else
+   echo "TEST-ERROR: rollback failed, interface testIf0 still exist (FAIL)"
+   exit 1
+fi
+
+# Step 4: cleanup
+ip link del testIf1
+
+# ## test rollback update
+#
+## Step 1: add testIf0 and testIf1
+sysrepocfg -d running --edit  tests/cases/test_ip_link_data2.xml || ret=$?
+sleep 0.1
+
+# Step 2: delete testIf1 manually
+ip link del testIf1
+
+# Step 3: update MTU on testIf0 and delete testIf1 from iproute2-sysrepo (expected to fail and rull back mtu to 1400)
+sysrepocfg -d running --edit  tests/cases/test_ip_link_data2.xml  >/dev/null 2>&1
+
+# Step 4: check the MTU is reverted back to 1400
+current_mtu=$(ip link show dev testIf0 2>/dev/null | grep -oP '(?<=mtu )\d+' | head -n 1)
+
+if [ -z "$current_mtu" ]; then
+    echo "TEST-ERROR: Failed to retrieve MTU for IP link testIf0"
+    exit 1
+fi
+
+if [ "$current_mtu" -eq 1400 ]; then
+    echo "TEST-INFO: Rollback successful, MTU for IP link testIf0 is 1400 (OK)"
+else
+    echo "TEST-ERROR: Rollback Failed, MTU for IP link testIf0 was not reverted back to 1400 (FAIL)"
+    exit 1
+fi
+
+
+
+# Step 5: cleanup
+ip link add testIf1 type dummy
+sysrepocfg -C startup -d running -m iproute2-ip-link
+sleep 0.1
 
 # Exit with return value
 exit $ret

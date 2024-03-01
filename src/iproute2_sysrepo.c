@@ -329,6 +329,15 @@ static int do_cmd(int argc, char **argv)
     return EXIT_FAILURE;
 }
 
+void print_cmd_line(int argc, char **argv)
+{
+    for (int k = 0; k < argc; k++) {
+        printf("%s ", argv[k]);
+    }
+
+    fprintf(stdout, "\n");
+}
+
 int ip_sr_config_change_cb_prepare(const struct lyd_node *dnode)
 {
     //TODO: add validation, and generate_argv() might be called here.
@@ -346,29 +355,30 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
     ipr2_cmds = lyd2cmds(change_dnode);
     if (ipr2_cmds == NULL) {
         fprintf(stderr, "%s: failed to generate commands for the change \n", __func__);
-        return EXIT_FAILURE;
+        return SR_ERR_CALLBACK_FAILED;
     }
     for (int i = 0; ipr2_cmds[i] != NULL; i++) {
         fprintf(stdout, "%s: executing command: ", __func__);
-        for (int k = 0; k < ipr2_cmds[i]->argc; k++) {
-            printf("%s", ipr2_cmds[i]->argv[k]);
-            if (i < ipr2_cmds[i]->argc - 1) {
-                printf(" ");
-            }
-        }
-        fprintf(stdout, "\n");
+        print_cmd_line(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         jump_set = 1;
         if (setjmp(jbuf)) {
             // iproute2 exited, reset jump, and set exit callback.
             jump_set = 0;
             atexit(exit_cb);
-            return EXIT_FAILURE;
+            return SR_ERR_CALLBACK_FAILED;
         }
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         if (ret != EXIT_SUCCESS) {
-            // TODO: add rollback functionality.
+            fprintf(stderr, "%s: iproute2 command failed, cmd = ", __func__);
+            print_cmd_line(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
+            // rollback on failure.
+            for (i--; i >= 0; i--) {
+                fprintf(stderr, "%s: executing rollback cmd: ", __func__);
+                print_cmd_line(ipr2_cmds[i]->rollback_argc, ipr2_cmds[i]->rollback_argv);
+                do_cmd(ipr2_cmds[i]->rollback_argc, ipr2_cmds[i]->rollback_argv);
+            }
             free(ipr2_cmds);
-            return SR_ERR_INTERNAL;
+            return SR_ERR_CALLBACK_FAILED;
         }
     }
     free(ipr2_cmds);
