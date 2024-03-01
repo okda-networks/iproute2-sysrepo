@@ -31,7 +31,9 @@ for test_script in tests/cases/*.sh; do
         script_ret=$?  # Capture the return value of the test script
         if [ $script_ret -ne 0 ]; then
             echo "Error: $test_script failed with exit code $script_ret"
-            ret=$script_ret  # Update the overall return value if any test fails
+            kill $sysrepo_pid
+            wait $sysrepo_pid
+            exit $ret
         fi
         echo "Completed $test_script"
     fi
