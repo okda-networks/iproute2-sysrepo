@@ -1,0 +1,26 @@
+--- /lib/json_print.c	2024-03-01 19:01:32.645610624 -0500
++++ ipr2_patches/json_print_modified	2024-03-01 18:41:21.869658736 -0500
+@@ -11,12 +11,15 @@
+ #include "utils.h"
+ #include "json_print.h"
+ 
++FILE *j_stream;
++char json_buffer[1024 * 1024] = { 0 };
+ static json_writer_t *_jw;
+ 
+ static void __new_json_obj(int json, bool have_array)
+ {
+ 	if (json) {
+-		_jw = jsonw_new(stdout);
++		j_stream = fmemopen(json_buffer, sizeof(json_buffer), "w");
++		_jw = jsonw_new(j_stream);
+ 		if (!_jw) {
+ 			perror("json object");
+ 			exit(1);
+@@ -34,6 +37,7 @@
+ 		if (have_array)
+ 			jsonw_end_array(_jw);
+ 		jsonw_destroy(&_jw);
++		fclose(j_stream);
+ 	}
+ }

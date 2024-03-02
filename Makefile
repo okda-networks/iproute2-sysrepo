@@ -25,6 +25,13 @@ IPR2_SR_OBJ = $(IPR2_SR_SRC:.c=.o)
 
 
 all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
+	@echo "Checking if json_print patch is already applied..."
+	@if ! patch --dry-run --reverse --force -d iproute2 -p1 < ipr2_patches/json_print.patch; then \
+		echo "Applying json_print patch..."; \
+		patch -d iproute2 -p1 < ipr2_patches/json_print.patch || { echo "Patch failed"; true; }; \
+	else \
+		echo "json_print patch is already applied, skipping..."; \
+	fi
 	@set -e; \
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i || exit 1; done && \
@@ -43,6 +50,13 @@ all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	@echo "Make complete"
 
 clean:
+	@echo "Checking if json_print patch is already applied..."
+	@if ! patch --dry-run --reverse --force -d iproute2 -p1 < ipr2_patches/json_print.patch; then \
+		echo "Patch wasn't applying, nothing to reverse..."; \
+	else \
+		echo "Reversing json_print patch..."; \
+		patch -R -d iproute2 -p1 < ipr2_patches/json_print.patch || { echo "Patch failed"; true; }; \
+	fi
 	@set -e; \
 	for i in $(SUBDIRS); do \
 	$(MAKE) -C $$i clean || exit 1; done && \
