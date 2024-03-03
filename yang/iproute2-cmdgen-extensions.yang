@@ -85,5 +85,16 @@ module iproute2-cmdgen-extensions {
             "instruct iproute2 to group the leafs values inside the list/container to be groupd with separator specified";
         argument "separator";
     }
-
+    extension after-leaf-add-static-arg{
+        description
+            "instruct iproute2 to always add the static argument mentioned,
+            for example for startcmd vrf always add type vrf";
+        argument "static-arg";
+    }
+    extension on-leaf-delete{
+        description
+            "when the leaf is deleted the provided 'arg' will be added to cmd,
+            example is nomaster with removig vrf from link";
+        argument "arg";
+    }
 }

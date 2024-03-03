@@ -3,6 +3,7 @@ module iproute2-ip-link {
     namespace "urn:okda:iproute2:ip:link";
     prefix "iplink";
 
+    import ietf-yang-types { prefix yang;}
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-netns { prefix ipnetns; }
 
@@ -134,11 +135,30 @@ module iproute2-ip-link {
             "VLAN device.";
     }
 
+    identity vrf {
+        base link-type;
+        description
+            "VLAN device.";
+    }
+
     container links {
         ipr2cgen:cmd-add "ip link add";
         ipr2cgen:cmd-update "ip link set";
         ipr2cgen:cmd-delete "ip link delete";
         description "ip-link - network device configuration";
+        list vrf{
+            ipr2cgen:cmd-start;
+            key "name table";
+            leaf name {
+                ipr2cgen:after-leaf-add-static-arg "type vrf";
+                type string;
+                description "vrf name";
+            }
+            leaf table{
+                type uint16;
+                description "vrf table id";
+            }
+        }
         list link {
             ipr2cgen:cmd-start;
             key "name";
@@ -152,63 +172,20 @@ module iproute2-ip-link {
                 must "../device != ../name" {
                     error-message "Cannot reference the current link name, you can use other links";
                 }
+                must "../mtu <= /links/link[name=current()/../device]/mtu" {
+                    error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
+                }
                 ipr2cgen:arg-name "link";
                 type link-ref;
 
                 description "specifies the physical device to act operate on";
             }
-
             leaf mtu {
                 type uint16{
                     range "64..9000";
                 }
                 default 1500;
                 description "specifies the mtu size for the device";
-            }
-
-            leaf numtxqueues {
-                type uint32;
-                default 1;
-                description "specifies the number of transmit queues for device.";
-            }
-            leaf numrxqueues {
-                type uint32;
-                default 1;
-                description "specifies the number of receive queues for device.";
-            }
-            leaf gso_max_size {
-                type uint32;
-                default 65536;
-                description "BYTES: specifies the recommended maximum size of a Generic Segment Offload packet
-                the new device should accept. This is also used to enable BIG TCP for IPv6 on
-                this device when the size is greater than 65536.";
-            }
-            leaf gso_ipv4_max_size {
-                type uint32;
-                default 65536;
-                description "BYTES: specifies the recommended maximum size of a IPv4 Generic Segment Offload
-                packet the new device should accept. This is especially used to enable BIG TCP for
-                IPv4 on this device by setting to a size greater than 65536.";
-            }
-            leaf gso_max_segs {
-                type uint32;
-                default 65535;
-                description "specifies the recommended maximum number of a Generic Segment
-                Offload segments the device should accept.";
-            }
-            leaf gro_max_size {
-                type uint32;
-                default 65536;
-                description "specifies the maximum size of a packet built by GRO stack on this device.
-                This is also used for BIG TCP to allow the size of a merged IPv6 GSO
-                packet on this device greater than 65536.";
-            }
-            leaf gro_ipv4_max_size {
-                type uint32;
-                default 65536;
-                description "specifies the maximum size of a IPv4 packet built by GRO stack on this device.
-                This is especially used for BIG TCP to allow the size of a merged IPv4 GSO packet on
-                this device greater than 65536.";
             }
             leaf admin-status{
                 description "set admin status for the link";
@@ -223,6 +200,13 @@ module iproute2-ip-link {
                 type uint64;
                 description "specifies the desired index of the new virtual device.
                 The link creation fails, if the index is busy.";
+            }
+            leaf vrf {
+                ipr2cgen:on-leaf-delete "nomaster";
+                type leafref {
+                    path "../../vrf/name";
+                }
+                description "add the interface to vrf";
             }
             choice netns {
                 description "create the device in the network namespace associated with process
@@ -252,13 +236,147 @@ module iproute2-ip-link {
                     }
                 }
             }
+            leaf group {
+                description "specify group id that this link belong to,
+                GROUP has a dual role: If both group and dev are present,
+                then move the device to the specified group. If only a group is specified,
+                then the change operates on all devices in that group.";
+                type uint64;
+                default 0;
+            }
+            container lladdresses {
+                description "configure lladdress for link, peer and broadcast addresses";
+                leaf mac_addr{
+                    ipr2cgen:arg-name "address";
+                    type yang:mac-address;
+                    description "change the station address of the interface.";
+                }
+                leaf broadcast_addr {
+                    ipr2cgen:arg-name "broadcast";
+                    type yang:mac-address;
+                    description "change the link layer broadcast address, when the interface is POINTOPOINT.";
+                }
+                leaf peer_addr {
+                    ipr2cgen:arg-name "peer";
+                    type yang:mac-address;
+                    description "change the link layer peer address, when the interface is POINTOPOINT.";
+                }
+            }
+            container advance {
+                leaf protodown {
+                    description "change the PROTODOWN state on the device.
+                    Indicates that a protocol error has been detected on the port.
+                    Switch drivers can react to this error by doing a phys down on the switch port.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    default "on";
+                }
+                leaf numtxqueues {
+                    type uint32;
+                    default 1;
+                    description "specifies the number of transmit queues for device.";
+                }
+                leaf numrxqueues {
+                    type uint32;
+                    default 1;
+                    description "specifies the number of receive queues for device.";
+                }
+                leaf gso_max_size {
+                    type uint32;
+                    default 65536;
+                    description "BYTES: specifies the recommended maximum size of a Generic Segment Offload packet
+                    the new device should accept. This is also used to enable BIG TCP for IPv6 on
+                    this device when the size is greater than 65536.";
+                }
+                leaf gso_ipv4_max_size {
+                    type uint32;
+                    default 65536;
+                    description "BYTES: specifies the recommended maximum size of a IPv4 Generic Segment Offload
+                    packet the new device should accept. This is especially used to enable BIG TCP for
+                    IPv4 on this device by setting to a size greater than 65536.";
+                }
+                leaf gso_max_segs {
+                    type uint32;
+                    default 65535;
+                    description "specifies the recommended maximum number of a Generic Segment
+                    Offload segments the device should accept.";
+                }
+                leaf gro_max_size {
+                    type uint32;
+                    default 65536;
+                    description "specifies the maximum size of a packet built by GRO stack on this device.
+                    This is also used for BIG TCP to allow the size of a merged IPv6 GSO
+                    packet on this device greater than 65536.";
+                }
+                leaf gro_ipv4_max_size {
+                    type uint32;
+                    default 65536;
+                    description "specifies the maximum size of a IPv4 packet built by GRO stack on this device.
+                    This is especially used for BIG TCP to allow the size of a merged IPv4 GSO packet on
+                    this device greater than 65536.";
+                }
+                leaf txqueuelen {
+                    description "change the transmit queue length of the device.";
+                    type uint32;
+                    default 1000;
+                }
+            }
+            container modes {
+                description "set arb,mcast,promsi ... etc modes on the link";
+                leaf arp {
+                    description "change the NOARP flag on the device.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    default "off";
+                }
+                leaf multicast {
+                    description "change the MULTICAST flag on the device.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    default "off";
+                }
+                leaf allmulticast {
+                    description "change the ALLMULTI flag on the device. When enabled,
+                    instructs network driver to retrieve all multicast packets from the network
+                    to the kernel for further processing.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    default "off";
+                }
+                leaf promisc {
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "change the PROMISC flag on the device. When enabled,
+                    activates promiscuous operation of the network device.";
+                    default "off";
+                }
+                leaf trailers {
+                    description "change the NOTRAILERS flag on the device,
+                    NOT used by the Linux and exists for BSD compatibility";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    default "on";
+                }
+            }
             leaf type {
                 type identityref {
                     base link-type;
                 }
                 description "specifies the type of the device";
             }
-
         }
+
     }
 }

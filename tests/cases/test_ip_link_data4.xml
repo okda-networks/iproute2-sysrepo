@@ -1,0 +1,11 @@
+<links xmlns="urn:okda:iproute2:ip:link">
+    <vrf>
+        <name>vpn10</name>
+        <table>10</table>
+    </vrf>
+    <link>
+        <name>testvrf</name>
+        <vrf>vpn10</vrf>
+        <type>dummy</type>
+    </link>
+</links>

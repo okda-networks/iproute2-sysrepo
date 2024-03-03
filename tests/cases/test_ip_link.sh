@@ -130,6 +130,38 @@ else
 fi
 
 ####################################################################
+# Test: test ip link vrf.
+####################################################################
+
+echo "-----------------"
+echo "[2] Test Link VRF"
+echo "-----------------"
+
+# Step 1: add vrf vpn10 and add link testvrf and assign vrf vpn10 to it.
+
+sysrepocfg -C  tests/cases/test_ip_link_data4.xml -d running
+sleep 0.1
+
+# Step 2: Check if the master for IP testvrf is updated by iproute2-sysrepo
+master_value=$(ip link show dev testvrf 2>/dev/null | grep -oP '(?<=master )\w+' | head -n 1)
+
+if [ -z "$master_value" ]; then
+    echo "TEST-ERROR: Failed to retrieve master_value for IP link testvrf (FAIL)"
+    exit 1
+fi
+
+# Step 3: Check if the master has the expected value "vpn10"
+if [[ "$master_value" =~ "vpn10" ]]; then
+    echo "TEST-INFO: vrf vpn10 set successfully for link  testvrf (OK)"
+else
+    echo "TEST-ERROR: failed to set vrf vpn10 value for link  testvrf (FAIL)"
+    exit 1
+fi
+
+# cleanup
+sysrepocfg -C startup -d running -m iproute2-ip-link
+
+####################################################################
 # Test: test rollback on failure.
 ####################################################################
 
@@ -191,6 +223,7 @@ fi
 ip link add testIf1 type dummy
 sysrepocfg -C startup -d running -m iproute2-ip-link
 sleep 0.1
+
 
 # Exit with return value
 exit $ret
