@@ -161,6 +161,55 @@ fi
 # cleanup
 sysrepocfg -C startup -d running -m iproute2-ip-link
 
+
+
+####################################################################
+# Test: test ip link bond.
+####################################################################
+
+echo "------------------"
+echo "[2] Test Link bond"
+echo "------------------"
+
+# Step 1: create two links eth_b0 and eth_b1 and add them to bond0.
+
+sysrepocfg -C  tests/cases/test_ip_link_data5.xml -d running
+sleep 0.1
+
+# Step 2: Check if  eth_b0, eth_b1 are created
+if ip link show eth_b0 >/dev/null 2>&1 && ip link show eth_b1 >/dev/null 2>&1 ; then
+    echo "TEST-INFO: IP link eth_b0 and eth_b1 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create IP link eth_b0 and eth_b1"
+    exit 1
+fi
+
+# Step 3: Check if eth_b0 have bond0 as master
+master_value=$(ip link show dev eth_b0 2>/dev/null | grep -oP '(?<=master )\w+' | head -n 1)
+
+if [ -z "$master_value" ]; then
+    echo "TEST-ERROR: Failed to retrieve master_value for IP link eth_b0 (FAIL)"
+    exit 1
+fi
+
+# Step 3: Check if the master has the expected value "bond0"
+if [[ "$master_value" =~ "bond0" ]]; then
+    echo "TEST-INFO: eth_b0 master set successfully to bond0 (OK)"
+else
+    echo "TEST-ERROR: failed to set bond0 as master to link eth_b0 (FAIL)"
+    exit 1
+fi
+# cleanup
+sysrepocfg -C startup -d running -m iproute2-ip-link
+
+# Step 3: Check if all links were deleted
+if ! ip link show bond0 >/dev/null 2>&1 && ! ip link show eth_b0 >/dev/null 2>&1 && ! ip link show eth_b1 >/dev/null 2>&1; then
+    echo "TEST-INFO: bond0, eth_b0 and eth_b1 deleted successfully (OK)"
+else
+    echo "TEST-ERROR: failed to delete bond0, eth_b0 or eth_b1 (FAIL)"
+    exit 1
+fi
+
 ####################################################################
 # Test: test rollback on failure.
 ####################################################################

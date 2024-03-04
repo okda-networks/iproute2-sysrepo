@@ -1,0 +1,16 @@
+<links xmlns="urn:okda:iproute2:ip:link">
+    <link>
+        <name>bond0</name>
+        <type>bond</type>
+    </link>
+    <link>
+        <name>eth_b0</name>
+        <master>bond0</master>
+        <type>dummy</type>
+    </link>
+    <link>
+        <name>eth_b1</name>
+        <master>bond0</master>
+        <type>dummy</type>
+    </link>
+</links>
