@@ -33,7 +33,7 @@ for test_script in tests/cases/*.sh; do
             echo "Error: $test_script failed with exit code $script_ret"
             kill $sysrepo_pid
             wait $sysrepo_pid
-            exit $ret
+            exit $script_ret
         fi
         echo "Completed $test_script"
     fi
