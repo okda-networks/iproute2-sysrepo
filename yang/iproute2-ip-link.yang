@@ -25,6 +25,7 @@ module iproute2-ip-link {
         reference
             "YANG model for iproute2 ip link case.";
     }
+
     typedef link-ref {
         type leafref {
             path "/iplink:links/iplink:link/iplink:name";
@@ -135,7 +136,7 @@ module iproute2-ip-link {
             "VLAN device.";
     }
 
-    identity vrf {
+    identity bridge {
         base link-type;
         description
             "VLAN device.";
@@ -150,7 +151,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-start;
             key "name table";
             leaf name {
-                ipr2cgen:after-leaf-add-static-arg "type vrf";
+                ipr2cgen:after-node-add-static-arg "type vrf";
                 type string;
                 description "vrf name";
             }
@@ -196,13 +197,25 @@ module iproute2-ip-link {
                 }
                 default "down";
             }
+            leaf master{
+                ipr2cgen:on-node-delete "nomaster";
+                type link-ref;
+                description "add the interface to vrf";
+                must "../master != ../name" {
+                    error-message "cannot use same link as master link!";
+                }
+                must "(/links/link[name=current()/../master]/type = 'iplink:bond') or
+                (/links/link[name=current()/../master]/type = 'iplink:bridge')" {
+                    error-message "The master type must be 'bond' or 'bridge'.";
+                }
+            }
             leaf index {
                 type uint64;
                 description "specifies the desired index of the new virtual device.
                 The link creation fails, if the index is busy.";
             }
             leaf vrf {
-                ipr2cgen:on-leaf-delete "nomaster";
+                ipr2cgen:on-node-delete "nomaster";
                 type leafref {
                     path "../../vrf/name";
                 }
@@ -376,7 +389,25 @@ module iproute2-ip-link {
                 }
                 description "specifies the type of the device";
             }
+            container bond_slave {
+                ipr2cgen:add-static-arg "type bond_slave";
+                when "../master";
+                must "/links/link[name=current()/../master]/type = 'iplink:bond'" {
+                    error-message "blond_slave can only be confirgured if the link is part of bonding
+                    (has a master link or type 'bond') ";
+                }
+                description "set additional bonding related to link with master bond link";
+                leaf queue_id{
+                    type uint16;
+                    description "ID - set the slave's queue ID (a 16bit unsigned value)";
+                }
+                leaf prio {
+                    type int32;
+                    description "PRIORITY - set the slave's priority for active slave re-selection
+                    during failover (a 32bit signed value). This option only valid for active-backup(1),
+                    balance-tlb (5) and balance-alb (6) mode.";
+                }
+            }
         }
-
     }
 }

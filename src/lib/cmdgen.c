@@ -30,6 +30,7 @@ typedef enum {
 
 /**
  * definition of yang's extension_t.
+ * all details in yang/iproute2-cmdgen-extensions.yang
  */
 typedef enum {
     // list extensions
@@ -47,11 +48,13 @@ typedef enum {
     FLAG_EXT,
     VALUE_ONLY_EXT,
     VALUE_ONLY_ON_UPDATE_EXT,
-    AFTER_LEAF_ADD_STATIC_ARG,
-    ON_LEAF_DELETE,
+
+    AFTER_NODE_ADD_STATIC_ARG,
+    ON_NODE_DELETE,
 
     //other
-    ON_UPDATE_INCLUDE
+    ON_UPDATE_INCLUDE,
+    ADD_STATIC_ARG
 
 } extension_t;
 
@@ -67,9 +70,12 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [FLAG_EXT] = "flag",
                          [VALUE_ONLY_EXT] = "value-only",
                          [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
+                         [AFTER_NODE_ADD_STATIC_ARG] = "after-node-add-static-arg",
+                         [ON_NODE_DELETE] = "on-node-delete",
+
+                         // other
                          [ON_UPDATE_INCLUDE] = "on-update-include",
-                         [AFTER_LEAF_ADD_STATIC_ARG] = "after-leaf-add-static-arg",
-                         [ON_LEAF_DELETE] = "on-leaf-delete" };
+                         [ADD_STATIC_ARG] = "add-static-arg" };
 
 void dup_argv(char ***dest, char **src, int argc)
 {
@@ -317,18 +323,19 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
     // check if this is leaf delete
     oper_t leaf_op_val = get_operation(dnode);
     if (leaf_op_val == DELETE_OPR) {
-        char *on_leaf_delete = NULL;
-        if (get_extension(ON_LEAF_DELETE, dnode, &on_leaf_delete) == EXIT_SUCCESS) {
-            if (on_leaf_delete == NULL) {
+        char *on_node_delete = NULL;
+        if (get_extension(ON_NODE_DELETE, dnode, &on_node_delete) == EXIT_SUCCESS) {
+            if (on_node_delete == NULL) {
                 fprintf(stderr,
                         "%s: ipr2cgen:on-leaf-delete extension found but failed to "
                         "get its arg value form node \"%s\"\n",
                         __func__, dnode->schema->name);
                 return EXIT_FAILURE;
             }
-            *arg_name = on_leaf_delete;
+            *arg_name = on_node_delete;
             return EXIT_SUCCESS;
         }
+        return EXIT_SUCCESS;
     }
 
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
@@ -358,7 +365,7 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
  * @param [in] curr_op_val starnode op_val
  * @param [out] value the captured arg value value
  */
-void creat_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_value)
+void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_value)
 {
     // if list operation is delete, get the keys only
     if (startcmd_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
@@ -418,7 +425,7 @@ void creat_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **
         else
             *arg_value = (char *)strdup(lyd_get_value(dnode));
         char *add_static_arg;
-        if (get_extension(AFTER_LEAF_ADD_STATIC_ARG, dnode, &add_static_arg) == EXIT_SUCCESS) {
+        if (get_extension(AFTER_NODE_ADD_STATIC_ARG, dnode, &add_static_arg) == EXIT_SUCCESS) {
             size_t final_arg_value_len = strlen(*arg_value) + strlen(add_static_arg) + 2;
             char *final_arg_value = malloc(final_arg_value_len);
             memset(final_arg_value, '\0', final_arg_value_len);
@@ -472,13 +479,26 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
     struct lyd_node *next;
     LYD_TREE_DFS_BEGIN(startcmd_node, next)
     {
-        char *on_update_include = NULL;
+        char *on_update_include = NULL, *add_static_arg = NULL;
         char *group_list_separator = NULL;
         char *group_leafs_values_separator = NULL;
         char *arg_name = NULL, *arg_value = NULL;
         switch (next->schema->nodetype) {
         case LYS_LIST:
         case LYS_CONTAINER:
+            if (get_extension(ADD_STATIC_ARG, next, &add_static_arg) == EXIT_SUCCESS) {
+                if (add_static_arg == NULL) {
+                    fprintf(stderr,
+                            "%s: ADD_STATIC_ARG extension found,"
+                            "but failed to retrieve the the static arg extension value "
+                            "for node \"%s\" \n",
+                            __func__, next->schema->name);
+                    return NULL;
+                }
+                strlcat(cmd_line, " ", sizeof(cmd_line));
+                strlcat(cmd_line, add_static_arg, sizeof(cmd_line));
+                free(on_update_include);
+            }
             if (op_val == UPDATE_OPR &&
                 get_extension(ON_UPDATE_INCLUDE, next, &on_update_include) == EXIT_SUCCESS) {
                 // capture the on-update-include ext,
@@ -504,7 +524,7 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                     if (include_node == NULL)
                         return NULL;
 
-                    creat_cmd_arg_value(include_node, op_val, &arg_value);
+                    create_cmd_arg_value(include_node, op_val, &arg_value);
                     ret = create_cmd_arg_name(include_node, op_val, &arg_name);
                     if (ret != EXIT_SUCCESS) {
                         fprintf(stderr,
@@ -546,7 +566,7 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                             __func__, next->schema->name);
                     return NULL;
                 }
-                creat_cmd_arg_value(next, op_val, &arg_value);
+                create_cmd_arg_value(next, op_val, &arg_value);
                 ret = create_cmd_arg_name(next, op_val, &arg_name);
                 if (ret != EXIT_SUCCESS) {
                     fprintf(stderr, "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
@@ -583,7 +603,7 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
 
             arg_name = NULL;
             arg_value = NULL;
-            creat_cmd_arg_value(next, op_val, &arg_value);
+            create_cmd_arg_value(next, op_val, &arg_value);
             ret = create_cmd_arg_name(next, op_val, &arg_name);
             if (ret != EXIT_SUCCESS) {
                 fprintf(stderr, "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
