@@ -486,6 +486,11 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
         switch (next->schema->nodetype) {
         case LYS_LIST:
         case LYS_CONTAINER:
+            // if this and empty "when all container" skip.
+            // if when condition added, the continer will be included in the lyd tree even if
+            // no data inside the container, container will have LYD_DEFAULT|LYD_WHEN_TRUE flags
+            if ((next->flags & LYD_DEFAULT) && (next->flags & LYD_WHEN_TRUE))
+                break;
             if (get_extension(ADD_STATIC_ARG, next, &add_static_arg) == EXIT_SUCCESS) {
                 if (add_static_arg == NULL) {
                     fprintf(stderr,

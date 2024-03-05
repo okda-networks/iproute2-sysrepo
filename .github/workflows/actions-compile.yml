@@ -18,7 +18,7 @@ jobs:
       - name: add missing packages
         uses: ConorMacBride/install-package@v1
         with:
-          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev clang-format
+          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev clang-format linux-modules-extra-$(uname -r)
       - name: libyang v2.1.148 from upstream
         uses: actions/checkout@v4
         with:
@@ -47,6 +47,8 @@ jobs:
         run : CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
+      - name: install required kernel mod(s)
+        run : sudo modprobe vrf bonding
       - name: basic test "ip link add/set"
         run : |
           set -e
