@@ -348,7 +348,7 @@ int ip_sr_config_change_cb_prepare(const struct lyd_node *dnode)
 
 int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
 {
-    int ret;
+    int ret = SR_ERR_OK;
     struct cmd_info **ipr2_cmds;
     if (change_dnode == NULL) {
         return SR_ERR_INVAL_ARG;
@@ -365,7 +365,6 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         jump_set = 1;
         if (setjmp(jbuf)) {
             // iproute2 exited, reset jump, and set exit callback.
-            jump_set = 0;
             atexit(exit_cb);
             return SR_ERR_CALLBACK_FAILED;
         }
@@ -375,17 +374,22 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
             print_cmd_line(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
             // rollback on failure.
             for (i--; i >= 0; i--) {
+                if (setjmp(jbuf)) {
+                    // rollback cmd failed, continue with the reset rollback cmds.
+                    atexit(exit_cb);
+                    continue;
+                }
                 fprintf(stderr, "%s: executing rollback cmd: ", __func__);
                 print_cmd_line(ipr2_cmds[i]->rollback_argc, ipr2_cmds[i]->rollback_argv);
                 do_cmd(ipr2_cmds[i]->rollback_argc, ipr2_cmds[i]->rollback_argv);
             }
-            free(ipr2_cmds);
-            return SR_ERR_CALLBACK_FAILED;
+            ret = SR_ERR_CALLBACK_FAILED;
+            break;
         }
     }
     free(ipr2_cmds);
-
-    return SR_ERR_OK;
+    jump_set = 0;
+    return ret;
 }
 
 int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
