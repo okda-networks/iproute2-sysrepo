@@ -47,6 +47,8 @@ jobs:
         run : CC=${{ matrix.compiler }} make -j $(nproc)
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
+      - name: install required kernel mod(s)
+        run : modprobe vrf
       - name: basic test "ip link add/set"
         run : |
           set -e
