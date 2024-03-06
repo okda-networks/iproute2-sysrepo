@@ -34,4 +34,12 @@ void free_cmds_info(struct cmd_info **cmds_info);
  */
 struct cmd_info **lyd2cmds(const struct lyd_node *change_node);
 
+/**
+ * parse the command line and convert it to argc, argv
+ * @param [in]  command command line string "ip link add ..."
+ * @param [out] argc parsed argv count
+ * @param [out] argv parsed argv
+ */
+void parse_command(const char *command, int *argc, char ***argv);
+
 #endif // IPROUTE2_SYSREPO_CMDGEN_H

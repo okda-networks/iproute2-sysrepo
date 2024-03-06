@@ -41,6 +41,7 @@
 
 /* sysrepo */
 #include "lib/cmdgen.h"
+#include "lib/oper_data.h"
 #include <sysrepo.h>
 
 #ifndef LIBDIR
@@ -81,10 +82,15 @@ struct rtnl_handle rth = { .fd = -1 };
 sr_session_ctx_t *sr_session;
 static sr_conn_ctx_t *sr_connection;
 static sr_subscription_ctx_t *sr_sub_ctx;
-static char *iproute2_ip_modules[] = { "iproute2-ip-link", "iproute2-ip-nexthop",
-                                       "iproute2-ip-netns", NULL }; // null terminator
-
-extern char json_buffer[1024 * 1024];
+/**
+ * Struct store yang modules names, operational data path and callabck functions.
+ */
+struct yang_module {
+    const char *module; // Stores Module name
+    const char *oper_pull_path; // Stores operational pull subscription path
+} ipr2_ip_modules[] = { { "iproute2-ip-link", "/iproute2-ip-link:links/link" },
+                        { "iproute2-ip-nexthop", "/iproute2-ip-nexthop:nexthops/nexthop" },
+                        { "iproute2-ip-netns", "/iproute2-ip-netns:netnses/netns" } };
 
 volatile int exit_application = 0;
 static jmp_buf jbuf;
@@ -98,7 +104,7 @@ static void exit_cb(void)
 
 static void sigint_handler(__attribute__((unused)) int signum)
 {
-    printf("Sigint called, exiting...\n");
+    fprintf(stdout, "\nSigint called, exiting...\n");
     exit_application = 1;
 }
 
@@ -441,33 +447,82 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
     return ret;
 }
 
+int ipr2_oper_get_items_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
+                           const char *xpath, const char *request_xpath, uint32_t request_id,
+                           struct lyd_node **parent, void *private_data)
+{
+    int ret;
+    char *ipr2_show_cmd, **argv;
+    int argc;
+    const struct ly_ctx *ly_ctx;
+
+    (void)session;
+    (void)sub_id;
+    (void)request_xpath;
+    (void)request_id;
+    (void)private_data;
+
+    ipr2_show_cmd = get_module_sh_startcmd(module_name);
+
+    parse_command(ipr2_show_cmd, &argc, &argv);
+    ret = do_cmd(argc, argv);
+
+    return sr_set_oper_data_items(session, module_name, parent);
+}
+
 static void sr_subscribe_config()
 {
-    char **ip_module = iproute2_ip_modules;
     int ret;
-    fprintf(stdout, "Subscribing to sysrepo modules config updates:\n");
-    while (*ip_module != NULL) {
-        ret = sr_module_change_subscribe(sr_session, *ip_module, NULL, ip_sr_config_change_cb, NULL,
-                                         0, SR_SUBSCR_DEFAULT, &sr_sub_ctx);
-        if (ret != SR_ERR_OK)
-            fprintf(stderr, "%s: failed to subscribe to module (%s): %s\n", __func__, *ip_module,
-                    sr_strerror(ret));
-        else
-            fprintf(stdout, "%s: successfully subscribed to module (%s)\n", __func__, *ip_module);
+    fprintf(stdout, "Subscribing to iproute2 modules config changes:\n");
 
-        ++ip_module;
+    /* subscribe to ip modules */
+    for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
+        ret = sr_module_change_subscribe(sr_session, ipr2_ip_modules[i].module, NULL,
+                                         ip_sr_config_change_cb, NULL, 0, SR_SUBSCR_DEFAULT,
+                                         &sr_sub_ctx);
+        if (ret != SR_ERR_OK)
+            fprintf(stderr, "%s: Failed to subscribe to module (%s) config changes: %s\n", __func__,
+                    ipr2_ip_modules[i].module, sr_strerror(ret));
+        else
+            fprintf(stdout, "%s: Successfully subscribed to module (%s) config changes\n", __func__,
+                    ipr2_ip_modules[i].module);
     }
-    /* loop until ctrl-c is pressed / SIGINT is received */
-    signal(SIGINT, sigint_handler);
-    signal(SIGPIPE, SIG_IGN);
-    while (!exit_application) {
-        sleep(1);
+
+    /* TODO subscribe to bridge modules */
+    /* TODO subscribe to TC modules */
+}
+
+static void sr_subscribe_operational_pull()
+{
+    int ret;
+    fprintf(stdout, "Subscribing to iproute2 modules operational data pull requests:\n");
+    /* subscribe to ip modules */
+    for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
+        ret = sr_oper_get_subscribe(sr_session, ipr2_ip_modules[i].module,
+                                    ipr2_ip_modules[i].oper_pull_path, ipr2_oper_get_items_cb, NULL,
+                                    0, &sr_sub_ctx);
+        if (ret != SR_ERR_OK)
+            fprintf(stderr,
+                    "%s: Failed to subscribe to module (%s) operational data pull requests: %s\n",
+                    __func__, ipr2_ip_modules[i].module, sr_strerror(ret));
+        else
+            fprintf(stdout,
+                    "%s: Successfully subscribed to module (%s) operational data pull requests\n",
+                    __func__, ipr2_ip_modules[i].module);
     }
+
+    /* TODO subscribe to bridge modules */
+    /* TODO subscribe to TC modules */
 }
 
 int sysrepo_start()
 {
     int ret;
+
+    ++json; /* set iproute2 to format its print outputs in json */
+    ++show_details; /* set iproute2 to include details in its print outputs */
+    ++show_stats; /* set iproute2 to include stats in its print outputs */
+
     ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
     if (ret != SR_ERR_OK) {
         fprintf(stderr, "%s: sr_connect(): %s\n", __func__, sr_strerror(ret));
@@ -481,8 +536,18 @@ int sysrepo_start()
         goto cleanup;
     }
     sr_subscribe_config();
+    sr_subscribe_operational_pull();
+
+    /* loop until ctrl-c is pressed / SIGINT is received */
+    signal(SIGINT, sigint_handler);
+    signal(SIGPIPE, SIG_IGN);
+    while (!exit_application) {
+        sleep(1);
+    }
 
 cleanup:
+    if (sr_sub_ctx)
+        sr_unsubscribe(sr_sub_ctx);
     if (sr_session)
         sr_session_stop(sr_session);
     if (sr_connection)
