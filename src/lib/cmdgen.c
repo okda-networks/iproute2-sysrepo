@@ -658,14 +658,164 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     return strdup(cmd_line);
 }
 
+/**
+ * duplicate lyd_node and insert it in the provided parent tree.
+ * @param parent lyd_node parent tree to insert the child in.
+ * @param child lyd_node to be duplicated and inserted in the node.
+ * @return EXIT_SUCCESS
+ * @return EXIT_FAILURE
+ */
+int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
+{
+    int ret;
+    struct lyd_node *child_dup = NULL;
+    int processed = 1;
+
+    ret = lyd_dup_single(child, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS, &child_dup);
+    if (ret != LY_SUCCESS) {
+        fprintf(stderr, "%s: failed to duplicate child `%s`: %s.", __func__, child->schema->name,
+                ly_strerrcode(ret));
+        return EXIT_FAILURE;
+    }
+    ret = lyd_insert_child(*parent, child_dup);
+    if (ret != LY_SUCCESS) {
+        fprintf(stderr, "%s: failed to insert child in parent tree`%s`: %s.", __func__,
+                child->schema->name, ly_strerrcode(ret));
+        return EXIT_FAILURE;
+    }
+    child->priv = &processed;
+    return EXIT_SUCCESS;
+}
+
+/**
+ * add dnode dependencies in  the lyd_node ordered_node, this function uses the leafref as
+ * dependency indicator.
+ * @param [in,out] ordered_node order changed node.
+ * @param [in] dnode the original changed node
+ * @param [in] startcmd startcmd lyd_node
+ * @return EXIT_SUCCESS
+ * @return EXIT_FAILURE
+ */
+int add_leafref_dependency(struct lyd_node **ordered_node, const struct lyd_node *dnode,
+                           struct lyd_node *startcmd)
+{
+    int ret;
+    // in ->priv we add an int flag which indicate that this node has been processed.
+    if (startcmd->priv != NULL)
+        return EXIT_SUCCESS;
+    struct lyd_node *next, *lefref_node = NULL;
+    LYD_TREE_DFS_BEGIN(startcmd, next)
+    {
+        if (next->schema->nodetype == LYS_LEAF) {
+            LY_DATA_TYPE type = ((struct lysc_node_leaf *)next->schema)->type->basetype;
+            if (type == LY_TYPE_LEAFREF) {
+                // get the schema node of the leafref.
+                struct lysc_type_leafref *leafref =
+                    (struct lysc_type_leafref *)((struct lysc_node_leaf *)next->schema)->type;
+                struct ly_set *s_set;
+                ret = lys_find_expr_atoms(next->schema, next->schema->module, leafref->path,
+                                          leafref->prefixes, 0, &s_set);
+                if (s_set == NULL) {
+                    fprintf(stderr, "%s:failed to get target leafref for node \"%s\": %s\n",
+                            __func__, next->schema->name, ly_strerrcode(ret));
+                    return EXIT_FAILURE;
+                }
+                struct lysc_node *y_node = s_set->snodes[s_set->count - 2];
+
+                char xpath[1024] = { 0 }, dxpath[1024] = { 0 };
+                // get the xpath of the schema node.
+                lysc_path(y_node, LYSC_PATH_DATA_PATTERN, xpath, 1024);
+                // create data xpath for the schema node (add list predicate).
+                sprintf(dxpath, xpath, lyd_get_value(next));
+
+                ret = lyd_find_path(dnode, dxpath, 0, &lefref_node);
+                // if lefref_node found in try to add it to the order_list. if not continue to next node.
+                if (ret == LY_SUCCESS) {
+                    // - if operation is add, the lefref_node will be added first,
+                    // - if delete the depending node (the node that depending on the lefref_node)
+
+                    if (get_operation(startcmd) == DELETE_OPR && startcmd->priv == NULL) {
+                        // this is delete insert the depending-on node and then add_dependency recursively.
+                        ret = dup_and_insert_node(ordered_node, startcmd);
+                        if (ret != EXIT_SUCCESS)
+                            return ret;
+                        ret = add_leafref_dependency(ordered_node, dnode, lefref_node);
+                        if (ret != EXIT_SUCCESS)
+                            return ret;
+                    } else if (lefref_node->priv == NULL) {
+                        // this is add, insert the dependencies first recursively.
+                        ret = add_leafref_dependency(ordered_node, dnode, lefref_node);
+                        if (ret != EXIT_SUCCESS)
+                            return ret;
+                        ret = dup_and_insert_node(ordered_node, lefref_node);
+                        if (ret != EXIT_SUCCESS)
+                            return ret;
+                    }
+                }
+            }
+        }
+        LYD_TREE_DFS_END(startcmd, next);
+    }
+    return EXIT_SUCCESS;
+}
+
+/**
+ * sort change node dependencies based on leafrefs.
+ * @param dnode original change node.
+ * @return ordered_node ordered change node.
+ */
+struct lyd_node *sort_leafrefs_dependencies(const struct lyd_node *dnode)
+{
+    int ret;
+    struct lyd_node *next, *child_node, *ordered_node;
+    lyd_dup_single(dnode, NULL, LYD_DUP_WITH_FLAGS, &ordered_node);
+    child_node = lyd_child(dnode);
+    // add dependency for each node.
+    LY_LIST_FOR(child_node, next)
+    {
+        if (add_leafref_dependency(&ordered_node, dnode, next) != EXIT_SUCCESS) {
+            lyd_free_all(ordered_node);
+            return NULL;
+        }
+    }
+    // add the rest of unprocessed nodes (none dependency nodes.)
+    LY_LIST_FOR(child_node, next)
+    {
+        struct lyd_node *starcmd_dup = NULL;
+        if (next->priv == NULL) {
+            ret = lyd_dup_single(next, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS, &starcmd_dup);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr, "%s: failed duplicate node `%s`: %s.", __func__, next->schema->name,
+                        ly_strerrcode(ret));
+                lyd_free_all(ordered_node);
+                return NULL;
+            }
+            ret = lyd_insert_child(ordered_node, starcmd_dup);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr, "%s: failed to insert starcmd_dup in ordered_node tree `%s`: %s.",
+                        __func__, starcmd_dup->schema->name, ly_strerrcode(ret));
+                lyd_free_all(ordered_node);
+                return NULL;
+            }
+        }
+    }
+
+    return ordered_node;
+}
+
 struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
 {
     char *result;
     int cmd_idx = 0;
     char *cmd_line = NULL, *rollback_cmd_line = NULL;
-
+    struct lyd_node *ordered_change_node;
     lyd_print_mem(&result, change_node, LYD_XML, 0);
     printf("--%s", result);
+    ordered_change_node = sort_leafrefs_dependencies(change_node);
+    if (ordered_change_node == NULL) {
+        fprintf(stderr, "%s: failed to sort leafref dependencies\n", __func__);
+        return NULL;
+    }
 
     struct cmd_info **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_info *));
     if (cmds == NULL) {
@@ -705,7 +855,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
     }
 
     struct lyd_node *next, *child_node, *rollback_dnode;
-    child_node = lyd_child(change_node);
+    child_node = lyd_child(ordered_change_node);
     // loop through children of the root node.
     LY_LIST_FOR(child_node, next)
     {
@@ -713,7 +863,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
             if (is_startcmd_node(next)) {
                 cmd_line = lyd2cmd_line(next, oper2cmd_prefix);
                 if (cmd_line == NULL) {
-                    fprintf(stderr, "%s: failed to genrate ipr2 cmd for node \"%s\" \n", __func__,
+                    fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
                             next->schema->name);
                     free_cmds_info(cmds);
                     return NULL;
@@ -736,5 +886,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
             }
         }
     }
+    lyd_free_tree(ordered_change_node);
+    lyd_free_tree(rollback_dnode);
     return cmds;
 }
