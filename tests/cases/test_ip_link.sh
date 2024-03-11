@@ -108,12 +108,7 @@ echo "--------------------"
 echo "[3] Test Link DELETE"
 echo "---------------------"
 
-# step 1: work arround to delete the vlan10 first
-sysrepocfg -C  tests/cases/test_ip_link_data2.xml -d running
-sleep 0.1
-sysrepocfg -d running --edit  tests/cases/test_ip_link_data2.xml || ret=$?
-
-# Step 2: delete testif0 and testif1 from sysrepo
+# Step 1: delete vlan10, testif0 and testif1 from sysrepo
 sysrepocfg -C startup -d running -m iproute2-ip-link || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
@@ -121,7 +116,7 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     exit "$ret"
 fi
 
-# Step 3: check if interface deleted by iproute2-sysrepo
+# Step 2: check if interface deleted by iproute2-sysrepo
 if ! ip link show testIf0 >/dev/null 2>&1 && ! ip link show testIf1 >/dev/null 2>&1; then
     echo "TEST-INFO: IP links testIf0 and testIf1 are deleted successfully (OK)"
 else

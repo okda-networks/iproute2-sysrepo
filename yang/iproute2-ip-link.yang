@@ -1,7 +1,7 @@
 module iproute2-ip-link {
     yang-version 1.1;
     namespace "urn:okda:iproute2:ip:link";
-    prefix "iplink";
+    prefix iplink;
 
     import ietf-yang-types { prefix yang;}
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
@@ -166,7 +166,7 @@ module iproute2-ip-link {
         description "ip-link - network device configuration";
         list vrf{
             ipr2cgen:cmd-start;
-            key "name table";
+            key "name";
             leaf name {
                 ipr2cgen:after-node-add-static-arg "type vrf";
                 type string;
@@ -218,7 +218,7 @@ module iproute2-ip-link {
             leaf master{
                 ipr2cgen:on-node-delete "nomaster";
                 type link-ref;
-                description "add the interface to vrf";
+                description "add the link to master link";
                 must "../master != ../name" {
                     error-message "cannot use same link as master link!";
                 }
@@ -409,13 +409,13 @@ module iproute2-ip-link {
             }
             container bond_slave {
                 ipr2cgen:add-static-arg "type bond_slave";
-                when "../master";
-                must "/links/link[name=current()/../master]/type = 'iplink:bond'" {
-                    error-message "blond_slave can only be confirgured if the link is part of bonding
-                    (has a master link or type 'bond') ";
-                }
+                when "../master and /links/link[name=current()/../master]/type = 'iplink:bond'";
                 description "set additional bonding related to link with master bond link";
                 leaf queue_id{
+                    must "/links/link[name=current()/../../master]/type = 'iplink:bond'" {
+                        error-message "queue_id can only be confirgured if the link is part of bonding
+                        (has a master link or type 'bond') ";
+                    }
                     type uint16;
                     description "ID - set the slave's queue ID (a 16bit unsigned value)";
                 }
