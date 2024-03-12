@@ -49,6 +49,13 @@ module iproute2-cmdgen-extensions {
         argument "arg-name";
     }
 
+    extension oper-arg-name {
+        description
+            "iproute2 operational data extraction will use the leaf name for data lookup in iproute2 json outputs.
+            to override this use oper-arg-name extension";
+        argument "arg-name";
+    }
+
     extension flag {
         description
             "iproute2 cmd generator will use the leaf name only, ususally used for flags where the leaf type will be bool,

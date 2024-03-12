@@ -18,7 +18,7 @@ jobs:
       - name: add missing packages
         uses: ConorMacBride/install-package@v1
         with:
-          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev clang-format linux-modules-extra-$(uname -r)
+          apt: libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev libjson-c-dev clang-format linux-modules-extra-$(uname -r)
       - name: libyang v2.1.148 from upstream
         uses: actions/checkout@v4
         with:
