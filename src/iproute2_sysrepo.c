@@ -371,6 +371,7 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         jump_set = 1;
         if (setjmp(jbuf)) {
             // iproute2 exited, reset jump, and set exit callback.
+            free_cmds_info(ipr2_cmds);
             atexit(exit_cb);
             return SR_ERR_CALLBACK_FAILED;
         }
@@ -393,7 +394,7 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
             break;
         }
     }
-    free(ipr2_cmds);
+    free_cmds_info(ipr2_cmds);
     jump_set = 0;
     return ret;
 }
