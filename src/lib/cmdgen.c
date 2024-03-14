@@ -669,7 +669,7 @@ int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
 {
     int ret;
     struct lyd_node *child_dup = NULL;
-    int processed = 1;
+    static int processed = 1;
 
     ret = lyd_dup_single(child, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS, &child_dup);
     if (ret != LY_SUCCESS) {
