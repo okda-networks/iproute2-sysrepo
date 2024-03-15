@@ -113,8 +113,12 @@ void free_cmds_info(struct cmd_info **cmds_info)
             for (int j = 0; j < cmds_info[i]->argc; j++) {
                 free(cmds_info[i]->argv[j]);
             }
+            for (int j = 0; j < cmds_info[i]->rollback_argc; j++) {
+                free(cmds_info[i]->rollback_argv[j]);
+            }
             // Free the argv array itself
             free(cmds_info[i]->argv);
+            free(cmds_info[i]->rollback_argv);
             // Free the cmd_args struct itself
             free(cmds_info[i]);
         }
