@@ -807,20 +807,9 @@ struct lyd_node *sort_leafrefs_dependencies(const struct lyd_node *dnode)
     return ordered_node;
 }
 
-struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
+struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
 {
-    char *result;
     int cmd_idx = 0;
-    char *cmd_line = NULL, *rollback_cmd_line = NULL;
-    struct lyd_node *ordered_change_node;
-    lyd_print_mem(&result, change_node, LYD_XML, 0);
-    printf("--%s", result);
-    ordered_change_node = sort_leafrefs_dependencies(change_node);
-    if (ordered_change_node == NULL) {
-        fprintf(stderr, "%s: failed to sort leafref dependencies\n", __func__);
-        return NULL;
-    }
-
     struct cmd_info **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_info *));
     if (cmds == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
@@ -831,66 +820,89 @@ struct cmd_info **lyd2cmds(const struct lyd_node *change_node)
     for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
         cmds[i] = NULL;
     }
-
-    // this will hold the add, update and delete cmd prefixes.
-    char *oper2cmd_prefix[3] = { NULL };
-
-    // first get the add, update, delete cmds prefixis from schema extensions
-    if (get_extension(CMD_ADD_EXT, change_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
-        fprintf(stderr,
-                "%s: cmd-add extension is missing from root container "
-                "make sure root container has ipr2cgen:cmd-add\n",
-                __func__);
-        return NULL;
-    }
-    if (get_extension(CMD_DELETE_EXT, change_node, &oper2cmd_prefix[DELETE_OPR]) != EXIT_SUCCESS) {
-        fprintf(stderr,
-                "%s: cmd-delete extension is missing from root container "
-                "make sure root container has ipr2cgen:cmd-delete\n",
-                __func__);
-        return NULL;
-    }
-    if (get_extension(CMD_UPDATE_EXT, change_node, &oper2cmd_prefix[UPDATE_OPR]) != EXIT_SUCCESS) {
-        fprintf(stderr,
-                "%s: ipr2cgen:cmd-update extension is missing from root container "
-                "make sure root container has ipr2cgen:cmd-update\n",
-                __func__);
-        return NULL;
-    }
-
-    struct lyd_node *next, *child_node, *rollback_dnode;
-    child_node = lyd_child(ordered_change_node);
-    // loop through children of the root node.
-    LY_LIST_FOR(child_node, next)
+    const struct lyd_node *change_node;
+    // loop through all modules that has changes, and create the cmd_info array for all.
+    LY_LIST_FOR(all_change_nodes, change_node)
     {
-        if (next->schema->nodetype == LYS_LIST) {
-            if (is_startcmd_node(next)) {
-                cmd_line = lyd2cmd_line(next, oper2cmd_prefix);
-                if (cmd_line == NULL) {
-                    fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
-                            next->schema->name);
-                    free_cmds_info(cmds);
-                    return NULL;
+        char *result;
+
+        char *cmd_line = NULL, *rollback_cmd_line = NULL;
+        struct lyd_node *ordered_change_node;
+        lyd_print_mem(&result, change_node, LYD_XML, 0);
+        printf("--%s", result);
+        ordered_change_node = sort_leafrefs_dependencies(change_node);
+        if (ordered_change_node == NULL) {
+            fprintf(stderr, "%s: failed to sort leafref dependencies\n", __func__);
+            return NULL;
+        }
+
+        // this will hold the add, update and delete cmd prefixes.
+        char *oper2cmd_prefix[3] = { NULL };
+
+        // first get the add, update, delete cmds prefixis from schema extensions
+        if (get_extension(CMD_ADD_EXT, change_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
+            fprintf(stderr,
+                    "%s: cmd-add extension is missing from root container "
+                    "make sure root container has ipr2cgen:cmd-add\n",
+                    __func__);
+            return NULL;
+        }
+        if (get_extension(CMD_DELETE_EXT, change_node, &oper2cmd_prefix[DELETE_OPR]) !=
+            EXIT_SUCCESS) {
+            fprintf(stderr,
+                    "%s: cmd-delete extension is missing from root container "
+                    "make sure root container has ipr2cgen:cmd-delete\n",
+                    __func__);
+            return NULL;
+        }
+        if (get_extension(CMD_UPDATE_EXT, change_node, &oper2cmd_prefix[UPDATE_OPR]) !=
+            EXIT_SUCCESS) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:cmd-update extension is missing from root container "
+                    "make sure root container has ipr2cgen:cmd-update\n",
+                    __func__);
+            return NULL;
+        }
+
+        struct lyd_node *next, *child_node, *rollback_dnode;
+        child_node = lyd_child(ordered_change_node);
+        // loop through children of the root node.
+        LY_LIST_FOR(child_node, next)
+        {
+            if (next->schema->nodetype == LYS_LIST) {
+                if (is_startcmd_node(next)) {
+                    cmd_line = lyd2cmd_line(next, oper2cmd_prefix);
+                    if (cmd_line == NULL) {
+                        fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n",
+                                __func__, next->schema->name);
+                        free_cmds_info(cmds);
+                        lyd_free_tree(ordered_change_node);
+                        return NULL;
+                    }
+                    // get the rollback node.
+                    lyd_diff_reverse_all(next, &rollback_dnode);
+                    // the reversed node come with no parent, so we need to set the parent
+                    // for the rollback so we can fetch data from sr, otherwise the fetch will fail.
+                    rollback_dnode->parent = next->parent;
+                    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
+                    if (rollback_cmd_line == NULL) {
+                        fprintf(stderr,
+                                "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n",
+                                __func__, rollback_dnode->schema->name);
+                        free_cmds_info(cmds);
+                        free(cmd_line);
+                        lyd_free_tree(ordered_change_node);
+                        lyd_free_tree(rollback_dnode);
+                        return NULL;
+                    }
+                    add_command(cmds, &cmd_idx, cmd_line, rollback_cmd_line, next);
+                    free(cmd_line);
+                    free(rollback_cmd_line);
                 }
-                // get the rollback node.
-                lyd_diff_reverse_all(next, &rollback_dnode);
-                // the reversed node come with no parent, so we need to set the parent
-                // for the rollback so we can fetch data from sr, otherwise the fetch will fail.
-                rollback_dnode->parent = next->parent;
-                rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
-                if (rollback_cmd_line == NULL) {
-                    fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n",
-                            __func__, rollback_dnode->schema->name);
-                    free_cmds_info(cmds);
-                    return NULL;
-                }
-                add_command(cmds, &cmd_idx, cmd_line, rollback_cmd_line, next);
-                free(cmd_line);
-                free(rollback_cmd_line);
             }
         }
+        lyd_free_tree(ordered_change_node);
+        lyd_free_tree(rollback_dnode);
     }
-    lyd_free_tree(ordered_change_node);
-    lyd_free_tree(rollback_dnode);
     return cmds;
 }

@@ -427,15 +427,24 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
     root_dnode = (struct lyd_node *)dnode;
     while (root_dnode->parent != NULL) root_dnode = (struct lyd_node *)root_dnode->parent;
 
+    // for each module changed sysrepo will call the change callback, which we don't want,
+    // so we will get the last changed node in the list and apply the change only when the callback
+    // module name equals to the last node, this will assure the changes will be applied once.
+    struct lyd_node *next = NULL, *last_changed = NULL;
+    LY_LIST_FOR(root_dnode, next)
+    {
+        last_changed = next;
+    }
     switch (sr_ev) {
     case SR_EV_ENABLED:
     case SR_EV_CHANGE:
-        ret = ip_sr_config_change_cb_apply(root_dnode);
+        // apply the changes at the last called callback.
+        if (!strcmp(module_name, last_changed->schema->module->name)) {
+            ret = ip_sr_config_change_cb_apply(root_dnode);
+        }
         break;
     case SR_EV_DONE:
-        // TODO: add cleanup functionality.
     case SR_EV_ABORT:
-        // TODO: add abort event functionality.
     case SR_EV_RPC:
         // TODO: rpc support for iproute2 commands.
     case SR_EV_UPDATE:
