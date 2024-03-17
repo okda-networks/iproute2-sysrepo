@@ -677,13 +677,13 @@ int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
 
     ret = lyd_dup_single(child, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS, &child_dup);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to duplicate child `%s`: %s.", __func__, child->schema->name,
+        fprintf(stderr, "%s: failed to duplicate child `%s`: %s.\n", __func__, child->schema->name,
                 ly_strerrcode(ret));
         return EXIT_FAILURE;
     }
     ret = lyd_insert_child(*parent, child_dup);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to insert child in parent tree`%s`: %s.", __func__,
+        fprintf(stderr, "%s: failed to insert child in parent tree`%s`: %s.\n", __func__,
                 child->schema->name, ly_strerrcode(ret));
         return EXIT_FAILURE;
     }
@@ -737,7 +737,6 @@ int add_leafref_dependency(struct lyd_node **ordered_node, const struct lyd_node
                 if (ret == LY_SUCCESS) {
                     // - if operation is add, the lefref_node will be added first,
                     // - if delete the depending node (the node that depending on the lefref_node)
-
                     if (get_operation(startcmd) == DELETE_OPR && startcmd->priv == NULL) {
                         // this is delete insert the depending-on node and then add_dependency recursively.
                         ret = dup_and_insert_node(ordered_node, startcmd);
@@ -772,6 +771,7 @@ struct lyd_node *sort_leafrefs_dependencies(const struct lyd_node *dnode)
 {
     int ret;
     struct lyd_node *next, *child_node, *ordered_node;
+    // duplicate the change node without children.
     lyd_dup_single(dnode, NULL, LYD_DUP_WITH_FLAGS, &ordered_node);
     child_node = lyd_child(dnode);
     // add dependency for each node.
@@ -820,16 +820,16 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
         cmds[i] = NULL;
     }
+    char *result;
+    lyd_print_mem(&result, all_change_nodes, LYD_XML, 0);
+    printf("--%s", result);
     const struct lyd_node *change_node;
     // loop through all modules that has changes, and create the cmd_info array for all.
     LY_LIST_FOR(all_change_nodes, change_node)
     {
-        char *result;
-
         char *cmd_line = NULL, *rollback_cmd_line = NULL;
         struct lyd_node *ordered_change_node;
-        lyd_print_mem(&result, change_node, LYD_XML, 0);
-        printf("--%s", result);
+
         ordered_change_node = sort_leafrefs_dependencies(change_node);
         if (ordered_change_node == NULL) {
             fprintf(stderr, "%s: failed to sort leafref dependencies\n", __func__);
