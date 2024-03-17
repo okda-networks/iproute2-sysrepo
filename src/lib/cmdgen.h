@@ -29,10 +29,10 @@ void free_cmds_info(struct cmd_info **cmds_info);
  * @brief generate list of commands info from the lyd_node (diff).
  *
  *
- * @param[in] change_node lyd_node of change data.
+ * @param[in] all_change_nodes lyd_node change data for all modules.
  * @return cmd_info array.
  */
-struct cmd_info **lyd2cmds(const struct lyd_node *change_node);
+struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes);
 
 /**
  * parse the command line and convert it to argc, argv
