@@ -16,7 +16,7 @@
 #include "cmdgen.h"
 
 extern sr_session_ctx_t *sr_session;
-
+static int processed = 1;
 /**
  * @brief data struct to store cmd operation.
  *
@@ -279,28 +279,29 @@ void parse_command(const char *command, int *argc, char ***argv)
  * @param [in,out] cmd_idx current index of cmds.
  * @param [in] cmd_line command line string "ip link add name lo0 type dummy"
  * @param [in] cmd_line_rb the rollback command line string.
- * @param [in] start_dnode start_cmd node to be added to the cmd_info struct.
+ * @return EXIST_SUCCESS
+ * @return EXIST_FAILURE
  */
-void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_line_rb,
-                 const struct lyd_node *start_dnode)
+int add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_line_rb)
 {
     int argc, argc_rb;
     char **argv, **argv_rb;
+    if (*cmd_idx >= CMDS_ARRAY_SIZE) {
+        fprintf(stderr,
+                "%s: cmds exceeded MAX allowed commands per transaction, MAX_ALLOWED_CMDS=%d\n",
+                __func__, CMDS_ARRAY_SIZE);
+        return EXIT_FAILURE;
+    }
     parse_command(cmd_line, &argc, &argv);
     parse_command(cmd_line_rb, &argc_rb, &argv_rb);
-    if (*cmd_idx >= CMDS_ARRAY_SIZE) {
-        fprintf(stderr, "process_command: cmds exceeded MAX allowed commands per transaction\n");
-        free_argv(argv, argc);
-        free_argv(argv_rb, argc_rb);
-        return;
-    }
+
     (cmds)[*cmd_idx] = malloc(sizeof(struct cmd_info));
 
     if ((cmds)[*cmd_idx] == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         free_argv(argv, argc);
         free_argv(argv_rb, argc_rb);
-        return;
+        return EXIT_FAILURE;
     }
     dup_argv(&((cmds)[*cmd_idx]->argv), argv, argc);
     dup_argv(&((cmds)[*cmd_idx]->rollback_argv), argv_rb, argc_rb);
@@ -309,6 +310,7 @@ void add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd
     (*cmd_idx)++;
     free_argv(argv, argc);
     free_argv(argv_rb, argc_rb);
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -663,9 +665,10 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 }
 
 /**
- * duplicate lyd_node and insert it in the provided parent tree.
- * @param parent lyd_node parent tree to insert the child in.
- * @param child lyd_node to be duplicated and inserted in the node.
+ * duplicate lyd_node with its parent, then link the parent (insert_sibling)
+ * to the current provided parent
+ * @param parent [in,out] lyd_node parent tree to insert the child's parent to it.
+ * @param child  [in]     lyd_node to be duplicated and linked to the parent tree.
  * @return EXIT_SUCCESS
  * @return EXIT_FAILURE
  */
@@ -673,35 +676,35 @@ int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
 {
     int ret;
     struct lyd_node *child_dup = NULL;
-    static int processed = 1;
 
-    ret = lyd_dup_single(child, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS, &child_dup);
+    ret = lyd_dup_single(child, NULL, LYD_DUP_WITH_PARENTS | LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS,
+                         &child_dup);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to duplicate child `%s`: %s.\n", __func__, child->schema->name,
+        fprintf(stderr, "%s: failed to duplicate node `%s`: %s.\n", __func__, child->schema->name,
                 ly_strerrcode(ret));
         return EXIT_FAILURE;
     }
-    ret = lyd_insert_child(*parent, child_dup);
+    ret = lyd_insert_sibling(*parent, lyd_parent(child_dup), parent);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to insert child in parent tree`%s`: %s.\n", __func__,
-                child->schema->name, ly_strerrcode(ret));
+        fprintf(stderr, "%s: failed to insert sibling for node \"%s\": %s.\n", __func__,
+                lyd_parent(child)->schema->name, ly_strerrcode(ret));
+        lyd_free_all(child_dup);
         return EXIT_FAILURE;
     }
-    child->priv = &processed;
     return EXIT_SUCCESS;
 }
 
 /**
- * add dnode dependencies in  the lyd_node ordered_node, this function uses the leafref as
- * dependency indicator.
- * @param [in,out] ordered_node order changed node.
- * @param [in] dnode the original changed node
- * @param [in] startcmd startcmd lyd_node
- * @return EXIT_SUCCESS
- * @return EXIT_FAILURE
+ * @brief get all leafrefs of startcmd node, and create
+ * @param all_change_nodes [in]  all change nodes
+ * @param startcmd_node     [in]  lyd_node to create cmd_info for and add it to cmds.
+ * @param found_leafrefs   [out] all leafrefs founded, the leafrefs will be duplicates of the
+ *                               original leafref, and their parents will linked together.
+ * @return EXIST_SUCCESS
+ * @return EXIST_FAILURE
  */
-int add_leafref_dependency(struct lyd_node **ordered_node, const struct lyd_node *dnode,
-                           struct lyd_node *startcmd)
+int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *startcmd,
+                      struct lyd_node **found_leafrefs)
 {
     int ret;
     // in ->priv we add an int flag which indicate that this node has been processed.
@@ -732,27 +735,13 @@ int add_leafref_dependency(struct lyd_node **ordered_node, const struct lyd_node
                 // create data xpath for the schema node (add list predicate).
                 sprintf(dxpath, xpath, lyd_get_value(next));
 
-                ret = lyd_find_path(dnode, dxpath, 0, &lefref_node);
-                // if lefref_node found in try to add it to the order_list. if not continue to next node.
+                ret = lyd_find_path(all_change_nodes, dxpath, 0, &lefref_node);
+
                 if (ret == LY_SUCCESS) {
-                    // - if operation is add, the lefref_node will be added first,
-                    // - if delete the depending node (the node that depending on the lefref_node)
-                    if (get_operation(startcmd) == DELETE_OPR && startcmd->priv == NULL) {
-                        // this is delete insert the depending-on node and then add_dependency recursively.
-                        ret = dup_and_insert_node(ordered_node, startcmd);
-                        if (ret != EXIT_SUCCESS)
-                            return ret;
-                        ret = add_leafref_dependency(ordered_node, dnode, lefref_node);
-                        if (ret != EXIT_SUCCESS)
-                            return ret;
-                    } else if (lefref_node->priv == NULL) {
-                        // this is add, insert the dependencies first recursively.
-                        ret = add_leafref_dependency(ordered_node, dnode, lefref_node);
-                        if (ret != EXIT_SUCCESS)
-                            return ret;
-                        ret = dup_and_insert_node(ordered_node, lefref_node);
-                        if (ret != EXIT_SUCCESS)
-                            return ret;
+                    if (dup_and_insert_node(found_leafrefs, lefref_node) != EXIT_SUCCESS) {
+                        fprintf(stderr, "%s: failed to insert dependency leafref `%s`: %s.\n",
+                                __func__, lefref_node->schema->name, ly_strerrcode(ret));
+                        return EXIT_FAILURE;
                     }
                 }
             }
@@ -763,56 +752,175 @@ int add_leafref_dependency(struct lyd_node **ordered_node, const struct lyd_node
 }
 
 /**
- * sort change node dependencies based on leafrefs.
- * @param dnode original change node.
- * @return ordered_node ordered change node.
+ * @brief create cmd_info for startcmd_node and add it to cmds.
+ * @param cmds [in,out] array of cmd_info
+ * @param cmd_idx [in,out] current index pointer for cmds
+ * @param startcmd_node [in] lyd_node to create cmd_info for and add it to cmds.
+ * @return EXIST_SUCCESS
+ * @return EXIST_FAILURE
  */
-struct lyd_node *sort_leafrefs_dependencies(const struct lyd_node *dnode)
+int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *startcmd_node)
 {
-    int ret;
-    struct lyd_node *next, *child_node, *ordered_node;
-    // duplicate the change node without children.
-    lyd_dup_single(dnode, NULL, LYD_DUP_WITH_FLAGS, &ordered_node);
-    child_node = lyd_child(dnode);
-    // add dependency for each node.
-    LY_LIST_FOR(child_node, next)
-    {
-        if (add_leafref_dependency(&ordered_node, dnode, next) != EXIT_SUCCESS) {
-            lyd_free_all(ordered_node);
-            return NULL;
-        }
+    // if node already processed skip.
+    if (startcmd_node->priv != NULL)
+        return EXIT_SUCCESS;
+
+    int ret = EXIT_SUCCESS;
+    char *oper2cmd_prefix[3] = { NULL };
+    char *cmd_line = NULL, *rollback_cmd_line = NULL;
+    struct lyd_node *rollback_dnode = NULL;
+    // first get the add, update, delete cmds prefixis from schema extensions
+    if (get_extension(CMD_ADD_EXT, lyd_parent(startcmd_node), &oper2cmd_prefix[ADD_OPR]) !=
+        EXIT_SUCCESS) {
+        fprintf(stderr,
+                "%s: cmd-add extension is missing from root container "
+                "make sure root container has ipr2cgen:cmd-add\n",
+                __func__);
+        ret = EXIT_FAILURE;
+        goto cleanup;
     }
-    // add the rest of unprocessed nodes (none dependency nodes.)
-    LY_LIST_FOR(child_node, next)
-    {
-        struct lyd_node *starcmd_dup = NULL;
-        if (next->priv == NULL) {
-            ret = lyd_dup_single(next, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS, &starcmd_dup);
-            if (ret != LY_SUCCESS) {
-                fprintf(stderr, "%s: failed duplicate node `%s`: %s.", __func__, next->schema->name,
-                        ly_strerrcode(ret));
-                lyd_free_all(ordered_node);
-                return NULL;
-            }
-            ret = lyd_insert_child(ordered_node, starcmd_dup);
-            if (ret != LY_SUCCESS) {
-                fprintf(stderr, "%s: failed to insert starcmd_dup in ordered_node tree `%s`: %s.",
-                        __func__, starcmd_dup->schema->name, ly_strerrcode(ret));
-                lyd_free_all(ordered_node);
-                return NULL;
-            }
-        }
+    if (get_extension(CMD_DELETE_EXT, lyd_parent(startcmd_node), &oper2cmd_prefix[DELETE_OPR]) !=
+        EXIT_SUCCESS) {
+        fprintf(stderr,
+                "%s: cmd-delete extension is missing from root container "
+                "make sure root container has ipr2cgen:cmd-delete\n",
+                __func__);
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+    if (get_extension(CMD_UPDATE_EXT, lyd_parent(startcmd_node), &oper2cmd_prefix[UPDATE_OPR]) !=
+        EXIT_SUCCESS) {
+        fprintf(stderr,
+                "%s: ipr2cgen:cmd-update extension is missing from root container "
+                "make sure root container has ipr2cgen:cmd-update\n",
+                __func__);
+        ret = EXIT_FAILURE;
+        goto cleanup;
     }
 
-    return ordered_node;
+    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
+    if (cmd_line == NULL) {
+        fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
+                startcmd_node->schema->name);
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+    // get the rollback node.
+    lyd_diff_reverse_all(startcmd_node, &rollback_dnode);
+
+    // the reversed node come with no parent, so we need to duplicate startcmd parent, and insert
+    // the rollback_node into the duplicated parent.
+    // this is needed when fetching data from sr, otherwise the fetch will fail.
+    struct lyd_node *rollback_dnode_parent = NULL;
+    lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_FLAGS, &rollback_dnode_parent);
+    lyd_insert_child(rollback_dnode_parent, rollback_dnode);
+
+    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
+    if (rollback_cmd_line == NULL) {
+        fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n", __func__,
+                rollback_dnode->schema->name);
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+    ret = add_command(cmds, cmd_idx, cmd_line, rollback_cmd_line);
+
+cleanup:
+    if (cmd_line)
+        free(cmd_line);
+    if (rollback_cmd_line)
+        free(rollback_cmd_line);
+    if (rollback_dnode)
+        lyd_free_all(rollback_dnode);
+    if (oper2cmd_prefix[ADD_OPR])
+        free(oper2cmd_prefix[ADD_OPR]);
+    if (oper2cmd_prefix[UPDATE_OPR])
+        free(oper2cmd_prefix[UPDATE_OPR]);
+    if (oper2cmd_prefix[DELETE_OPR])
+        free(oper2cmd_prefix[DELETE_OPR]);
+    return ret;
+}
+
+/**
+ * add all dependencies for node startcmd_node, this add dependencies recursively.
+ * @param cmds [in,out] array of cmd_info
+ * @param cmd_idx [in,out] current index pointer for cmds
+ * @param all_change_nodes [in] all change nodes
+ * @param startcmd_node [in] startcmd_node to find and add its dependencies.
+ * @return EXIST_SUCCESS
+ * @return EXIST_FAILURE
+ */
+int add_dependencies_cmd_info(struct cmd_info **cmds, int *cmd_idx,
+                              const struct lyd_node *all_change_nodes,
+                              struct lyd_node *startcmd_node)
+{
+    int ret = EXIT_SUCCESS;
+    struct lyd_node *node_leafrefs = NULL;
+
+    // check if node is already processed
+    if (startcmd_node->priv != NULL)
+        return EXIT_SUCCESS;
+    // get the node leafrefs
+    ret = get_node_leafrefs(all_change_nodes, startcmd_node, &node_leafrefs);
+    if (ret != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: failed to get the leafref depenedecnies for node \"%s\"\n ", __func__,
+                startcmd_node->schema->name);
+        return EXIT_FAILURE;
+    }
+    // check if dependencies found.
+    if (node_leafrefs != NULL) {
+        struct lyd_node *leafref_node;
+        LY_LIST_FOR(node_leafrefs, leafref_node)
+        {
+            // - if the start_cmd node's operation is delete, then add it before it's leafref.
+            // - if the start_cmd node's operation is add, then add leafref before
+            if (get_operation(startcmd_node) == DELETE_OPR) {
+                if (startcmd_node->priv == NULL) {
+                    ret = add_cmd_info_core(cmds, cmd_idx, startcmd_node);
+                    if (ret != EXIT_SUCCESS)
+                        goto cleanup;
+                    startcmd_node->priv = &processed;
+                }
+            } else {
+                // first get the original leafref node that reside in all_change_nodes, as we need to
+                // change it's ->priv value to processed.
+                char dxpath[1024] = { 0 };
+                struct lyd_node *original_leafref_dnode = NULL;
+                lyd_path(lyd_child(leafref_node), LYD_PATH_STD, dxpath, 1024);
+                ret = lyd_find_path(all_change_nodes, dxpath, 0, &original_leafref_dnode);
+                if (ret != LY_SUCCESS) {
+                    fprintf(stderr, "%s: failed to get the original leafref node \"%s\"\n ",
+                            __func__, startcmd_node->schema->name);
+                    ret = EXIT_FAILURE;
+                    goto cleanup;
+                }
+                // check if the found dependency also has dependencies and add it.
+                ret = add_dependencies_cmd_info(cmds, cmd_idx, all_change_nodes,
+                                                original_leafref_dnode);
+                if (ret != EXIT_SUCCESS)
+                    goto cleanup;
+
+                if (original_leafref_dnode != NULL) {
+                    ret = add_cmd_info_core(cmds, cmd_idx, original_leafref_dnode);
+                    if (ret != EXIT_SUCCESS)
+                        goto cleanup;
+                    original_leafref_dnode->priv = &processed;
+                }
+            }
+        }
+    }
+cleanup:
+    if (node_leafrefs)
+        lyd_free_all(node_leafrefs);
+    return ret;
 }
 
 struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
 {
+    char *node_print_text;
     int cmd_idx = 0;
     struct cmd_info **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_info *));
     if (cmds == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+        fprintf(stderr, "%s:Memory allocation failed\n", __func__);
         return NULL;
     }
 
@@ -820,89 +928,62 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
         cmds[i] = NULL;
     }
-    char *result;
-    lyd_print_mem(&result, all_change_nodes, LYD_XML, 0);
-    printf("--%s", result);
+
     const struct lyd_node *change_node;
-    // loop through all modules that has changes, and create the cmd_info array for all.
+    struct lyd_node *next = NULL, *child_node = NULL;
+    // initialize ->priv to NULL.
     LY_LIST_FOR(all_change_nodes, change_node)
     {
-        char *cmd_line = NULL, *rollback_cmd_line = NULL;
-        struct lyd_node *ordered_change_node;
+        child_node = lyd_child(change_node);
 
-        ordered_change_node = sort_leafrefs_dependencies(change_node);
-        if (ordered_change_node == NULL) {
-            fprintf(stderr, "%s: failed to sort leafref dependencies\n", __func__);
-            return NULL;
-        }
+        lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
+        printf("--%s", node_print_text);
+        free(node_print_text);
 
-        // this will hold the add, update and delete cmd prefixes.
-        char *oper2cmd_prefix[3] = { NULL };
-
-        // first get the add, update, delete cmds prefixis from schema extensions
-        if (get_extension(CMD_ADD_EXT, change_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
-            fprintf(stderr,
-                    "%s: cmd-add extension is missing from root container "
-                    "make sure root container has ipr2cgen:cmd-add\n",
-                    __func__);
-            return NULL;
-        }
-        if (get_extension(CMD_DELETE_EXT, change_node, &oper2cmd_prefix[DELETE_OPR]) !=
-            EXIT_SUCCESS) {
-            fprintf(stderr,
-                    "%s: cmd-delete extension is missing from root container "
-                    "make sure root container has ipr2cgen:cmd-delete\n",
-                    __func__);
-            return NULL;
-        }
-        if (get_extension(CMD_UPDATE_EXT, change_node, &oper2cmd_prefix[UPDATE_OPR]) !=
-            EXIT_SUCCESS) {
-            fprintf(stderr,
-                    "%s: ipr2cgen:cmd-update extension is missing from root container "
-                    "make sure root container has ipr2cgen:cmd-update\n",
-                    __func__);
-            return NULL;
-        }
-
-        struct lyd_node *next, *child_node, *rollback_dnode;
-        child_node = lyd_child(ordered_change_node);
-        // loop through children of the root node.
         LY_LIST_FOR(child_node, next)
         {
-            if (next->schema->nodetype == LYS_LIST) {
-                if (is_startcmd_node(next)) {
-                    cmd_line = lyd2cmd_line(next, oper2cmd_prefix);
-                    if (cmd_line == NULL) {
-                        fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n",
-                                __func__, next->schema->name);
-                        free_cmds_info(cmds);
-                        lyd_free_tree(ordered_change_node);
-                        return NULL;
-                    }
-                    // get the rollback node.
-                    lyd_diff_reverse_all(next, &rollback_dnode);
-                    // the reversed node come with no parent, so we need to set the parent
-                    // for the rollback so we can fetch data from sr, otherwise the fetch will fail.
-                    rollback_dnode->parent = next->parent;
-                    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
-                    if (rollback_cmd_line == NULL) {
-                        fprintf(stderr,
-                                "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n",
-                                __func__, rollback_dnode->schema->name);
-                        free_cmds_info(cmds);
-                        free(cmd_line);
-                        lyd_free_tree(ordered_change_node);
-                        lyd_free_tree(rollback_dnode);
-                        return NULL;
-                    }
-                    add_command(cmds, &cmd_idx, cmd_line, rollback_cmd_line, next);
-                    free(cmd_line);
-                    free(rollback_cmd_line);
+            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
+                next->priv = NULL;
+            }
+        }
+    }
+
+    // loop through all modules and add all dependencies first.
+    LY_LIST_FOR(all_change_nodes, change_node)
+    {
+        child_node = lyd_child(change_node);
+        //
+        LY_LIST_FOR(child_node, next)
+        {
+            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
+                int ret = add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, next);
+                if (ret != EXIT_SUCCESS) {
+                    free_cmds_info(cmds);
+                    return NULL;
                 }
             }
         }
-        lyd_free_tree(ordered_change_node);
-        lyd_free_tree(rollback_dnode);
     }
+
+    // loop through all modules again and add all none processed nodes (->priv == NULL).
+    LY_LIST_FOR(all_change_nodes, change_node)
+    {
+        child_node = lyd_child(change_node);
+        // add none dependencies (->priv == NULL) second.
+        LY_LIST_FOR(child_node, next)
+        {
+            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
+                // check if node is already added (through add_dependencies_cmd_info())
+                if (next->priv == NULL) {
+                    if (add_cmd_info_core(cmds, &cmd_idx, next) != EXIT_SUCCESS) {
+                        free_cmds_info(cmds);
+                        return NULL;
+                    }
+                    next->priv = &processed;
+                }
+            }
+        }
+    }
+
     return cmds;
 }
