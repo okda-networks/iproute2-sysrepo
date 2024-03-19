@@ -56,6 +56,16 @@ module iproute2-cmdgen-extensions {
         argument "arg-name";
     }
 
+    extension oper-value-map {
+       description "used to map iproute2 operational data values to yang module vales";
+       argument "value_map";
+    }
+
+    extension oper-flag-map {
+       description "used to map iproute2 operational data values to yang module vales";
+       argument "flag_map";
+    }
+
     extension flag {
         description
             "iproute2 cmd generator will use the leaf name only, ususally used for flags where the leaf type will be bool,

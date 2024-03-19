@@ -12,19 +12,24 @@
  */
 
 #include <stdbool.h>
-#include "json-c/json.h"
+#include <libyang/tree_data.h>
 
+#include "json-c/json.h"
 #include "oper_data.h"
 #include "cmdgen.h"
 
 /* to be merged with cmdgen */
 typedef enum {
     // leaf extensions
-    OPER_ARG_NAME_EXT
+    OPER_ARG_NAME_EXT,
+    OPER_VALUE_MAP_EXT,
+    OPER_FLAG_MAP_EXT
 } oper_extension_t;
 
 /* to be merged with cmdgen */
-char *oper_yang_ext_map[] = { [OPER_ARG_NAME_EXT] = "oper-arg-name" };
+char *oper_yang_ext_map[] = { [OPER_ARG_NAME_EXT] = "oper-arg-name",
+                              [OPER_VALUE_MAP_EXT] = "oper-value-map",
+                              [OPER_FLAG_MAP_EXT] = "oper-flag-map" };
 
 /**
  * Struct store yang modules names and their iproute2 show cmd start.
@@ -43,25 +48,16 @@ struct module_sh_cmdstart {
  */
 char *get_module_sh_startcmd(const char *module_name)
 {
-    char showcmd[CMD_LINE_SIZE] = { 0 };
-
     /* convert module name to show cmd */
     for (size_t i = 0; i < sizeof(ipr2_sh_cmdstart) / sizeof(ipr2_sh_cmdstart[0]); i++) {
         if (strcmp(module_name, ipr2_sh_cmdstart[i].module_name) == 0) {
-            strlcat(showcmd, ipr2_sh_cmdstart[i].showcmd_start, sizeof(showcmd));
-            break;
+            return strdup(ipr2_sh_cmdstart[i].showcmd_start);
         }
     }
-
-    if (showcmd == NULL) {
-        return NULL;
-    }
-    fprintf(stdout, "iproute2 show cmd: %s\n", showcmd);
-
-    return strdup(showcmd);
+    return NULL;
 }
 
-void free_key_vals_lens(const char ***key_values, int **values_lengths, int key_count)
+void free_list_params(const char ***key_values, int **values_lengths, int key_count)
 {
     if (*key_values) {
         for (int i = 0; i < key_count; ++i) {
@@ -150,9 +146,10 @@ int get_lys_extension(oper_extension_t ex_t, const struct lysc_node *s_node, cha
  * @param [out] keys_num: Pointer to store the number of keys extracted.
  * @return Returns EXIT_SUCCESS if keys are successfully extracted; otherwise, returns EXIT_FAILURE.
  */
-int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj,
+int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj, bool load_config,
                   const char ***key_values, int **values_lengths, int *keys_num)
 {
+    int ret = EXIT_SUCCESS;
     int key_count = 0;
     *key_values = NULL;
     *values_lengths = NULL;
@@ -182,37 +179,279 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
 
                 if (!*key_values || !*values_lengths) {
                     fprintf(stderr, "Failed to allocate memory\n");
-                    return EXIT_FAILURE;
+                    ret = EXIT_FAILURE;
+                    goto cleanup;
                 }
 
                 // Store the new key
                 (*key_values)[key_count] = strdup(json_object_get_string(temp_value));
                 if (!(*key_values)[key_count]) {
                     fprintf(stderr, "Failed to duplicate list key value\n");
-                    return EXIT_FAILURE;
+                    ret = EXIT_FAILURE;
+                    goto cleanup;
                 }
                 (*values_lengths)[key_count] = strlen(json_object_get_string(temp_value));
                 key_count++;
             } else {
                 // key value not found in json data.
-                return EXIT_FAILURE;
+                ret = EXIT_FAILURE;
+                goto cleanup;
             }
         }
     }
     (*keys_num) = key_count;
-    return EXIT_SUCCESS;
+    ret = EXIT_SUCCESS;
+cleanup:
+    free(key_name);
+    return ret;
+}
+
+/**
+ * Converts a semicolon-separated key-value string to a JSON object. Each pair is separated by ';', and key-value within a pair is separated by ':'.
+ * This function is useful for converting OPER_VALUE_MAP_EXT and OPER_FLAG_MAP_EXT mapping from string to JSON objects for easier manipulation and access.
+ * @param [in] input: A semicolon-separated key-value pairs string.
+ * @return A pointer to a JSON object representing the input string's key-value pairs. The caller is responsible for freeing the JSON object.
+ */
+json_object *strmap_to_jsonmap(const char *input)
+{
+    struct json_object *jobj = json_object_new_object();
+    char *pairs = strdup(input);
+    char *pair;
+    char *rest_pairs = pairs;
+
+    while ((pair = strtok_r(rest_pairs, ";", &rest_pairs))) {
+        char *rest_kv = pair;
+        char *key = strtok_r(rest_kv, ":", &rest_kv);
+        char *value = strtok_r(NULL, ":", &rest_kv);
+
+        if (key && value) {
+            json_object_object_add(jobj, key, json_object_new_string(value));
+        }
+    }
+
+    free(pairs);
+    return jobj;
+}
+
+/**
+ * Looks up the value associated with a given key in a JSON object and returns it. If the key isn't found, returns the original value.
+ * 
+ * For a given value (original_value) this function helps mapping it to its corresponding mapped value found in value map JSON Object.
+ * If orignal_value doesn't have a corresponding mapping, it gets returned as is.
+ * @param [in] value_map_jobj: JSON object containing key-value mappings.
+ * @param [in] original_value: The key to look up in the mapping.
+ * @return The mapped value if the key is found; otherwise, the original value is returned.
+ */
+const char *map_value_if_needed(struct json_object *value_map_jobj, const char *original_value)
+{
+    struct json_object *mapped_value_obj;
+    if (value_map_jobj &&
+        json_object_object_get_ex(value_map_jobj, original_value, &mapped_value_obj)) {
+        return json_object_get_string(mapped_value_obj);
+    }
+    return original_value;
+}
+
+/**
+ * This function compairs schema node (s_node) parents names to lyd_node data tree node name, if the 
+ * schema node parent containers are not added to the lyd_node, this function adds them.
+ * 
+ * This function is to be used before processing leafs and leaf_lists to ensure their parent continers
+ * are added to the lyd data tree.
+ * 
+ * @param [in] s_node: schema node being processed (typically the s_node of a leaf or leaf_list).
+ * @param [in] parent_data_node: lyd data tree to which nodes under process are being attached to.
+ */
+void add_parent_node_if_needed(const struct lysc_node *s_node, struct lyd_node **parent_data_node)
+{
+    struct lyd_node *new_data_node = NULL;
+    if (strcmp(s_node->parent->name, (*parent_data_node)->schema->name) != 0 &&
+        s_node->parent->nodetype == LYS_CONTAINER) {
+        // check grand_parents
+        add_parent_node_if_needed(s_node->parent, parent_data_node);
+        if (LY_SUCCESS ==
+            lyd_new_inner(*parent_data_node, NULL, s_node->parent->name, 0, &new_data_node)) {
+            *parent_data_node = new_data_node;
+        }
+    }
+}
+
+/**
+ * Processes a JSON array of flags into individual leaf nodes under a parent data node, applying flag mappings if provided.
+ * 
+ * This function converts JSON flag arrays into YANG data tree leafs, with optional value mapping via a flag map JSON object.
+ * @param [in] temp_obj: JSON array object containing flags to be processed.
+ * @param [in] fmap_jobj: JSON object containing flag-value mappings.
+ * @param [in,out] parent_data_node: Pointer to the parent data node to attach the created leaf nodes.
+ * @param [in] s_node: Schema node corresponding to the leaf nodes to be created.
+ */
+void process_flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
+                            struct lyd_node **parent_data_node, const struct lysc_node *s_node)
+{
+    const char *value = NULL;
+    json_object_object_foreach(fmap_jobj, key_flag, flag_map)
+    {
+        size_t n_json_flags = json_object_array_length(temp_obj);
+        for (size_t i = 0; i < n_json_flags; i++) {
+            struct json_object *json_flag_obj = json_object_array_get_idx(temp_obj, i);
+            const char *json_flag = json_object_get_string(json_flag_obj);
+            if (strcmp(key_flag, json_flag) == 0) {
+                value = json_object_get_string(flag_map);
+                break;
+            }
+        }
+        break; // break after the first iteration, we need to check only the first element of fmap json object.
+    }
+    if (!value) {
+        value = json_object_get_string(find_json_value_by_key(fmap_jobj, "FLAG-UNSET"));
+    }
+    if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
+        fprintf(stderr, "node %s creation failed\n", s_node->name);
+    }
+}
+
+/**
+ * Creates yang leaf node using JSON object keys and values, if the leaf arg_name is found 
+ * in JSON Object keys, this function will create a new leaf attached to parent data tree 
+ * and set its value to the JSON Object key value.
+ * This function will also handle json value to leaf value type mapping.
+ * 
+ * @param [in] json_array_obj: JSON object containing the data.
+ * @param [in] arg_name: Argument name (leaf name) to look up in the JSON object keys.
+ * @param [in,out] parent_data_node: Pointer to the parent data node to attach the created leaf node.
+ * @param [in] s_node: Schema node corresponding to the leaf node to be created.
+ */
+void process_jobj_to_leaf(struct json_object *json_array_obj, const char *arg_name,
+                          struct lyd_node **parent_data_node, const struct lysc_node *s_node)
+{
+    char *vmap_str = NULL, *fmap_str = NULL;
+    if (get_lys_extension(OPER_FLAG_MAP_EXT, s_node, &fmap_str) == EXIT_SUCCESS) {
+        if (fmap_str == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-flag-map extension found but failed to "
+                    "get the flag_map value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+    } else if (get_lys_extension(OPER_VALUE_MAP_EXT, s_node, &vmap_str) == EXIT_SUCCESS) {
+        if (vmap_str == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-value-map extension found but failed to "
+                    "get the value_map value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+    }
+
+    struct json_object *fmap_jobj = fmap_str ? strmap_to_jsonmap(fmap_str) : NULL;
+    if (fmap_str) {
+        free(fmap_str);
+    }
+
+    struct json_object *vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
+    if (vmap_str) {
+        free(vmap_str);
+    }
+
+    struct json_object *temp_obj = NULL;
+    // Attempt to directly find the argument name or use search function
+    if (!json_object_object_get_ex(json_array_obj, arg_name, &temp_obj)) {
+        temp_obj = find_json_value_by_key(json_array_obj, arg_name);
+    }
+
+    // Proceed only if temp_obj is found
+    if (temp_obj) {
+        add_parent_node_if_needed(s_node, parent_data_node);
+        if (json_object_is_type(temp_obj, json_type_array) && fmap_jobj) {
+            // array values are processed as flags.
+            process_flags_to_leafs(temp_obj, fmap_jobj, parent_data_node, s_node);
+        } else {
+            // Process a single value
+            const char *value = map_value_if_needed(vmap_jobj, json_object_get_string(temp_obj));
+            if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
+                fprintf(stderr, "node %s creation failed\n", s_node->name);
+            }
+        }
+    }
+
+    if (vmap_jobj) {
+        json_object_put(vmap_jobj);
+    }
+    if (fmap_jobj) {
+        json_object_put(fmap_jobj);
+    }
+}
+
+/**
+ * Creates yang leaf-list node using JSON object array values, if the leaf-list name is found in 
+ * JSON Object keys, This function will create a new leaf-list attached to parent data tree and 
+ * set its leaf-list values to the JSON Object key values set.
+ * 
+ * This function will also handle value mapping and flag mapping before setting the leaf value.
+ * @param [in] json_array_obj: JSON object containing the data to search in.
+ * @param [in] arg_name: Argument name (leaf-list name) to look up in the JSON object keys.
+ * @param [in,out] parent_data_node: Pointer to the parent data node to attach the created leaf-list node.
+ * @param [in] s_node: Schema node corresponding to the leaf-list node to be created.
+ */
+void process_jarray_to_leaflist(struct json_object *json_array_obj, const char *arg_name,
+                                struct lyd_node **parent_data_node, const struct lysc_node *s_node)
+{
+    char *vmap_str = NULL;
+    if (get_lys_extension(OPER_VALUE_MAP_EXT, s_node, &vmap_str) == EXIT_SUCCESS) {
+        if (vmap_str == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-value-map extension found but failed to "
+                    "get the value_map value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+    }
+
+    struct json_object *vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
+    if (vmap_str) {
+        free(vmap_str);
+    }
+
+    struct json_object *temp_obj = NULL;
+    // Attempt to directly find the argument name or use search function
+    if (!json_object_object_get_ex(json_array_obj, arg_name, &temp_obj)) {
+        temp_obj = find_json_value_by_key(json_array_obj, arg_name);
+    }
+
+    // Proceed only if temp_obj is found
+    if (temp_obj) {
+        add_parent_node_if_needed(s_node, parent_data_node);
+        if (json_object_is_type(temp_obj, json_type_array)) {
+            size_t n_json_flags = json_object_array_length(temp_obj);
+            for (size_t i = 0; i < n_json_flags; i++) {
+                struct json_object *inner_value = json_object_array_get_idx(temp_obj, i);
+                const char *value =
+                    map_value_if_needed(vmap_jobj, json_object_get_string(inner_value));
+                if (LY_SUCCESS !=
+                    lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
+                    fprintf(stderr, "node %s creation failed.\n", s_node->name);
+                }
+            }
+        }
+    }
+
+    if (vmap_jobj) {
+        json_object_put(vmap_jobj);
+    }
 }
 
 /**
  * Processes a schema node and maps its data from a JSON object to a YANG data tree (lyd_node).
  * This function looks up schema node names in json object keys to retrive their values, and creates
  * corresponding lyd_node.
- * This function only processes read-only schema nodes.
  * @param [in] s_node: Schema node to be processed.
  * @param [in] json_array_obj: JSON object containing the data to map.
+ * @param [in] lys_flags: flag value used to filter out schema nodes containers and leafs.
+ *                        Use LYS_CONFIG_R to allow parsing read-only containers and leafs (for loading operational data).
+ *                        Use LYS_CONFIG_W to allow parsing write containers and leafs (for loading configuration data).
  * @param [in, out] parent_data_node: Pointer to the parent data node in the YANG data tree (lyd_node).
  */
-void process_node(const struct lysc_node *s_node, json_object *json_array_obj,
+void process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
                   struct lyd_node **parent_data_node)
 {
     struct lyd_node *new_data_node = NULL;
@@ -223,16 +462,18 @@ void process_node(const struct lysc_node *s_node, json_object *json_array_obj,
         lyd_new_inner(NULL, s_node->module, s_node->name, 0, parent_data_node);
         new_data_node = *parent_data_node;
     } else {
-        const struct lysc_node_list *list;
         switch (s_node->nodetype) {
-        case LYS_LEAF:
-        case LYS_LEAFLIST: {
+        case LYS_LEAFLIST:
+        case LYS_LEAF: {
             /* json keys are added on list creation, don't re-add them */
             if (lysc_is_key(s_node))
                 break;
 
-            /* don't process config write schema nodes */
-            if (s_node->flags & LYS_CONFIG_W)
+            /* on config load don't process read-only leafs
+               on operational load, don't process write leafs */
+            if ((lys_flags & LYS_CONFIG_W) && (s_node->flags & LYS_CONFIG_R))
+                break;
+            if ((lys_flags & LYS_CONFIG_R) && (s_node->flags & LYS_CONFIG_W))
                 break;
 
             /* check for schema extension overrides */
@@ -249,62 +490,31 @@ void process_node(const struct lysc_node *s_node, json_object *json_array_obj,
                 arg_name = strdup(s_node->name);
             }
 
-            /*
-            To add json values to the lyd_leaf do the following: 
-            1- if arg_name value is found on main array element keys:
-                - if the found value is an array then add array values to leaf list.
-                - else (the found value is one element), add the element to leaf.
-            2- else (arg_name) value is not found on main array element keys:
-                - search for key name: if found do same steps in 1. */
-            if (json_object_object_get_ex(json_array_obj, arg_name, &temp_obj)) {
-                if (json_object_is_type(temp_obj, json_type_array)) {
-                    size_t n_arrays = json_object_array_length(temp_obj);
-                    for (size_t i = 0; i < n_arrays; i++) {
-                        struct json_object *inner_value = json_object_array_get_idx(temp_obj, i);
-                        lyd_new_term(*parent_data_node, NULL, s_node->name,
-                                     json_object_get_string(inner_value), 0, &new_data_node);
-                    }
-                } else {
-                    lyd_new_term(*parent_data_node, NULL, s_node->name,
-                                 json_object_get_string(temp_obj), 0, &new_data_node);
-                }
-            } else {
-                temp_obj = find_json_value_by_key(json_array_obj, arg_name);
-                if (temp_obj) {
-                    if (json_object_is_type(temp_obj, json_type_array)) {
-                        size_t n_arrays = json_object_array_length(temp_obj);
-                        for (size_t i = 0; i < n_arrays; i++) {
-                            struct json_object *inner_value =
-                                json_object_array_get_idx(temp_obj, i);
-                            lyd_new_term(*parent_data_node, NULL, s_node->name,
-                                         json_object_get_string(inner_value), 0, &new_data_node);
-                        }
-                    } else {
-                        lyd_new_term(*parent_data_node, NULL, s_node->name,
-                                     json_object_get_string(temp_obj), 0, &new_data_node);
-                    }
-                }
-            }
+            if (s_node->nodetype == LYS_LEAFLIST)
+                process_jarray_to_leaflist(json_array_obj, arg_name, parent_data_node, s_node);
+
+            if (s_node->nodetype == LYS_LEAF)
+                process_jobj_to_leaf(json_array_obj, arg_name, parent_data_node, s_node);
+
+            free(arg_name);
             break;
         }
-        case LYS_CONTAINER:
-            lyd_new_inner(*parent_data_node, NULL, s_node->name, 0, &new_data_node);
-            break;
         case LYS_LIST: {
             const char **key_values;
             int *values_lengths, keys_count;
+            const struct lysc_node_list *list;
             list = (const struct lysc_node_list *)s_node;
-            if (get_list_keys(list, json_array_obj, &key_values, &values_lengths, &keys_count) ==
-                EXIT_SUCCESS) {
+            if (get_list_keys(list, json_array_obj, lys_flags, &key_values, &values_lengths,
+                              &keys_count) == EXIT_SUCCESS) {
                 lyd_new_list3(*parent_data_node, NULL, s_node->name, key_values, values_lengths, 0,
                               &new_data_node);
-                free_key_vals_lens(&key_values, &values_lengths, keys_count);
+                free_list_params(&key_values, &values_lengths, keys_count);
             }
             break;
+        }
         case LYS_CHOICE:
         case LYS_CASE:
-            break;
-        }
+        case LYS_CONTAINER:
         default:
             break;
         }
@@ -320,7 +530,7 @@ void process_node(const struct lysc_node *s_node, json_object *json_array_obj,
     const struct lysc_node *s_child;
     LY_LIST_FOR(lysc_node_child(s_node), s_child)
     {
-        process_node(s_child, json_array_obj, &new_data_node);
+        process_node(s_child, json_array_obj, lys_flags, &new_data_node);
     }
 }
 
@@ -329,29 +539,37 @@ void process_node(const struct lysc_node *s_node, json_object *json_array_obj,
  * This function is a wrapper around `process_node` for handling JSON arrays.
  * @param [in] json_array_obj: JSON array object to convert.
  * @param [in] top_node: Top-level schema node for mapping.
+ * @param [in] lys_flags: Flag value used to filter out schema nodes containers and leafs
+ *                        Use LYS_CONFIG_R to allow parsing read-only containers and leafs (for loading operational data).
+ *                        Use LYS_CONFIG_W to allow parsing write containers and leafs (for loading configuration data).
  * @param [out] data_tree: Pointer to store the resulting YANG data tree.
  */
-void jarray2lyd(json_object *json_array_obj, const struct lysc_node *top_node,
+void jarray2lyd(json_object *json_array_obj, const struct lysc_node *top_node, uint16_t lys_flags,
                 struct lyd_node **data_tree)
 {
     const struct lysc_node *node;
     LY_LIST_FOR(top_node, node)
     {
         // Start with level 0 for top-level nodes, data_tree = NULL
-        process_node(node, json_array_obj, data_tree);
+        process_node(node, json_array_obj, lys_flags, data_tree);
     }
 }
 
 /**
- * Sets operational data items for a module in a Sysrepo session based on global json_buffer content.
- * This function parses the json_buffer data, converts it to a YANG data tree, and merges it into the 
- * existing operational datastore.
+ * Sets operational data items or running data items for a module in a Sysrepo session
+ * based on global json_buffer content.
+ * This function parses the json_buffer data outputs comming from iproute2 show commands
+ * then converts it to a YANG data tree, and merges the created data tree into a parent
+ * data tree.
  * @param [in] session: Sysrepo session context.
  * @param [in] module_name: Name of the module for which the data is to be set.
+ * @param [in] lys_flags: Flag value used to filter out schema nodes containers and leafs.
+ *                        Use LYS_CONFIG_R to allow parsing read-only containers and leafs (for loading operational data).
+ *                        Use LYS_CONFIG_W to allow parsing write containers and leafs (for loading configuration data).
  * @param [in, out] parent: Pointer to the parent node for merging the data tree.
  * @return Returns an integer status code (SR_ERR_OK on success or an error code on failure).
  */
-int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name,
+int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
                            struct lyd_node **parent)
 {
     int ret = SR_ERR_OK;
@@ -372,17 +590,16 @@ int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name,
     size_t n_arrays = json_object_array_length(json_obj);
     for (size_t i = 0; i < n_arrays; i++) {
         struct json_object *array_obj = json_object_array_get_idx(json_obj, i);
-        jarray2lyd(array_obj, module->compiled->data, &data_tree);
+        jarray2lyd(array_obj, module->compiled->data, lys_flags, &data_tree);
 
         /* Merge data_tree in parent node.
            This operation will validate data_tree nodes before merging them.
            It will drop nodes with validation failed */
         if (lyd_merge_tree(parent, data_tree, LYD_MERGE_DEFAULTS)) {
-            lyd_free_tree(data_tree);
-
             /* Merge of one json_array data_tree failed.
                This is a partial failure, no need to return ERR. */
-            goto cleanup;
+            fprintf(stderr, "Partial failure on pushing '%s' operational data\n",
+                    data_tree->schema->name, __func__);
         }
         // Free data_tree after merging it.
         lyd_free_tree(data_tree);

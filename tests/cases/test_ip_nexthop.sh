@@ -24,7 +24,7 @@ echo "[1] Test nexthop CREATE"
 echo "---------------------"
 
 # Step 1: Add IP nexthops to RUNNING data store
-sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data.xml || ret=$?
+sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data.xml -m iproute2-ip-nexthop || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     echo "TEST-ERROR: failed to create nexthops in sysrepo datastore"
@@ -92,7 +92,7 @@ echo "[3] Test nexthop DELETE"
 echo "---------------------"
 
 # step 0: work arround to delete the nexthop id 12 first
-sysrepocfg -C  tests/cases/test_ip_nexthop_data2.xml -d running
+sysrepocfg -C tests/cases/test_ip_nexthop_data2.xml -d running -m iproute2-ip-nexthop 
 sleep 0.1
 sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data2.xml || ret=$?
 
@@ -111,8 +111,6 @@ else
     echo "TEST-ERROR: Failed to delete IP nexthops 2 and 1 (FAIL)"
     exit 1
 fi
-
-
 
 # Exit with return value
 exit $ret
