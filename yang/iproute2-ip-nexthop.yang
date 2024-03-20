@@ -54,6 +54,7 @@ module iproute2-ip-nexthop {
                     description "ipv4 nexthop";
                     leaf address {
                         ipr2cgen:arg-name "via";
+                        ipr2cgen:oper-arg-name "gateway";
                         description "ipv4 nexthop address";
                         type inet:ipv4-address;
                     }
@@ -61,6 +62,7 @@ module iproute2-ip-nexthop {
                 container ipv6 {
                     description "ipv6 nexthop";
                     ipr2cgen:arg-name "via";
+                    ipr2cgen:oper-arg-name "gateway";
                     leaf address {
                         description "ipv6 nexthop address";
                         type inet:ipv6-address;
@@ -70,6 +72,7 @@ module iproute2-ip-nexthop {
             }
             leaf blackhole {
                 ipr2cgen:flag;
+                ipr2cgen:oper-ck-argname-presence "true";
                 description "specify if this is blackhole nexthop, which discards all traffic sent to it.";
                 type boolean;
                 when "not(../dev) and not(../ipv6) and not(../ipv4)";
@@ -103,6 +106,7 @@ module iproute2-ip-nexthop {
                     ipr2cgen:group-list-with-separator "/";
                     ipr2cgen:group-leafs-values-separator ",";
                     ipr2cgen:arg-name "group";
+                    ipr2cgen:oper-arg-name "group";
                     leaf id{
                         type leafref {
                             path "/ipnh:nexthops/nexthop/id";
@@ -148,6 +152,7 @@ module iproute2-ip-nexthop {
             }
             leaf fdb {
                 ipr2cgen:flag;
+                ipr2cgen:oper-ck-argname-presence "true";
                 type boolean;
                 description "nexthop and nexthop groups for use with layer-2 fdb entries.
                 A fdb nexthop group can only have fdb nexthops. Example: Used to represent a vxlan remote
