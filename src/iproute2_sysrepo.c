@@ -370,13 +370,13 @@ int ip_sr_config_change_cb_apply(const struct lyd_node *change_dnode)
         print_cmd_line(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         jump_set = 1;
         if (setjmp(jbuf)) {
-            // iproute2 exited, reset jump, and set exit callback.
-            free_cmds_info(ipr2_cmds);
+            // iproute2 exited, go to rollback.
             atexit(exit_cb);
-            return SR_ERR_CALLBACK_FAILED;
+            goto rollback;
         }
         ret = do_cmd(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
         if (ret != EXIT_SUCCESS) {
+rollback:
             fprintf(stderr, "%s: iproute2 command failed, cmd = ", __func__);
             print_cmd_line(ipr2_cmds[i]->argc, ipr2_cmds[i]->argv);
             // rollback on failure.
