@@ -141,6 +141,18 @@ module iproute2-ip-link {
             "VLAN device.";
     }
 
+    identity veth {
+        base link-type;
+        description
+            "veth device.";
+    }
+
+    identity vxcan {
+        base link-type;
+        description
+            "vxcan device.";
+    }
+
     identity bridge {
         base link-type;
         description
@@ -407,6 +419,14 @@ module iproute2-ip-link {
                 }
                 description "specifies the type of the device";
             }
+            leaf virtual_peer_name {
+                ipr2cgen:arg-name "peer name";
+                type string;
+                description "specifies the virtual pair device name of the VETH/VXCAN tunnel.";
+                must "(../iplink:type = 'iplink:veth') or (../iplink:type = 'iplink:vxcan')"{
+                    error-message "virtual_peer_name can be only configured for veth or vxcan links.";
+                }
+            }
             container bond_slave {
                 ipr2cgen:add-static-arg "type bond_slave";
                 when "../master and /links/link[name=current()/../master]/type = 'iplink:bond'";
@@ -459,7 +479,7 @@ module iproute2-ip-link {
                 }
                 leaf mtu {
                     type uint32{
-                    range "64..65536";
+                        range "64..65536";
                     }
                     description "Specifies the Maximum Transmission Unit (MTU) size in bytes for the interface.";
                 }
@@ -507,7 +527,7 @@ module iproute2-ip-link {
                         type identityref {
                             base oper-link-type;
                         }
-                    } 
+                    }
                     description "Indicates the specific type of the device";
                 }
                 leaf address {
