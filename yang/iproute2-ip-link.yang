@@ -221,6 +221,8 @@ module iproute2-ip-link {
             leaf admin-status{
                 description "set admin status for the link";
                 ipr2cgen:value-only;
+                ipr2cgen:oper-arg-name "flags";
+                ipr2cgen:oper-flag-map "UP:up;FLAG-UNSET:down";
                 type enumeration {
                     enum "up";
                     enum "down";
@@ -240,6 +242,7 @@ module iproute2-ip-link {
                 }
             }
             leaf index {
+                ipr2cgen:oper-arg-name "ifindex";
                 type uint64;
                 description "specifies the desired index of the new virtual device.
                 The link creation fails, if the index is busy.";
@@ -284,6 +287,7 @@ module iproute2-ip-link {
                 GROUP has a dual role: If both group and dev are present,
                 then move the device to the specified group. If only a group is specified,
                 then the change operates on all devices in that group.";
+                ipr2cgen:oper-value-map "default:0";
                 type uint64;
                 default 0;
             }
@@ -291,16 +295,19 @@ module iproute2-ip-link {
                 description "configure lladdress for link, peer and broadcast addresses";
                 leaf mac_addr{
                     ipr2cgen:arg-name "address";
+                    ipr2cgen:oper-arg-name "address";
                     type yang:mac-address;
                     description "change the station address of the interface.";
                 }
                 leaf broadcast_addr {
                     ipr2cgen:arg-name "broadcast";
+                    ipr2cgen:oper-arg-name "broadcast";
                     type yang:mac-address;
                     description "change the link layer broadcast address, when the interface is POINTOPOINT.";
                 }
                 leaf peer_addr {
                     ipr2cgen:arg-name "peer";
+                    ipr2cgen:oper-arg-name "peer";
                     type yang:mac-address;
                     description "change the link layer peer address, when the interface is POINTOPOINT.";
                 }
@@ -317,11 +324,13 @@ module iproute2-ip-link {
                     default "on";
                 }
                 leaf numtxqueues {
+                    ipr2cgen:oper-arg-name "num_tx_queues";
                     type uint32;
                     default 1;
                     description "specifies the number of transmit queues for device.";
                 }
                 leaf numrxqueues {
+                    ipr2cgen:oper-arg-name "num_rx_queues";
                     type uint32;
                     default 1;
                     description "specifies the number of receive queues for device.";
@@ -362,6 +371,7 @@ module iproute2-ip-link {
                 }
                 leaf txqueuelen {
                     description "change the transmit queue length of the device.";
+                    ipr2cgen:oper-arg-name "txqlen";
                     type uint32;
                     default 1000;
                 }
@@ -370,6 +380,8 @@ module iproute2-ip-link {
                 description "set arb,mcast,promsi ... etc modes on the link";
                 leaf arp {
                     description "change the NOARP flag on the device.";
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "NOARP:off;FLAG-UNSET:on";
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -378,6 +390,8 @@ module iproute2-ip-link {
                 }
                 leaf multicast {
                     description "change the MULTICAST flag on the device.";
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "MULTICAST:on;FLAG-UNSET:off";
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -388,6 +402,8 @@ module iproute2-ip-link {
                     description "change the ALLMULTI flag on the device. When enabled,
                     instructs network driver to retrieve all multicast packets from the network
                     to the kernel for further processing.";
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "ALLMULTI:on;FLAG-UNSET:off";
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -395,6 +411,8 @@ module iproute2-ip-link {
                     default "off";
                 }
                 leaf promisc {
+                    ipr2cgen:oper-arg-name "promiscuity";
+                    ipr2cgen:oper-value-map "0:off;1:on";
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -406,6 +424,8 @@ module iproute2-ip-link {
                 leaf trailers {
                     description "change the NOTRAILERS flag on the device,
                     NOT used by the Linux and exists for BSD compatibility";
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "NOTRAILERS:off;FLAG-UNSET:on";
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -414,6 +434,7 @@ module iproute2-ip-link {
                 }
             }
             leaf type {
+                ipr2cgen:oper-arg-name "info_kind";
                 type identityref {
                     base link-type;
                 }

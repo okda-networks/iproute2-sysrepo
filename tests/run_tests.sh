@@ -20,6 +20,9 @@ done
 sysrepo_pid=$!
 sleep 0.5
 
+#Save current running_ds state to startup_ds
+sysrepocfg -C running -d startup
+
 # Iterate over all case/*.sh files
 for test_script in tests/cases/*.sh; do
     # Check if the file is executable and has the .sh extension

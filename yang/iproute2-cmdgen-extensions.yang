@@ -56,6 +56,29 @@ module iproute2-cmdgen-extensions {
         argument "arg-name";
     }
 
+    extension oper-value-map {
+       description "used to map iproute2 operational data values to yang module vales";
+       argument "value_map";
+    }
+
+    extension oper-flag-map {
+       description "used to map iproute2 operational data values to yang module values";
+       argument "flag_map";
+    }
+
+    extension oper-ck-argname-presence {
+       description "used to instruct operational data to lookup the argname only in iproute2 operational data 
+                    outputs, if found the value is defined by the extension argument this is typically used 
+                    in leafs where ipr2 displays the flag as json key and key value as null";
+       argument "static_value";
+    }
+
+    extension oper-cmdstart {
+       description "define node which a new show cmd is needed, typically used in the first list in the schema, example
+                    ir2cmdgen:oper-cmdstart \"ip vrf\"";
+       argument "show_cmd";
+    }
+
     extension flag {
         description
             "iproute2 cmd generator will use the leaf name only, ususally used for flags where the leaf type will be bool,

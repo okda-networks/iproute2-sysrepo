@@ -296,6 +296,8 @@ noexist:
 
 static int do_cmd(int argc, char **argv)
 {
+    preferred_family = AF_UNSPEC;
+    max_flush_loops = 10;
     const struct cmd *cmds;
     const struct cmd *c;
     if (argc < 2) {
@@ -399,6 +401,18 @@ rollback:
     return ret;
 }
 
+/* TODO: move to a common lib file */
+void free_argv2(char **argv, int argc)
+{
+    // Free memory for each string
+    for (int i = 0; i < argc; i++) {
+        free(argv[i]);
+        argv[i] = NULL;
+    }
+    // Free memory for the array of pointers
+    free(argv);
+}
+
 int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
                            const char *xpath, sr_event_t sr_ev, uint32_t request_id,
                            void *private_data)
@@ -457,22 +471,19 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
     return ret;
 }
 
-int ipr2_oper_get_items_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
-                           const char *xpath, const char *request_xpath, uint32_t request_id,
-                           struct lyd_node **parent, void *private_data)
+int load_module_data(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
+                     struct lyd_node **parent)
 {
     int ret;
     char *ipr2_show_cmd, **argv;
     int argc;
-    const struct ly_ctx *ly_ctx;
-
-    (void)session;
-    (void)sub_id;
-    (void)request_xpath;
-    (void)request_id;
-    (void)private_data;
-
     ipr2_show_cmd = get_module_sh_startcmd(module_name);
+    if (ipr2_show_cmd == NULL) {
+        fprintf(stderr,
+                "%s: failed to get show command for operational data request, module name %s.\n",
+                __func__, module_name);
+        return SR_ERR_CALLBACK_FAILED;
+    }
 
     parse_command(ipr2_show_cmd, &argc, &argv);
     jump_set = 1;
@@ -489,9 +500,48 @@ exit_check_done:
         print_cmd_line(argc, argv);
         ret = SR_ERR_CALLBACK_FAILED;
     } else {
-        ret = sr_set_oper_data_items(session, module_name, parent);
+        ret = sr_set_oper_data_items(session, module_name, lys_flags, parent);
     }
     jump_set = 0;
+    free(ipr2_show_cmd);
+    free_argv2(argv, argc);
+    return ret;
+}
+
+int ipr2_oper_get_items_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
+                           const char *xpath, const char *request_xpath, uint32_t request_id,
+                           struct lyd_node **parent, void *private_data)
+{
+    return load_module_data(session, module_name, LYS_CONFIG_R, parent);
+}
+
+int load_linux_running_config()
+{
+    int ret = 0;
+    struct lyd_node *root_node = NULL;
+    fprintf(stdout, "%s: Started loading iproute2 running configuration.\n", __func__);
+    for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
+        fprintf(stdout, "%s: Loading module: %s data.\n", __func__, ipr2_ip_modules[i].module);
+        load_module_data(sr_session, ipr2_ip_modules[i].module, LYS_CONFIG_W, &root_node);
+    }
+
+    fprintf(stdout, "%s: Storing loaded data to sysrepo running datastore.\n", __func__);
+    ret = sr_edit_batch(sr_session, root_node, "replace");
+    if (SR_ERR_OK != ret) {
+        fprintf(stderr, "%s: Error by sr_edit_batch: %s.\n", __func__, sr_strerror(ret));
+        goto cleanup;
+    }
+
+    // Commit changes
+    ret = sr_apply_changes(sr_session, 0);
+    if (SR_ERR_OK != ret) {
+        fprintf(stderr, "%s: Error by sr_apply_changes: %s.\n", __func__, sr_strerror(ret));
+        goto cleanup;
+    }
+    fprintf(stdout, "%s: Done loading iproute2 running configuration successfully.\n", __func__);
+cleanup:
+    lyd_free_all(root_node);
+    root_node = NULL;
     return ret;
 }
 
@@ -560,6 +610,7 @@ int sysrepo_start()
         fprintf(stderr, "%s: sr_session_start(): %s\n", __func__, sr_strerror(ret));
         goto cleanup;
     }
+    load_linux_running_config();
     sr_subscribe_config();
     sr_subscribe_operational_pull();
 

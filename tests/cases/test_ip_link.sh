@@ -134,7 +134,7 @@ echo "-----------------"
 
 # Step 1: add vrf vpn10 and add link testvrf and assign vrf vpn10 to it.
 
-sysrepocfg -C  tests/cases/test_ip_link_data4.xml -d running
+sysrepocfg --edit  tests/cases/test_ip_link_data4.xml -d running
 sleep 0.1
 
 # Step 2: Check if the master for IP testvrf is updated by iproute2-sysrepo
@@ -168,7 +168,7 @@ echo "------------------"
 
 # Step 1: create two links eth_b0 and eth_b1 and add them to bond0.
 
-sysrepocfg -C  tests/cases/test_ip_link_data5.xml -d running
+sysrepocfg --edit  tests/cases/test_ip_link_data5.xml -d running
 sleep 0.1
 
 # Step 2: Check if  eth_b0, eth_b1 are created
