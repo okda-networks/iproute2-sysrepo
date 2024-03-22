@@ -328,7 +328,7 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
 void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                    struct lyd_node **parent_data_node, const struct lysc_node *s_node)
 {
-    char *vmap_str = NULL, *fmap_str = NULL, *static_value;
+    char *vmap_str = NULL, *fmap_str = NULL, *static_value = NULL;
     if (get_lys_extension(OPER_FLAG_MAP_EXT, s_node, &fmap_str) == EXIT_SUCCESS) {
         if (fmap_str == NULL) {
             fprintf(stderr,
@@ -378,6 +378,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
             if (LY_SUCCESS !=
                 lyd_new_term(*parent_data_node, NULL, s_node->name, static_value, 0, NULL)) {
                 fprintf(stderr, "node %s creation failed\n", s_node->name);
+                return;
             }
             free(static_value);
         } else if (temp_obj) {
@@ -577,13 +578,10 @@ void process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_
 
         if (s_node->nodetype == LYS_LEAF)
             jdata_to_leaf(json_obj, arg_name, parent_data_node, s_node);
-
-        free(arg_name);
         break;
     }
     case LYS_LIST: {
         jdata_to_list(json_obj, arg_name, s_node, lys_flags, parent_data_node);
-        free(arg_name);
         break;
     }
     case LYS_CHOICE:
@@ -597,6 +595,7 @@ void process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_
     default:
         break;
     }
+    free(arg_name);
 }
 
 /**
