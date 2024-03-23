@@ -342,7 +342,7 @@ static int do_cmd(int argc, char **argv)
 void print_cmd_line(int argc, char **argv)
 {
     for (int k = 0; k < argc; k++) {
-        printf("%s ", argv[k]);
+        fprintf(stdout, "%s ", argv[k]);
     }
 
     fprintf(stdout, "\n");
@@ -548,7 +548,7 @@ cleanup:
 static void sr_subscribe_config()
 {
     int ret;
-    fprintf(stdout, "Subscribing to iproute2 modules config changes:\n");
+    fprintf(stdout, "%s: Subscribing to iproute2 modules config changes:\n", __func__);
 
     /* subscribe to ip modules */
     for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
@@ -570,7 +570,8 @@ static void sr_subscribe_config()
 static void sr_subscribe_operational_pull()
 {
     int ret;
-    fprintf(stdout, "Subscribing to iproute2 modules operational data pull requests:\n");
+    fprintf(stdout, "%s: Subscribing to iproute2 modules operational data pull requests:\n",
+            __func__);
     /* subscribe to ip modules */
     for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
         ret = sr_oper_get_subscribe(sr_session, ipr2_ip_modules[i].module,
