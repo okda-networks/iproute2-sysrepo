@@ -180,7 +180,7 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
                     (uint32_t *)realloc(*values_lengths, (key_count + 1) * sizeof(uint32_t));
 
                 if (!*key_values || !*values_lengths) {
-                    fprintf(stderr, "Failed to allocate memory\n");
+                    fprintf(stderr, "%s: Memory allocation failed\n", __func__);
                     ret = EXIT_FAILURE;
                     goto cleanup;
                 }
@@ -188,7 +188,7 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
                 // Store the new key
                 (*key_values)[key_count] = strdup(json_object_get_string(temp_value));
                 if (!(*key_values)[key_count]) {
-                    fprintf(stderr, "Failed to duplicate list key value\n");
+                    fprintf(stderr, "%s: Failed to duplicate list key value\n", __func__);
                     ret = EXIT_FAILURE;
                     goto cleanup;
                 }
@@ -310,7 +310,7 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
         value = json_object_get_string(flag_unset_obj);
     }
     if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
-        fprintf(stderr, "node %s creation failed\n", s_node->name);
+        fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
     }
 }
 
@@ -377,7 +377,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
             add_missing_parents(s_node, parent_data_node);
             if (LY_SUCCESS !=
                 lyd_new_term(*parent_data_node, NULL, s_node->name, static_value, 0, NULL)) {
-                fprintf(stderr, "node %s creation failed\n", s_node->name);
+                fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
                 return;
             }
             free(static_value);
@@ -392,7 +392,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     map_value_if_needed(vmap_jobj, json_object_get_string(temp_obj));
                 if (LY_SUCCESS !=
                     lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
-                    fprintf(stderr, "node %s creation failed\n", s_node->name);
+                    fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
                 }
             }
         }
@@ -646,7 +646,8 @@ int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name, u
     json_obj = json_tokener_parse(json_buffer);
     module = ly_ctx_get_module_implemented(ly_ctx, module_name);
     if (module == NULL) {
-        fprintf(stderr, "Failed to get requested module schema, module name: %s\n", module_name);
+        fprintf(stderr, "%s: Failed to get requested module schema, module name: %s\n", __func__,
+                module_name);
         ret = SR_ERR_CALLBACK_FAILED;
         goto cleanup;
     }
@@ -666,8 +667,8 @@ int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name, u
             if (lyd_merge_tree(parent, data_tree, LYD_MERGE_DEFAULTS)) {
                 /* Merge of one json_array data_tree failed.
                This is a partial failure, no need to return ERR. */
-                fprintf(stderr, "Partial failure on pushing '%s' operational data\n",
-                        data_tree->schema->name, __func__);
+                fprintf(stderr, "%s: Partial failure on pushing '%s' operational data\n", __func__,
+                        data_tree->schema->name);
             }
             // Free data_tree after merging it.
             lyd_free_tree(data_tree);

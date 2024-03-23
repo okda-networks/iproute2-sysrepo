@@ -81,13 +81,13 @@ void dup_argv(char ***dest, char **src, int argc)
 {
     *dest = (char **)malloc(argc * sizeof(char *));
     if (*dest == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+        fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         exit(EXIT_FAILURE);
     }
     for (int i = 0; i < argc; i++) {
         (*dest)[i] = strdup(src[i]);
         if ((*dest)[i] == NULL) {
-            fprintf(stderr, "Memory allocation failed\n");
+            fprintf(stderr, "%s: Memory allocation failed\n", __func__);
             exit(EXIT_FAILURE);
         }
     }
@@ -142,7 +142,7 @@ char *strip_yang_iden_prefix(const char *input)
         // Allocate memory for output string
         char *output = malloc(len + 1);
         if (output == NULL) {
-            fprintf(stderr, "Memory allocation failed\n");
+            fprintf(stderr, "%s: Memory allocation failed\n", __func__);
             exit(EXIT_FAILURE);
         }
 
@@ -255,7 +255,7 @@ void parse_command(const char *command, int *argc, char ***argv)
     // Allocate memory for argv
     *argv = (char **)malloc((*argc) * sizeof(char *));
     if (*argv == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+        fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         exit(EXIT_FAILURE);
     }
 
@@ -298,7 +298,7 @@ int add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_
     (cmds)[*cmd_idx] = malloc(sizeof(struct cmd_info));
 
     if ((cmds)[*cmd_idx] == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+        fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         free_argv(argv, argc);
         free_argv(argv_rb, argc_rb);
         return EXIT_FAILURE;
@@ -723,7 +723,7 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
                 ret = lys_find_expr_atoms(next->schema, next->schema->module, leafref->path,
                                           leafref->prefixes, 0, &s_set);
                 if (s_set == NULL) {
-                    fprintf(stderr, "%s:failed to get target leafref for node \"%s\": %s\n",
+                    fprintf(stderr, "%s: failed to get target leafref for node \"%s\": %s\n",
                             __func__, next->schema->name, ly_strerrcode(ret));
                     return EXIT_FAILURE;
                 }
@@ -920,7 +920,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     int cmd_idx = 0;
     struct cmd_info **cmds = malloc(CMDS_ARRAY_SIZE * sizeof(struct cmd_info *));
     if (cmds == NULL) {
-        fprintf(stderr, "%s:Memory allocation failed\n", __func__);
+        fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         return NULL;
     }
 
@@ -937,7 +937,7 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
         child_node = lyd_child(change_node);
 
         lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
-        printf("--%s", node_print_text);
+        fprintf(stdout, "--%s", node_print_text);
         free(node_print_text);
 
         LY_LIST_FOR(child_node, next)
