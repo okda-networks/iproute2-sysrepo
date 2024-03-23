@@ -507,15 +507,12 @@ void jdata_to_list(struct json_object *json_obj, const char *arg_name,
                    struct lyd_node **parent_data_node)
 {
     struct json_object *lists_arrays;
-    if (find_json_value_by_key(json_obj, arg_name, &lists_arrays)) {
-        if (json_object_get_type(lists_arrays) == json_type_array) {
-            size_t n_arrays = json_object_array_length(lists_arrays);
-            for (size_t i = 0; i < n_arrays; i++) {
-                struct json_object *list_obj = json_object_array_get_idx(lists_arrays, i);
-                single_jobj_to_list(list_obj, parent_data_node, s_node, lys_flags);
-            }
-        } else {
-            single_jobj_to_list(lists_arrays, parent_data_node, s_node, lys_flags);
+    if (find_json_value_by_key(json_obj, arg_name, &lists_arrays) &&
+        json_object_get_type(lists_arrays) == json_type_array) {
+        size_t n_arrays = json_object_array_length(lists_arrays);
+        for (size_t i = 0; i < n_arrays; i++) {
+            struct json_object *list_obj = json_object_array_get_idx(lists_arrays, i);
+            single_jobj_to_list(list_obj, parent_data_node, s_node, lys_flags);
         }
     } else {
         // Handle case where json_array_obj itself is the list to process
