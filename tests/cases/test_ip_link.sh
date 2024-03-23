@@ -90,7 +90,7 @@ else
 fi
 
 # Step 3: Check if the qos-map for IP vlan10 is updated by iproute2-sysrepo
-sysrepocfg -S '/iproute2-ip-link:links/link[name="vlan10"]/iproute2-ip-link-vlan-ext:vlan/egress-qos-map' --value 10:31
+sysrepocfg -S '/iproute2-ip-link:links/vlan[name="vlan10"]/vlan-info/egress-qos-map' --value 10:31
 
 # Step 4: Run the ip command and extract the egress-qos-map
 # Run the ip command and extract the egress-qos-map
