@@ -1,4 +1,12 @@
 <links xmlns="urn:okda:iproute2:ip:link">
+    <vti xmlns="urn:okda:iproute2:ip:link">
+        <name>vti_if1</name>
+        <tunnel-info>
+            <local>1.1.1.1</local>
+            <remote>2.2.2.2</remote>
+        </tunnel-info>
+    </vti>
+
     <link>
         <name>testIf0</name>
         <type>dummy</type>

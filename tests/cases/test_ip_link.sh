@@ -55,6 +55,14 @@ else
     exit 1
 fi
 
+# Step 5: Check if IP vti_if1 is created
+if ip link show vti_if1 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP link vti_if1 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create IP link vti_if1 (FAIL)"
+    exit 1
+fi
+
 sleep 0.2
 ####################################################################
 # Test: Update IP Links
@@ -63,7 +71,7 @@ echo "--------------------"
 echo "[2] Test Link UPDATE"
 echo "---------------------"
 
-# Step 1: update MTU in sysrepo
+# Step 1: update MTU on testIf0 in sysrepo
 sysrepocfg -S '/iproute2-ip-link:links/link[name="testIf0"]/mtu' --value  1400
 
 # Step 2: Check if the MTU for IP testIf0 is updated by iproute2-sysrepo
@@ -77,7 +85,7 @@ fi
 if [ "$current_mtu" -eq 1400 ]; then
     echo "TEST-INFO: MTU for IP link testIf0 updated successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to update MTU for IP link testIf0 (FAIL)"
+    echo "TEST-ERROR: Failed to update MTU for IP link testIf0, current_mtu = $current_mtu (FAIL)"
     exit 1
 fi
 
@@ -98,9 +106,24 @@ fi
 if [[ "$egress_qos_map" =~ "10:7" ]]; then
     echo "TEST-INFO: egress-qos-map updated on vlan10  (OK)"
 else
-    echo "TEST-ERROR: egress-qos-map for vlan10 is incorrect (FAIL)"
+    echo "TEST-ERROR: egress-qos-map for vlan10 is incorrect, egress-qos-map = $egress_qos_map (FAIL)"
     exit 1
 fi
+
+# Step 5: update ikey on vti_if1
+
+sysrepocfg -S '/iproute2-ip-link:links/vti[name="vti_if1"]/tunnel-info/ikey' --value  0.0.0.100
+
+# Step 6: check if ikey value updated
+ikey_value=$(ip -d link show dev vti_if1 2>/dev/null | grep -oP '(?<=ikey )\d+.\d+.\d+.\d+' | head -n 1)
+
+if [ "$ikey_value" = "0.0.0.100" ]; then
+    echo "TEST-INFO: ikey for vti vti_if1 updated successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to update ikey for vti vti_if1, ikey_value = $ikey_value (FAIL)"
+    exit 1
+fi
+
 ####################################################################
 # Test: Delete IP Links
 ####################################################################
@@ -124,12 +147,20 @@ else
     exit 1
 fi
 
+# Step 2: check if interface deleted by iproute2-sysrepo
+if ! ip link show vti_if1 >/dev/null 2>&1 ; then
+    echo "TEST-INFO: IP links testIf0 and vti_if1 are deleted successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to delete IP links testIf0 and vti_if1 (FAIL)"
+    exit 1
+fi
+
 ####################################################################
 # Test: test ip link vrf.
 ####################################################################
 
 echo "-----------------"
-echo "[2] Test Link VRF"
+echo "[4] Test Link VRF"
 echo "-----------------"
 
 # Step 1: add vrf vpn10 and add link testvrf and assign vrf vpn10 to it.
@@ -163,7 +194,7 @@ sysrepocfg -C startup -d running -m iproute2-ip-link
 ####################################################################
 
 echo "------------------"
-echo "[2] Test Link bond"
+echo "[5] Test Link bond"
 echo "------------------"
 
 # Step 1: create two links eth_b0 and eth_b1 and add them to bond0.
@@ -210,7 +241,7 @@ fi
 ####################################################################
 
 echo "----------------------"
-echo "[2] Test Link ROLLBACK"
+echo "[6] Test Link ROLLBACK"
 echo "----------------------"
 
 # Step 1: create a interface using ip link directly
@@ -257,7 +288,7 @@ fi
 if [ "$current_mtu" -eq 1400 ]; then
     echo "TEST-INFO: Rollback successful, MTU for IP link testIf0 is 1400 (OK)"
 else
-    echo "TEST-ERROR: Rollback Failed, MTU for IP link testIf0 was not reverted back to 1400 (FAIL)"
+    echo "TEST-ERROR: Rollback Failed, MTU for IP link testIf0 was not reverted back to 1400, current_mtu = $current_mtu (FAIL)"
     exit 1
 fi
 
