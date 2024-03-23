@@ -264,27 +264,6 @@ module iproute2-ip-link {
                 error-message "The master type must be 'bond' or 'bridge'.";
             }
         }
-        container lladdresses {
-            description "configure lladdress for link, peer and broadcast addresses";
-            leaf mac_addr{
-                ipr2cgen:arg-name "address";
-                ipr2cgen:oper-arg-name "address";
-                type yang:mac-address;
-                description "change the station address of the interface.";
-            }
-            leaf broadcast_addr {
-                ipr2cgen:arg-name "broadcast";
-                ipr2cgen:oper-arg-name "broadcast";
-                type yang:mac-address;
-                description "change the link layer broadcast address, when the interface is POINTOPOINT.";
-            }
-            leaf peer_addr {
-                ipr2cgen:arg-name "peer";
-                ipr2cgen:oper-arg-name "peer";
-                type yang:mac-address;
-                description "change the link layer peer address, when the interface is POINTOPOINT.";
-            }
-        }
         container advance {
             leaf protodown {
                 description "change the PROTODOWN state on the device.
@@ -404,6 +383,30 @@ module iproute2-ip-link {
                     enum "off";
                 }
                 default "on";
+            }
+        }
+    }
+
+    grouping link-layer2{
+        container lladdresses {
+            description "configure lladdress for link, peer and broadcast addresses";
+            leaf mac_addr{
+                ipr2cgen:arg-name "address";
+                ipr2cgen:oper-arg-name "address";
+                type yang:mac-address;
+                description "change the station address of the interface.";
+            }
+            leaf broadcast_addr {
+                ipr2cgen:arg-name "broadcast";
+                ipr2cgen:oper-arg-name "broadcast";
+                type yang:mac-address;
+                description "change the link layer broadcast address, when the interface is POINTOPOINT.";
+            }
+            leaf peer_addr {
+                ipr2cgen:arg-name "peer";
+                ipr2cgen:oper-arg-name "peer";
+                type yang:mac-address;
+                description "change the link layer peer address, when the interface is POINTOPOINT.";
             }
         }
     }
@@ -671,6 +674,7 @@ module iproute2-ip-link {
             uses link-device;
             uses link-essentials;
             uses link-advance;
+            uses link-layer2;
             leaf type {
                 ipr2cgen:oper-arg-name "info_kind";
                 type identityref {
@@ -740,6 +744,7 @@ module iproute2-ip-link {
             uses link-essentials;
             uses link-advance;
             uses link-device;
+            uses link-layer2;
             container vlan-info {
                 ipr2cgen:add-static-arg "type vlan";
                 must "../iplink:device" {
