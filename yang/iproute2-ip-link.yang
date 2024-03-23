@@ -3,6 +3,7 @@ module iproute2-ip-link {
     namespace "urn:okda:iproute2:ip:link";
     prefix iplink;
 
+    import ietf-inet-types { prefix inet; }
     import ietf-yang-types { prefix yang;}
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-netns { prefix ipnetns; }
@@ -26,6 +27,10 @@ module iproute2-ip-link {
             "YANG model for iproute2 ip link case.";
     }
 
+    /*
+    * Typedefs
+    */
+
     typedef link-ref {
         type leafref {
             path "/iplink:links/iplink:link/iplink:name";
@@ -34,6 +39,10 @@ module iproute2-ip-link {
             "This type is used by data models that need to reference
             interfaces.";
     }
+
+    /*
+    * Identities
+    */
 
     identity link-type {
         description
@@ -129,12 +138,6 @@ module iproute2-ip-link {
             "rtnetlink wifi simulation device.";
     }
 
-    identity vti {
-        base link-type;
-        description
-            "Virtual tunnel interface.";
-    }
-
     identity vlan {
         base link-type;
         description
@@ -169,6 +172,457 @@ module iproute2-ip-link {
         base oper-link-type;
         description
             "loopback device.";
+    }
+
+    /*
+    * groupings
+    */
+
+    grouping link-essentials{
+
+        leaf mtu {
+            type uint16{
+                range "64..9000";
+            }
+            default 1500;
+            description "specifies the mtu size for the device";
+        }
+        leaf admin-status{
+            description "set admin status for the link";
+            ipr2cgen:value-only;
+            ipr2cgen:oper-arg-name "flags";
+            ipr2cgen:oper-flag-map "UP:up;FLAG-UNSET:down";
+            type enumeration {
+                enum "up";
+                enum "down";
+            }
+            default "down";
+        }
+        leaf index {
+            ipr2cgen:oper-arg-name "ifindex";
+            type uint64;
+            description "specifies the desired index of the new virtual device.
+            The link creation fails, if the index is busy.";
+        }
+        leaf vrf {
+            ipr2cgen:on-node-delete "nomaster";
+            type leafref {
+                path "../../vrf/name";
+            }
+            description "add the interface to vrf";
+        }
+        choice netns {
+            description "create the device in the network namespace associated with process
+            PID or the name NETNSNAME or the file NETNSFILE.";
+            case process-id {
+                description "create the device in the network namespace associated with process";
+                leaf pid {
+                    ipr2cgen:arg-name "netns";
+                    type uint64;
+                    description "process id";
+                }
+            }
+            case name {
+                description "create the device in the network namespace associated with name NETNSNAME";
+                leaf netnsname {
+                    ipr2cgen:arg-name "netns";
+                    type ipnetns:netns-ref;
+                    description "network namespace name";
+                }
+            }
+            case file {
+                description "create the device in the network namespace associated with file NETNSFILE";
+                leaf netnsfile {
+                    ipr2cgen:arg-name "netns";
+                    type string;
+                    description "network namespace file";
+                }
+            }
+        }
+        leaf group {
+            description "specify group id that this link belong to,
+            GROUP has a dual role: If both group and dev are present,
+            then move the device to the specified group. If only a group is specified,
+            then the change operates on all devices in that group.";
+            ipr2cgen:oper-value-map "default:0";
+            type uint64;
+            default 0;
+        }
+
+    }
+
+    grouping link-advance {
+        leaf master{
+            ipr2cgen:on-node-delete "nomaster";
+            type link-ref;
+            description "add the link to master link";
+            must "../master != ../name" {
+                error-message "cannot use same link as master link!";
+            }
+            must "(/links/link[name=current()/../master]/type = 'iplink:bond') or
+            (/links/link[name=current()/../master]/type = 'iplink:bridge')" {
+                error-message "The master type must be 'bond' or 'bridge'.";
+            }
+        }
+        container lladdresses {
+            description "configure lladdress for link, peer and broadcast addresses";
+            leaf mac_addr{
+                ipr2cgen:arg-name "address";
+                ipr2cgen:oper-arg-name "address";
+                type yang:mac-address;
+                description "change the station address of the interface.";
+            }
+            leaf broadcast_addr {
+                ipr2cgen:arg-name "broadcast";
+                ipr2cgen:oper-arg-name "broadcast";
+                type yang:mac-address;
+                description "change the link layer broadcast address, when the interface is POINTOPOINT.";
+            }
+            leaf peer_addr {
+                ipr2cgen:arg-name "peer";
+                ipr2cgen:oper-arg-name "peer";
+                type yang:mac-address;
+                description "change the link layer peer address, when the interface is POINTOPOINT.";
+            }
+        }
+        container advance {
+            leaf protodown {
+                description "change the PROTODOWN state on the device.
+                Indicates that a protocol error has been detected on the port.
+                Switch drivers can react to this error by doing a phys down on the switch port.";
+                type enumeration {
+                    enum "on";
+                    enum "off";
+                }
+                default "on";
+            }
+            leaf numtxqueues {
+                ipr2cgen:oper-arg-name "num_tx_queues";
+                type uint32;
+                default 1;
+                description "specifies the number of transmit queues for device.";
+            }
+            leaf numrxqueues {
+                ipr2cgen:oper-arg-name "num_rx_queues";
+                type uint32;
+                default 1;
+                description "specifies the number of receive queues for device.";
+            }
+            leaf gso_max_size {
+                type uint32;
+                default 65536;
+                description "BYTES: specifies the recommended maximum size of a Generic Segment Offload packet
+                the new device should accept. This is also used to enable BIG TCP for IPv6 on
+                this device when the size is greater than 65536.";
+            }
+            leaf gso_ipv4_max_size {
+                type uint32;
+                default 65536;
+                description "BYTES: specifies the recommended maximum size of a IPv4 Generic Segment Offload
+                packet the new device should accept. This is especially used to enable BIG TCP for
+                IPv4 on this device by setting to a size greater than 65536.";
+            }
+            leaf gso_max_segs {
+                type uint32;
+                default 65535;
+                description "specifies the recommended maximum number of a Generic Segment
+                Offload segments the device should accept.";
+            }
+            leaf gro_max_size {
+                type uint32;
+                default 65536;
+                description "specifies the maximum size of a packet built by GRO stack on this device.
+                This is also used for BIG TCP to allow the size of a merged IPv6 GSO
+                packet on this device greater than 65536.";
+            }
+            leaf gro_ipv4_max_size {
+                type uint32;
+                default 65536;
+                description "specifies the maximum size of a IPv4 packet built by GRO stack on this device.
+                This is especially used for BIG TCP to allow the size of a merged IPv4 GSO packet on
+                this device greater than 65536.";
+            }
+            leaf txqueuelen {
+                description "change the transmit queue length of the device.";
+                ipr2cgen:oper-arg-name "txqlen";
+                type uint32;
+                default 1000;
+            }
+        }
+        container modes {
+            description "set arb,mcast,promsi ... etc modes on the link";
+            leaf arp {
+                description "change the NOARP flag on the device.";
+                ipr2cgen:oper-arg-name "flags";
+                ipr2cgen:oper-flag-map "NOARP:off;FLAG-UNSET:on";
+                type enumeration {
+                    enum "on";
+                    enum "off";
+                }
+                default "off";
+            }
+            leaf multicast {
+                description "change the MULTICAST flag on the device.";
+                ipr2cgen:oper-arg-name "flags";
+                ipr2cgen:oper-flag-map "MULTICAST:on;FLAG-UNSET:off";
+                type enumeration {
+                    enum "on";
+                    enum "off";
+                }
+                default "off";
+            }
+            leaf allmulticast {
+                description "change the ALLMULTI flag on the device. When enabled,
+                instructs network driver to retrieve all multicast packets from the network
+                to the kernel for further processing.";
+                ipr2cgen:oper-arg-name "flags";
+                ipr2cgen:oper-flag-map "ALLMULTI:on;FLAG-UNSET:off";
+                type enumeration {
+                    enum "on";
+                    enum "off";
+                }
+                default "off";
+            }
+            leaf promisc {
+                ipr2cgen:oper-arg-name "promiscuity";
+                ipr2cgen:oper-value-map "0:off;1:on";
+                type enumeration {
+                    enum "on";
+                    enum "off";
+                }
+                description "change the PROMISC flag on the device. When enabled,
+                activates promiscuous operation of the network device.";
+                default "off";
+            }
+            leaf trailers {
+                description "change the NOTRAILERS flag on the device,
+                NOT used by the Linux and exists for BSD compatibility";
+                ipr2cgen:oper-arg-name "flags";
+                ipr2cgen:oper-flag-map "NOTRAILERS:off;FLAG-UNSET:on";
+                type enumeration {
+                    enum "on";
+                    enum "off";
+                }
+                default "on";
+            }
+        }
+    }
+
+    grouping link-state {
+        container state {
+            config false;
+            leaf ifindex {
+                type uint64;
+                description "index of the interface.";
+            }
+            leaf-list flags {
+                type enumeration {
+                    enum "NO-CARRIER";
+                    enum "LOOPBACK";
+                    enum "BROADCAST";
+                    enum "POINTOPOINT";
+                    enum "MULTICAST";
+                    enum "NOARP";
+                    enum "ALLMULTI";
+                    enum "PROMISC";
+                    enum "MASTER";
+                    enum "SLAVE";
+                    enum "DEBUG";
+                    enum "DYNAMIC";
+                    enum "AUTOMEDIA";
+                    enum "PORTSEL";
+                    enum "NOTRAILERS";
+                    enum "UP";
+                    enum "LOWER_UP";
+                    enum "DORMANT";
+                    enum "ECHO";
+                }
+                description "A list of flags representing various states and capabilities of the interface.
+                Each flag denotes a specific characteristic or status";
+            }
+            leaf mtu {
+                type uint32{
+                    range "64..65536";
+                }
+                description "Specifies the Maximum Transmission Unit (MTU) size in bytes for the interface.";
+            }
+            leaf qdisc {
+                type string; //TODO review
+                description "Reference to the queuing discipline (qdisc) associated with the interface.";
+            }
+            leaf operstate {
+                type enumeration {
+                    enum "UP";
+                    enum "DOWN";
+                    enum "LOWERLAYERDOWN";
+                    enum "UNKNOWN";
+                    enum "NOTPRESENT";
+                    enum "TESTING";
+                    enum "DORMANT";
+                }
+                description "Represents the current operational state of the interface.";
+            }
+            leaf linkmode {
+                type enumeration {
+                    enum "DEFAULT";
+                    enum "DORMANT";
+                }
+                description "Defines the current link mode of the interface.";
+            }
+            leaf group {
+                type union {
+                    type uint64;
+                    type enumeration {
+                        enum "default";
+                    }
+                }
+                description "Group ID assiciated with the interface, allowing for collective management or categorization.";
+            }
+            leaf txqlen {
+                type uint32;
+                description "Specifies the length of the transmit queue for the interface";
+            }
+            leaf link_type {
+                type union {
+                    type identityref {
+                        base link-type;
+                    }
+                    type identityref {
+                        base oper-link-type;
+                    }
+                }
+                description "Indicates the specific type of the device";
+            }
+            leaf address {
+                type yang:mac-address;
+                description "MAC address of the interface";
+            }
+            leaf broadcast {
+                type yang:mac-address;
+                description "Specifies the broadcast MAC address for the interface";
+
+            }
+            leaf promiscuity {
+                type uint32;
+                description "Indicates the level of promiscuity of the interface.
+                reflecting how many types of packets are accepted by the interface.";
+            }
+            leaf min_mtu {
+                type uint32;
+                description "Specifies the minimum MTU size that the interface supports";
+            }
+            leaf max_mtu {
+                type uint32;
+                description "Specifies the maximum MTU size that the interface supports";
+            }
+            leaf inet6_addr_gen_mode {
+                type union {
+                    type yang:hex-string;
+                    type enumeration {
+                        enum "eui64";
+                        enum "none";
+                        enum "stable_secret";
+                        enum "random";
+                    }
+                }
+                description "Specifies the method used for generating IPv6 addresses for the interface.";
+            }
+            leaf num_tx_queues {
+                type uint32;
+                description "The number of transmit queues available on the interface";
+            }
+            leaf num_rx_queues {
+                type uint32;
+                description "The number of receive queues available on the interface";
+            }
+            container stats64 {
+                description "Contains 64-bit counters for various network statistics.
+                Providing detailed information on the traffic handled by the interface.";
+                container rx {
+                    leaf bytes {
+                        type uint64;
+                        description "Total number of bytes received by the interface.";
+                    }
+                    leaf packets {
+                        type uint64;
+                        description "Total number of packets received by the interface.";
+                    }
+                    leaf errors {
+                        type uint64;
+                        description "Number of receive errors detected by the interface.";
+                    }
+                    leaf dropped {
+                        type uint64;
+                        description "Number of packets dropped by the interface due to various reasons, such as buffer overflows.";
+                    }
+                    leaf over_errors {
+                        type uint64;
+                        description "Count of receiver overruns, indicating packets lost because the receiver
+                        couldn't handle incoming data quickly enough.";
+                    }
+                    leaf multicast {
+                        type uint64;
+                        description "Number of multicast packets received by the interface.";
+                    }
+                }
+                container tx {
+                    leaf bytes {
+                        type uint64;
+                        description "Total number of bytes transmitted by the interface.";
+                    }
+                    leaf packets {
+                        type uint64;
+                        description "Total number of packets transmitted by the interface.";
+                    }
+                    leaf errors {
+                        type uint64;
+                        description "Number of transmission errors detected by the interface.";
+                    }
+                    leaf dropped {
+                        type uint64;
+                        description "Number of packets that were not transmitted by the interface and were dropped.";
+                    }
+                    leaf carrier_errors {
+                        type uint64;
+                        description "Count of carrier-related errors on the interface.
+                        typically indicating problems with the physical layer.";
+                    }
+                    leaf collisions {
+                        type uint64;
+                        description "Number of collision errors detected on the interface.";
+                    }
+                }
+            }
+        }
+    }
+
+    grouping tunnel-common {
+        leaf local {
+            type inet:ipv4-address;
+            description "specifies the fixed local ipv4 address for tunneled packets.
+            It must be an address on another interface on the host.";
+            default "0.0.0.0";
+        }
+        leaf remote {
+            type inet:ipv4-address;
+            description "specifies the remote ipv4 address of the tunnel.";
+            default "0.0.0.0";
+        }
+        leaf dev {
+            type link-ref;
+            description "specifies the physical device to use for tunnel endpoint communication.";
+        }
+    }
+
+    grouping tunnel-keyed{
+        leaf ikey {
+            type yang:dotted-quad;
+            description "specifies the tunnel input key (dotted-quad)";
+        }
+        leaf okey {
+            type yang:dotted-quad;
+            description "specifies the tunnel output key (dotted-quad)";
+        }
     }
 
     container links {
@@ -211,228 +665,8 @@ module iproute2-ip-link {
 
                 description "specifies the physical device to act operate on";
             }
-            leaf mtu {
-                type uint16{
-                    range "64..9000";
-                }
-                default 1500;
-                description "specifies the mtu size for the device";
-            }
-            leaf admin-status{
-                description "set admin status for the link";
-                ipr2cgen:value-only;
-                ipr2cgen:oper-arg-name "flags";
-                ipr2cgen:oper-flag-map "UP:up;FLAG-UNSET:down";
-                type enumeration {
-                    enum "up";
-                    enum "down";
-                }
-                default "down";
-            }
-            leaf master{
-                ipr2cgen:on-node-delete "nomaster";
-                type link-ref;
-                description "add the link to master link";
-                must "../master != ../name" {
-                    error-message "cannot use same link as master link!";
-                }
-                must "(/links/link[name=current()/../master]/type = 'iplink:bond') or
-                (/links/link[name=current()/../master]/type = 'iplink:bridge')" {
-                    error-message "The master type must be 'bond' or 'bridge'.";
-                }
-            }
-            leaf index {
-                ipr2cgen:oper-arg-name "ifindex";
-                type uint64;
-                description "specifies the desired index of the new virtual device.
-                The link creation fails, if the index is busy.";
-            }
-            leaf vrf {
-                ipr2cgen:on-node-delete "nomaster";
-                type leafref {
-                    path "../../vrf/name";
-                }
-                description "add the interface to vrf";
-            }
-            choice netns {
-                description "create the device in the network namespace associated with process
-                PID or the name NETNSNAME or the file NETNSFILE.";
-                case process-id {
-                    description "create the device in the network namespace associated with process";
-                    leaf pid {
-                        ipr2cgen:arg-name "netns";
-                        type uint64;
-                        description "process id";
-                    }
-                }
-                case name {
-                    description "create the device in the network namespace associated with name NETNSNAME";
-                    leaf netnsname {
-                        ipr2cgen:arg-name "netns";
-                        type ipnetns:netns-ref;
-                        description "network namespace name";
-                    }
-                }
-                case file {
-                    description "create the device in the network namespace associated with file NETNSFILE";
-                    leaf netnsfile {
-                        ipr2cgen:arg-name "netns";
-                        type string;
-                        description "network namespace file";
-                    }
-                }
-            }
-            leaf group {
-                description "specify group id that this link belong to,
-                GROUP has a dual role: If both group and dev are present,
-                then move the device to the specified group. If only a group is specified,
-                then the change operates on all devices in that group.";
-                ipr2cgen:oper-value-map "default:0";
-                type uint64;
-                default 0;
-            }
-            container lladdresses {
-                description "configure lladdress for link, peer and broadcast addresses";
-                leaf mac_addr{
-                    ipr2cgen:arg-name "address";
-                    ipr2cgen:oper-arg-name "address";
-                    type yang:mac-address;
-                    description "change the station address of the interface.";
-                }
-                leaf broadcast_addr {
-                    ipr2cgen:arg-name "broadcast";
-                    ipr2cgen:oper-arg-name "broadcast";
-                    type yang:mac-address;
-                    description "change the link layer broadcast address, when the interface is POINTOPOINT.";
-                }
-                leaf peer_addr {
-                    ipr2cgen:arg-name "peer";
-                    ipr2cgen:oper-arg-name "peer";
-                    type yang:mac-address;
-                    description "change the link layer peer address, when the interface is POINTOPOINT.";
-                }
-            }
-            container advance {
-                leaf protodown {
-                    description "change the PROTODOWN state on the device.
-                    Indicates that a protocol error has been detected on the port.
-                    Switch drivers can react to this error by doing a phys down on the switch port.";
-                    type enumeration {
-                        enum "on";
-                        enum "off";
-                    }
-                    default "on";
-                }
-                leaf numtxqueues {
-                    ipr2cgen:oper-arg-name "num_tx_queues";
-                    type uint32;
-                    default 1;
-                    description "specifies the number of transmit queues for device.";
-                }
-                leaf numrxqueues {
-                    ipr2cgen:oper-arg-name "num_rx_queues";
-                    type uint32;
-                    default 1;
-                    description "specifies the number of receive queues for device.";
-                }
-                leaf gso_max_size {
-                    type uint32;
-                    default 65536;
-                    description "BYTES: specifies the recommended maximum size of a Generic Segment Offload packet
-                    the new device should accept. This is also used to enable BIG TCP for IPv6 on
-                    this device when the size is greater than 65536.";
-                }
-                leaf gso_ipv4_max_size {
-                    type uint32;
-                    default 65536;
-                    description "BYTES: specifies the recommended maximum size of a IPv4 Generic Segment Offload
-                    packet the new device should accept. This is especially used to enable BIG TCP for
-                    IPv4 on this device by setting to a size greater than 65536.";
-                }
-                leaf gso_max_segs {
-                    type uint32;
-                    default 65535;
-                    description "specifies the recommended maximum number of a Generic Segment
-                    Offload segments the device should accept.";
-                }
-                leaf gro_max_size {
-                    type uint32;
-                    default 65536;
-                    description "specifies the maximum size of a packet built by GRO stack on this device.
-                    This is also used for BIG TCP to allow the size of a merged IPv6 GSO
-                    packet on this device greater than 65536.";
-                }
-                leaf gro_ipv4_max_size {
-                    type uint32;
-                    default 65536;
-                    description "specifies the maximum size of a IPv4 packet built by GRO stack on this device.
-                    This is especially used for BIG TCP to allow the size of a merged IPv4 GSO packet on
-                    this device greater than 65536.";
-                }
-                leaf txqueuelen {
-                    description "change the transmit queue length of the device.";
-                    ipr2cgen:oper-arg-name "txqlen";
-                    type uint32;
-                    default 1000;
-                }
-            }
-            container modes {
-                description "set arb,mcast,promsi ... etc modes on the link";
-                leaf arp {
-                    description "change the NOARP flag on the device.";
-                    ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "NOARP:off;FLAG-UNSET:on";
-                    type enumeration {
-                        enum "on";
-                        enum "off";
-                    }
-                    default "off";
-                }
-                leaf multicast {
-                    description "change the MULTICAST flag on the device.";
-                    ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "MULTICAST:on;FLAG-UNSET:off";
-                    type enumeration {
-                        enum "on";
-                        enum "off";
-                    }
-                    default "off";
-                }
-                leaf allmulticast {
-                    description "change the ALLMULTI flag on the device. When enabled,
-                    instructs network driver to retrieve all multicast packets from the network
-                    to the kernel for further processing.";
-                    ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "ALLMULTI:on;FLAG-UNSET:off";
-                    type enumeration {
-                        enum "on";
-                        enum "off";
-                    }
-                    default "off";
-                }
-                leaf promisc {
-                    ipr2cgen:oper-arg-name "promiscuity";
-                    ipr2cgen:oper-value-map "0:off;1:on";
-                    type enumeration {
-                        enum "on";
-                        enum "off";
-                    }
-                    description "change the PROMISC flag on the device. When enabled,
-                    activates promiscuous operation of the network device.";
-                    default "off";
-                }
-                leaf trailers {
-                    description "change the NOTRAILERS flag on the device,
-                    NOT used by the Linux and exists for BSD compatibility";
-                    ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "NOTRAILERS:off;FLAG-UNSET:on";
-                    type enumeration {
-                        enum "on";
-                        enum "off";
-                    }
-                    default "on";
-                }
-            }
+            uses link-essentials;
+            uses link-advance;
             leaf type {
                 ipr2cgen:oper-arg-name "info_kind";
                 type identityref {
@@ -467,191 +701,30 @@ module iproute2-ip-link {
                     balance-tlb (5) and balance-alb (6) mode.";
                 }
             }
-            container state {
-                config false;
-                leaf ifindex {
-                    type uint64;
-                    description "index of the interface.";
-                }
-                leaf-list flags {
-                    type enumeration {
-                        enum "NO-CARRIER";
-                        enum "LOOPBACK";
-                        enum "BROADCAST";
-                        enum "POINTOPOINT";
-                        enum "MULTICAST";
-                        enum "NOARP";
-                        enum "ALLMULTI";
-                        enum "PROMISC";
-                        enum "MASTER";
-                        enum "SLAVE";
-                        enum "DEBUG";
-                        enum "DYNAMIC";
-                        enum "AUTOMEDIA";
-                        enum "PORTSEL";
-                        enum "NOTRAILERS";
-                        enum "UP";
-                        enum "LOWER_UP";
-                        enum "DORMANT";
-                        enum "ECHO";
+            uses link-state;
+        }
+        list vti {
+            ipr2cgen:cmd-start;
+            key "name";
+            leaf name {
+                type string;
+                description "vti tunnel interface name";
+            }
+            uses link-essentials;
+            uses link-advance;
+            container tunnel-info{
+                ipr2cgen:add-static-arg "type vti";
+                description "vti tunnel info details";
+                uses tunnel-common;
+                uses tunnel-keyed;
+                leaf fwmark{
+                    type string {
+                        pattern '0x[0-9a-fA-F]+|\d+';
                     }
-                    description "A list of flags representing various states and capabilities of the interface.
-                    Each flag denotes a specific characteristic or status";
-                }
-                leaf mtu {
-                    type uint32{
-                        range "64..65536";
-                    }
-                    description "Specifies the Maximum Transmission Unit (MTU) size in bytes for the interface.";
-                }
-                leaf qdisc {
-                    type string; //TODO review
-                    description "Reference to the queuing discipline (qdisc) associated with the interface.";
-                }
-                leaf operstate {
-                    type enumeration {
-                        enum "UP";
-                        enum "DOWN";
-                        enum "LOWERLAYERDOWN";
-                        enum "UNKNOWN";
-                        enum "NOTPRESENT";
-                        enum "TESTING";
-                        enum "DORMANT";
-                    }
-                    description "Represents the current operational state of the interface.";
-                }
-                leaf linkmode {
-                    type enumeration {
-                        enum "DEFAULT";
-                        enum "DORMANT";
-                    }
-                    description "Defines the current link mode of the interface.";
-                }
-                leaf group {
-                    type union {
-                        type uint64;
-                        type enumeration {
-                            enum "default";
-                        }
-                    }
-                    description "Group ID assiciated with the interface, allowing for collective management or categorization.";
-                }
-                leaf txqlen {
-                    type uint32;
-                    description "Specifies the length of the transmit queue for the interface";
-                }
-                leaf link_type {
-                    type union {
-                        type identityref {
-                            base link-type;
-                        }
-                        type identityref {
-                            base oper-link-type;
-                        }
-                    }
-                    description "Indicates the specific type of the device";
-                }
-                leaf address {
-                    type yang:mac-address;
-                    description "MAC address of the interface";
-                }
-                leaf broadcast {
-                    type yang:mac-address;
-                    description "Specifies the broadcast MAC address for the interface";
-
-                }
-                leaf promiscuity {
-                    type uint32;
-                    description "Indicates the level of promiscuity of the interface.
-                    reflecting how many types of packets are accepted by the interface.";
-                }
-                leaf min_mtu {
-                    type uint32;
-                    description "Specifies the minimum MTU size that the interface supports";
-                }
-                leaf max_mtu {
-                    type uint32;
-                    description "Specifies the maximum MTU size that the interface supports";
-                }
-                leaf inet6_addr_gen_mode {
-                    type union {
-                        type yang:hex-string;
-                        type enumeration {
-                            enum "eui64";
-                            enum "none";
-                            enum "stable_secret";
-                            enum "random";
-                        }
-                    }
-                    description "Specifies the method used for generating IPv6 addresses for the interface.";
-                }
-                leaf num_tx_queues {
-                    type uint32;
-                    description "The number of transmit queues available on the interface";
-                }
-                leaf num_rx_queues {
-                    type uint32;
-                    description "The number of receive queues available on the interface";
-                }
-                container stats64 {
-                    description "Contains 64-bit counters for various network statistics.
-                    Providing detailed information on the traffic handled by the interface.";
-                    container rx {
-                        leaf bytes {
-                            type uint64;
-                            description "Total number of bytes received by the interface.";
-                        }
-                        leaf packets {
-                            type uint64;
-                            description "Total number of packets received by the interface.";
-                        }
-                        leaf errors {
-                            type uint64;
-                            description "Number of receive errors detected by the interface.";
-                        }
-                        leaf dropped {
-                            type uint64;
-                            description "Number of packets dropped by the interface due to various reasons, such as buffer overflows.";
-                        }
-                        leaf over_errors {
-                            type uint64;
-                            description "Count of receiver overruns, indicating packets lost because the receiver
-                            couldn't handle incoming data quickly enough.";
-                        }
-                        leaf multicast {
-                            type uint64;
-                            description "Number of multicast packets received by the interface.";
-                        }
-                    }
-                    container tx {
-                        leaf bytes {
-                            type uint64;
-                            description "Total number of bytes transmitted by the interface.";
-                        }
-                        leaf packets {
-                            type uint64;
-                            description "Total number of packets transmitted by the interface.";
-                        }
-                        leaf errors {
-                            type uint64;
-                            description "Number of transmission errors detected by the interface.";
-                        }
-                        leaf dropped {
-                            type uint64;
-                            description "Number of packets that were not transmitted by the interface and were dropped.";
-                        }
-                        leaf carrier_errors {
-                            type uint64;
-                            description "Count of carrier-related errors on the interface.
-                            typically indicating problems with the physical layer.";
-                        }
-                        leaf collisions {
-                            type uint64;
-                            description "Number of collision errors detected on the interface.";
-                        }
-                    }
+                    description "specify the fwmark value (0x0..0xffffffff)";
                 }
             }
+            uses link-state;
         }
     }
 }
