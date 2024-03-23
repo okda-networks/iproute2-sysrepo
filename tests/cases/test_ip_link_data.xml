@@ -6,7 +6,6 @@
             <remote>2.2.2.2</remote>
         </tunnel-info>
     </vti>
-
     <link>
         <name>testIf0</name>
         <type>dummy</type>
@@ -15,13 +14,12 @@
         <name>testIf1</name>
         <type>dummy</type>
     </link>
-    <link>
+    <vlan>
         <name>vlan10</name>
         <device>testIf1</device>
-        <type>vlan</type>
-        <vlan xmlns="urn:okda:iproute2:ip:link:vlan:ext">
+        <vlan-info>
             <protocol>802.1q</protocol>
             <id>10</id>
-        </vlan>
-    </link>
+        </vlan-info>
+    </vlan>
 </links>

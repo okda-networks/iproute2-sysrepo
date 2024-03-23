@@ -408,6 +408,21 @@ module iproute2-ip-link {
         }
     }
 
+    grouping link-device {
+        leaf device {
+            must "../device != ../name" {
+                error-message "Cannot reference the current link name, you can use other links";
+            }
+            must "../mtu <= /links/link[name=current()/../device]/mtu" {
+                error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
+            }
+            ipr2cgen:arg-name "link";
+            type link-ref;
+
+            description "specifies the physical device to act operate on";
+        }
+    }
+
     grouping link-state {
         container state {
             config false;
@@ -653,18 +668,7 @@ module iproute2-ip-link {
                 type string;
                 description "link name";
             }
-            leaf device {
-                must "../device != ../name" {
-                    error-message "Cannot reference the current link name, you can use other links";
-                }
-                must "../mtu <= /links/link[name=current()/../device]/mtu" {
-                    error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
-                }
-                ipr2cgen:arg-name "link";
-                type link-ref;
-
-                description "specifies the physical device to act operate on";
-            }
+            uses link-device;
             uses link-essentials;
             uses link-advance;
             leaf type {
@@ -725,6 +729,90 @@ module iproute2-ip-link {
                 }
             }
             uses link-state;
+        }
+        list vlan {
+            ipr2cgen:cmd-start;
+            key "name";
+            leaf name {
+                type string;
+                description "vlan name";
+            }
+            uses link-essentials;
+            uses link-advance;
+            uses link-device;
+            container vlan-info {
+                ipr2cgen:add-static-arg "type vlan";
+                must "../iplink:device" {
+                    description "VLAN configuration requires 'device' to be set";
+                    error-message "VLAN configuration is not allowed without specifying 'device'";
+                }
+                description "vlan type interface paramters";
+                leaf protocol {
+                    description "VLAN_PROTO - either 802.1Q or 802.1ad.";
+                    default "802.1q";
+                    type enumeration {
+                        enum "802.1q";
+                        enum "802.1ad";
+                    }
+                }
+                leaf id {
+                    type uint16;
+                    description "VLAN ID";
+                }
+                leaf reorder_hdr {
+                    description "{ on | off } - specifies whether ethernet headers are reordered or not (default is on).";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                }
+                leaf gvrp {
+                    description "{ on | off } - specifies whether this VLAN should be
+                    registered using GARP VLAN Registration Protocol.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                }
+                leaf mvrp {
+                    description "{ on | off } - specifies whether this VLAN should be registered
+                    using Multiple VLAN Registration Protocol.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                }
+                leaf loose_binding {
+                    description "{ on | off } - specifies whether the VLAN device state is bound to the
+                    physical device state.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                }
+                leaf bridge_binding {
+                    description "{ on | off } - specifies whether the VLAN device link state tracks the state
+                    of bridge ports that are members of the VLAN.";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                }
+                leaf-list ingress-qos-map {
+                    type string {
+                        pattern '\d+:\d+';
+                    }
+                    description "defines a mapping of VLAN header prio field to the Linux internal packet priority on
+                    incoming frames. The format is FROM:TO with multiple mappings separated by spaces.";
+                }
+                leaf-list egress-qos-map {
+                    type string {
+                        pattern '\d+:\d+';
+                    }
+                    description "defines a mapping of Linux internal packet priority to VLAN header prio field but
+                    for outgoing frames.The format is FROM:TO with multiple mappings separated by spaces.";
+                }
+            }
         }
     }
 }
