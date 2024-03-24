@@ -43,10 +43,7 @@ module iproute2-ip-nexthop {
             }
             leaf dev{
                 description "Specifies the network interface associated with the nexthop.";
-                type leafref {
-                    path "/iplink:links/iplink:link/iplink:name";
-
-                }
+                type iplink:l3-links-ref;
             }
             choice via {
                 description "nexthop ip address";
