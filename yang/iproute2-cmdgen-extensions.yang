@@ -73,9 +73,17 @@ module iproute2-cmdgen-extensions {
        argument "static_value";
     }
 
-    extension oper-cmdstart {
+    extension oper-stop-if {
+       description "Instructs oper data to processing node if one of its values matches value list specified, the key and values
+       are expected to be expressed in json array format.
+       for example: to stop processing node if the node show command outputs contains \"info_kind\" key with values of \"vlan\" or \"vti\"
+       then the used argument should be set tp : {\"info_kind\": [\"vlan\", \"vti\"]}";
+       argument "stop_key_and_values";
+    }
+
+    extension oper-cmd {
        description "define node which a new show cmd is needed, typically used in the first list in the schema, example
-                    ir2cmdgen:oper-cmdstart \"ip vrf\"";
+                    ir2cmdgen:oper-cmd \"ip link show type vrf\"";
        argument "show_cmd";
     }
 

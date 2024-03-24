@@ -21,46 +21,25 @@
 /* to be merged with cmdgen */
 typedef enum {
     // leaf extensions
+    OPER_CMD_EXT,
     OPER_ARG_NAME_EXT,
     OPER_VALUE_MAP_EXT,
     OPER_FLAG_MAP_EXT,
-    OPER_CK_ARGNAME_PRESENCE_EXT
+    OPER_CK_ARGNAME_PRESENCE_EXT,
+    OPER_STOP_IF_EXT,
 } oper_extension_t;
 
 /* to be merged with cmdgen */
-char *oper_yang_ext_map[] = { [OPER_ARG_NAME_EXT] = "oper-arg-name",
+char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
+                              [OPER_ARG_NAME_EXT] = "oper-arg-name",
                               [OPER_VALUE_MAP_EXT] = "oper-value-map",
                               [OPER_FLAG_MAP_EXT] = "oper-flag-map",
-                              [OPER_CK_ARGNAME_PRESENCE_EXT] = "oper-ck-argname-presence" };
+                              [OPER_CK_ARGNAME_PRESENCE_EXT] = "oper-ck-argname-presence",
+                              [OPER_STOP_IF_EXT] = "oper-stop-if" };
 
-/**
- * Struct store yang modules names and their iproute2 show cmd start.
- */
-struct module_sh_cmdstart {
-    const char *module_name; // Stores Module name
-    const char *showcmd_start; // Store iproute2 show command related to the module
-} ipr2_sh_cmdstart[] = { { "iproute2-ip-link", "ip link show" },
-                         { "iproute2-ip-nexthop", "ip nexthop show" },
-                         { "iproute2-ip-netns", "ip netns show" } };
-
-void process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
-                  struct lyd_node **parent_data_node);
-
-/**
- * Retrieves the iproute2 show command for a specific module name.
- * @param [in] module_name: Name of the module for which the shell command is to be retrieved.
- * @return show command line string, NULL if no matching command is found or on failure..
- */
-char *get_module_sh_startcmd(const char *module_name)
-{
-    /* convert module name to show cmd */
-    for (size_t i = 0; i < sizeof(ipr2_sh_cmdstart) / sizeof(ipr2_sh_cmdstart[0]); i++) {
-        if (strcmp(module_name, ipr2_sh_cmdstart[i].module_name) == 0) {
-            return strdup(ipr2_sh_cmdstart[i].showcmd_start);
-        }
-    }
-    return NULL;
-}
+extern int apply_ipr2_cmd(char *ipr2_show_cmd);
+int process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
+                 struct lyd_node **parent_data_node);
 
 void free_list_params(const char ***key_values, int **values_lengths, int key_count)
 {
@@ -252,6 +231,44 @@ const char *map_value_if_needed(struct json_object *value_map_jobj, const char *
         return json_object_get_string(mapped_value_obj);
     }
     return original_value;
+}
+
+/**
+ * Evaluates if processing schema processing should terminate based on matches between `cmd_out_jobj` and 
+ * `termination_obj`. It iterates through `termination_obj`, comparing its key-value pairs 
+ * against those in `cmd_out_jobj`. For matching keys, it checks if any value in `termination_obj` 
+ * (direct value or within an array) equals the value in `cmd_out_jobj`. Termination is advised if 
+ * any match is found.
+ *
+ * @param [in] cmd_out_jobj: JSON object with command output to check.
+ * @param [in] termination_obj: JSON object with termination criteria.
+ * @return Returns true if a termination condition is met, otherwise false.
+ */
+bool terminate_processing(struct json_object *cmd_out_jobj, struct json_object *termination_obj)
+{
+    struct json_object *cmd_out_val = NULL;
+    json_object_object_foreach(termination_obj, key, term_vals_obj)
+    {
+        if (find_json_value_by_key(cmd_out_jobj, key, &cmd_out_val)) {
+            if (json_object_is_type(term_vals_obj, json_type_array)) {
+                size_t n_json_values = json_object_array_length(term_vals_obj);
+                for (size_t i = 0; i < n_json_values; i++) {
+                    struct json_object *inner_value = json_object_array_get_idx(term_vals_obj, i);
+                    if (strcmp(json_object_get_string(cmd_out_val),
+                               json_object_get_string(inner_value)) == 0) {
+                        return true;
+                    }
+                }
+                if (json_object_is_type(term_vals_obj, json_type_object)) {
+                    if (strcmp(json_object_get_string(cmd_out_val),
+                               json_object_get_string(term_vals_obj)) == 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
 }
 
 /**
@@ -485,7 +502,8 @@ void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_
         const struct lysc_node *s_child;
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
         {
-            process_node(s_child, json_obj, lys_flags, &new_data_node);
+            if (process_node(s_child, json_obj, lys_flags, &new_data_node))
+                return;
         }
     }
 }
@@ -531,26 +549,43 @@ void jdata_to_list(struct json_object *json_obj, const char *arg_name,
  *                        Use LYS_CONFIG_W to allow parsing write containers and leafs (for loading configuration data).
  * @param [in, out] parent_data_node: Pointer to the parent data node in the YANG data tree (lyd_node).
  */
-void process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t lys_flags,
-                  struct lyd_node **parent_data_node)
+int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t lys_flags,
+                 struct lyd_node **parent_data_node)
 {
-    /* Create lyd_node for current schema node and attach to parent_data_node if not NULL */
-    if (*parent_data_node == NULL) { // Top-level node
-        lyd_new_inner(NULL, s_node->module, s_node->name, 0, parent_data_node);
-    }
-
     const struct lysc_node *s_child;
     struct lyd_node *new_data_node = *parent_data_node;
 
     /* check for schema extension overrides */
     char *arg_name = NULL;
+    char *term_vals = NULL;
+
+    if (get_lys_extension(OPER_STOP_IF_EXT, s_node, &term_vals) == EXIT_SUCCESS) {
+        if (term_vals == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-arg-name extension found but failed to "
+                    "get the arg-name value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return EXIT_FAILURE;
+        }
+
+        struct json_object *term_jobj = term_vals ? json_tokener_parse(term_vals) : NULL;
+        if (term_vals) {
+            free(term_vals);
+        }
+
+        if (terminate_processing(json_obj, term_jobj)) {
+            s_node = (*parent_data_node)->schema->next;
+            return EXIT_FAILURE;
+        }
+    }
+
     if (get_lys_extension(OPER_ARG_NAME_EXT, s_node, &arg_name) == EXIT_SUCCESS) {
         if (arg_name == NULL) {
             fprintf(stderr,
                     "%s: ipr2cgen:oper-arg-name extension found but failed to "
                     "get the arg-name value for node \"%s\"\n",
                     __func__, s_node->name);
-            return;
+            return EXIT_FAILURE;
         }
     } else {
         arg_name = strdup(s_node->name);
@@ -586,7 +621,8 @@ void process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_
     case LYS_CONTAINER:
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
         {
-            process_node(s_child, json_obj, lys_flags, &new_data_node);
+            if (process_node(s_child, json_obj, lys_flags, &new_data_node))
+                return EXIT_FAILURE;
         }
         break;
     default:
@@ -596,24 +632,64 @@ void process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_
 }
 
 /**
- * Converts JSON array objects to a YANG data tree based on the provided schema node.
- * This function is a wrapper around `process_node` for handling JSON arrays.
- * @param [in] json_array_obj: JSON array object to convert.
- * @param [in] top_node: Top-level schema node for mapping.
- * @param [in] lys_flags: Flag value used to filter out schema nodes containers and leafs
+ * Starts the porcessing of module schema, it processes every node in the schema to lyd_node if the node name
+ * is found in the input json_obj.
+ * First it looks for show commands to apply as it iterates through the schema node, then it stores the outputs
+ * into json_obj, and starts processing the schema nodes based on the content of that json_obj.
+ * @param [in] s_node: Schema node to be processed.
+ * @param [in] json_obj: JSON object containing the data to process.
+ * @param [in] lys_flags: flag value used to filter out schema nodes containers and leafs.
  *                        Use LYS_CONFIG_R to allow parsing read-only containers and leafs (for loading operational data).
  *                        Use LYS_CONFIG_W to allow parsing write containers and leafs (for loading configuration data).
- * @param [out] data_tree: Pointer to store the resulting YANG data tree.
+ * @param [in, out] parent_data_node: Pointer to the parent data node in the YANG data tree (lyd_node).
  */
-void jarray_to_lyd(json_object *json_array_obj, const struct lysc_node *top_node,
-                   uint16_t lys_flags, struct lyd_node **data_tree)
+int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
+                   struct lyd_node **parent_data_node)
 {
-    const struct lysc_node *node;
-    LY_LIST_FOR(top_node, node)
-    {
-        // Start with level 0 for top-level nodes, data_tree = NULL
-        process_node(node, json_array_obj, lys_flags, data_tree);
+    char *show_cmd = NULL;
+    const struct lysc_node *new_cmd_child;
+    struct json_object *cmd_output = NULL;
+    /* Create top-level lyd_node */
+    if (*parent_data_node == NULL) { // Top-level node
+        lyd_new_inner(NULL, s_node->module, s_node->name, 0, parent_data_node);
     }
+
+    if (get_lys_extension(OPER_CMD_EXT, s_node, &show_cmd) == EXIT_SUCCESS) {
+        if (show_cmd == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-cmd extension found but failed to "
+                    "get the command value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return EXIT_FAILURE;
+        }
+        if (apply_ipr2_cmd(show_cmd) != EXIT_SUCCESS) {
+            fprintf(stderr, "%s: command execution failed\n", __func__);
+
+            return EXIT_FAILURE;
+        }
+        free(show_cmd);
+
+        cmd_output = json_tokener_parse(json_buffer);
+
+        if (json_object_get_type(cmd_output) == json_type_array) {
+            // Iterate over json_obj arrays:
+            size_t n_arrays = json_object_array_length(cmd_output);
+            for (size_t i = 0; i < n_arrays; i++) {
+                struct json_object *array_obj = json_object_array_get_idx(cmd_output, i);
+                process_node(s_node, array_obj, lys_flags, parent_data_node);
+            }
+        }
+    } else {
+        const struct lysc_node *s_child;
+        LY_LIST_FOR(lysc_node_child(s_node), s_child)
+        {
+            process_schema(s_child, lys_flags, parent_data_node);
+        }
+    }
+    if (cmd_output)
+        json_object_put(cmd_output);
+
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -630,17 +706,15 @@ void jarray_to_lyd(json_object *json_array_obj, const struct lysc_node *top_node
  * @param [in, out] parent: Pointer to the parent node for merging the data tree.
  * @return Returns an integer status code (SR_ERR_OK on success or an error code on failure).
  */
-int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
-                           struct lyd_node **parent)
+int load_module_data(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
+                     struct lyd_node **parent)
 {
     int ret = SR_ERR_OK;
     const struct ly_ctx *ly_ctx;
     const struct lys_module *module = NULL;
     struct lyd_node *data_tree = NULL;
-    struct json_object *json_obj;
 
     ly_ctx = sr_acquire_context(sr_session_get_connection(session));
-    json_obj = json_tokener_parse(json_buffer);
     module = ly_ctx_get_module_implemented(ly_ctx, module_name);
     if (module == NULL) {
         fprintf(stderr, "%s: Failed to get requested module schema, module name: %s\n", __func__,
@@ -649,32 +723,24 @@ int sr_set_oper_data_items(sr_session_ctx_t *session, const char *module_name, u
         goto cleanup;
     }
 
-    if (json_object_get_type(json_obj) == json_type_array) {
-        // Iterate over json_obj arrays:
-        size_t n_arrays = json_object_array_length(json_obj);
-        for (size_t i = 0; i < n_arrays; i++) {
-            struct json_object *array_obj = json_object_array_get_idx(json_obj, i);
-            jarray_to_lyd(array_obj, module->compiled->data, lys_flags, &data_tree);
-
-            /* 
-            Merge data_tree in parent node.
-            This operation will validate data_tree nodes before merging them.
-            It will drop nodes with validation failed
-            */
-            if (lyd_merge_tree(parent, data_tree, LYD_MERGE_DEFAULTS)) {
-                /* Merge of one json_array data_tree failed.
+    const struct lysc_node *node;
+    LY_LIST_FOR(module->compiled->data, node)
+    {
+        // Start with level 0 for top-level nodes, data_tree = NULL
+        //process_node(node, json_array_obj, lys_flags, data_tree);
+        process_schema(node, lys_flags, &data_tree);
+        if (lyd_merge_tree(parent, data_tree, LYD_MERGE_DEFAULTS)) {
+            /* Merge of one json_array data_tree failed.
                This is a partial failure, no need to return ERR. */
-                fprintf(stderr, "%s: Partial failure on pushing '%s' operational data\n", __func__,
-                        data_tree->schema->name);
-            }
-            // Free data_tree after merging it.
-            lyd_free_tree(data_tree);
-            data_tree = NULL;
+            fprintf(stderr, "%s: Partial failure on pushing '%s' operational data\n", __func__,
+                    data_tree->schema->name);
         }
+        // Free data_tree after merging it.
+        lyd_free_tree(data_tree);
+        data_tree = NULL;
     }
 
 cleanup:
-    json_object_put(json_obj);
     sr_release_context(sr_session_get_connection(session));
     return ret;
 }
