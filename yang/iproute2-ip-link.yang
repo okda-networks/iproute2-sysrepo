@@ -39,6 +39,28 @@ module iproute2-ip-link {
             "This type is used by data models that need to reference
             interfaces.";
     }
+    typedef vti-ref {
+        type leafref {
+            path "/iplink:links/iplink:vti/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference
+            interfaces.";
+    }
+    typedef vlan-ref {
+        type leafref {
+            path "/iplink:links/iplink:vlan/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference
+            interfaces.";
+    }
+    typedef l3-links-ref {
+        type union{
+            type link-ref;
+            type vti-ref;
+        }
+    }
 
     /*
     * Identities
@@ -136,12 +158,6 @@ module iproute2-ip-link {
         base link-type;
         description
             "rtnetlink wifi simulation device.";
-    }
-
-    identity vlan {
-        base link-type;
-        description
-            "VLAN device.";
     }
 
     identity veth {

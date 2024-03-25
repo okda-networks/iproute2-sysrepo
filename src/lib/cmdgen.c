@@ -715,23 +715,59 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
     {
         if (next->schema->nodetype == LYS_LEAF) {
             LY_DATA_TYPE type = ((struct lysc_node_leaf *)next->schema)->type->basetype;
-            if (type == LY_TYPE_LEAFREF) {
-                // get the schema node of the leafref.
-                struct lysc_type_leafref *leafref =
-                    (struct lysc_type_leafref *)((struct lysc_node_leaf *)next->schema)->type;
+            // union might have leafrefs.
+            if (type == LY_TYPE_UNION) {
+                struct lysc_type_union *y_union_t = NULL;
                 struct ly_set *s_set;
-                ret = lys_find_expr_atoms(next->schema, next->schema->module, leafref->path,
-                                          leafref->prefixes, 0, &s_set);
-                if (s_set == NULL) {
-                    fprintf(stderr, "%s: failed to get target leafref for node \"%s\": %s\n",
-                            __func__, next->schema->name, ly_strerrcode(ret));
+                y_union_t = (struct lysc_type_union *)((struct lysc_node_leaf *)next->schema)->type;
+                LY_ARRAY_COUNT_TYPE i_sized;
+                LY_ARRAY_FOR(y_union_t->types, i_sized)
+                {
+                    // get the schema node of the leafref.
+                    struct lysc_node *target_startcmd_y_node = NULL;
+
+                    struct lysc_type_leafref *lref_t =
+                        (struct lysc_type_leafref *)y_union_t->types[i_sized];
+                    ret = lys_find_expr_atoms(next->schema, next->schema->module, lref_t->path,
+                                              lref_t->prefixes, 0, &s_set);
+                    if (s_set == NULL) {
+                        printf("%s: failed to get target leafref for node \"%s\": %s\n", __func__,
+                               next->schema->name, ly_strerrcode(ret));
+                        return EXIT_FAILURE;
+                    }
+                    target_startcmd_y_node = s_set->snodes[s_set->count - 2];
+
+                    char xpath[1024] = { 0 }, dxpath[1024] = { 0 };
+                    // get the xpath of the schema node.
+                    lysc_path(target_startcmd_y_node, LYSC_PATH_DATA_PATTERN, xpath, 1024);
+                    // create data xpath for the schema node (add list predicate).
+                    sprintf(dxpath, xpath, lyd_get_value(next));
+
+                    ret = lyd_find_path(all_change_nodes, dxpath, 0, &lefref_node);
+
+                    if (ret == LY_SUCCESS) {
+                        if (dup_and_insert_node(found_leafrefs, lefref_node) != EXIT_SUCCESS) {
+                            fprintf(stderr, "%s: failed to insert dependency leafref `%s`: %s.\n",
+                                    __func__, lefref_node->schema->name, ly_strerrcode(ret));
+                            return EXIT_FAILURE;
+                        }
+                    }
+                }
+            } else if (type == LY_TYPE_LEAFREF) {
+                // get the schema node of the leafref.
+
+                struct lysc_node *target_startcmd_y_node = NULL, *target_y_node = NULL;
+                target_y_node = (struct lysc_node *)lysc_node_lref_target(next->schema);
+                if (target_y_node == NULL) {
+                    fprintf(stderr, "%s: failed to get target leafref for node \"%s\"\n", __func__,
+                            next->schema->name);
                     return EXIT_FAILURE;
                 }
-                struct lysc_node *y_node = s_set->snodes[s_set->count - 2];
+                target_startcmd_y_node = target_y_node->parent;
 
                 char xpath[1024] = { 0 }, dxpath[1024] = { 0 };
                 // get the xpath of the schema node.
-                lysc_path(y_node, LYSC_PATH_DATA_PATTERN, xpath, 1024);
+                lysc_path(target_startcmd_y_node, LYSC_PATH_DATA_PATTERN, xpath, 1024);
                 // create data xpath for the schema node (add list predicate).
                 sprintf(dxpath, xpath, lyd_get_value(next));
 
