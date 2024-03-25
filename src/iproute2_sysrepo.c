@@ -471,19 +471,11 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
     return ret;
 }
 
-int load_module_data(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
-                     struct lyd_node **parent)
+int apply_ipr2_cmd(char *ipr2_show_cmd)
 {
     int ret;
-    char *ipr2_show_cmd, **argv;
+    char **argv;
     int argc;
-    ipr2_show_cmd = get_module_sh_startcmd(module_name);
-    if (ipr2_show_cmd == NULL) {
-        fprintf(stderr,
-                "%s: failed to get show command for operational data request, module name %s.\n",
-                __func__, module_name);
-        return SR_ERR_CALLBACK_FAILED;
-    }
 
     parse_command(ipr2_show_cmd, &argc, &argv);
     jump_set = 1;
@@ -493,17 +485,17 @@ int load_module_data(sr_session_ctx_t *session, const char *module_name, uint16_
         ret = SR_ERR_CALLBACK_FAILED;
         goto exit_check_done;
     }
+    fprintf(stdout, "%s: executing command: %s\n", __func__, ipr2_show_cmd);
     ret = do_cmd(argc, argv);
 exit_check_done:
     if (ret != EXIT_SUCCESS) {
-        fprintf(stderr, "%s: iproute2 command failed, cmd = ", __func__);
+        fprintf(stderr, "%s: iproute2 command execution failed, cmd = ", __func__);
         print_cmd_line(argc, argv);
         ret = SR_ERR_CALLBACK_FAILED;
     } else {
-        ret = sr_set_oper_data_items(session, module_name, lys_flags, parent);
+        ret = SR_ERR_OK;
     }
     jump_set = 0;
-    free(ipr2_show_cmd);
     free_argv2(argv, argc);
     return ret;
 }

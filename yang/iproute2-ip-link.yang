@@ -420,6 +420,7 @@ module iproute2-ip-link {
                 error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
             }
             ipr2cgen:arg-name "link";
+            ipr2cgen:oper-arg-name "link";
             type link-ref;
 
             description "specifies the physical device to act operate on";
@@ -616,17 +617,20 @@ module iproute2-ip-link {
 
     grouping tunnel-common {
         leaf local {
+            ipr2cgen:oper-value-map "any:0.0.0.0";
             type inet:ipv4-address;
             description "specifies the fixed local ipv4 address for tunneled packets.
             It must be an address on another interface on the host.";
             default "0.0.0.0";
         }
         leaf remote {
+            ipr2cgen:oper-value-map "any:0.0.0.0";
             type inet:ipv4-address;
             description "specifies the remote ipv4 address of the tunnel.";
             default "0.0.0.0";
         }
         leaf dev {
+            ipr2cgen:oper-arg-name "link";
             type link-ref;
             description "specifies the physical device to use for tunnel endpoint communication.";
         }
@@ -650,9 +654,11 @@ module iproute2-ip-link {
         description "ip-link - network device configuration";
         list vrf{
             ipr2cgen:cmd-start;
+            ipr2cgen:oper-cmd "ip link show type vrf";
             key "name";
             leaf name {
                 ipr2cgen:after-node-add-static-arg "type vrf";
+                ipr2cgen:oper-arg-name "ifname";
                 type string;
                 description "vrf name";
             }
@@ -663,6 +669,8 @@ module iproute2-ip-link {
         }
         list link {
             ipr2cgen:cmd-start;
+            ipr2cgen:oper-cmd "ip link show";
+            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\"]}";
             key "name";
             description "ip-link - network device";
             leaf name {
@@ -713,8 +721,10 @@ module iproute2-ip-link {
         }
         list vti {
             ipr2cgen:cmd-start;
+            ipr2cgen:oper-cmd "ip link show type vti";
             key "name";
             leaf name {
+                ipr2cgen:oper-arg-name "ifname";
                 type string;
                 description "vti tunnel interface name";
             }
@@ -736,8 +746,10 @@ module iproute2-ip-link {
         }
         list vlan {
             ipr2cgen:cmd-start;
+            ipr2cgen:oper-cmd "ip link show type vlan";
             key "name";
             leaf name {
+                ipr2cgen:oper-arg-name "ifname";
                 type string;
                 description "vlan name";
             }
@@ -753,6 +765,7 @@ module iproute2-ip-link {
                 }
                 description "vlan type interface paramters";
                 leaf protocol {
+                    ipr2cgen:oper-value-map "802.1Q:802.1q;802.1AD:802.1ad";
                     description "VLAN_PROTO - either 802.1Q or 802.1ad.";
                     default "802.1q";
                     type enumeration {
@@ -765,6 +778,8 @@ module iproute2-ip-link {
                     description "VLAN ID";
                 }
                 leaf reorder_hdr {
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "REORDER_HDR:on;FLAG-UNSET:off";
                     description "{ on | off } - specifies whether ethernet headers are reordered or not (default is on).";
                     type enumeration {
                         enum "on";
@@ -772,6 +787,8 @@ module iproute2-ip-link {
                     }
                 }
                 leaf gvrp {
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "GVRP:on;FLAG-UNSET:off";
                     description "{ on | off } - specifies whether this VLAN should be
                     registered using GARP VLAN Registration Protocol.";
                     type enumeration {
@@ -780,6 +797,8 @@ module iproute2-ip-link {
                     }
                 }
                 leaf mvrp {
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "MVRP:on;FLAG-UNSET:off";
                     description "{ on | off } - specifies whether this VLAN should be registered
                     using Multiple VLAN Registration Protocol.";
                     type enumeration {
@@ -788,6 +807,8 @@ module iproute2-ip-link {
                     }
                 }
                 leaf loose_binding {
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "LOOSE_BINDING:on;FLAG-UNSET:off";
                     description "{ on | off } - specifies whether the VLAN device state is bound to the
                     physical device state.";
                     type enumeration {
@@ -796,6 +817,8 @@ module iproute2-ip-link {
                     }
                 }
                 leaf bridge_binding {
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "BRIDGE_BINDING:on;FLAG-UNSET:off";
                     description "{ on | off } - specifies whether the VLAN device link state tracks the state
                     of bridge ports that are members of the VLAN.";
                     type enumeration {
