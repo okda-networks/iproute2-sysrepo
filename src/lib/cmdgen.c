@@ -849,7 +849,14 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     // this is needed when fetching data from sr, otherwise the fetch will fail.
     struct lyd_node *rollback_dnode_parent = NULL;
     lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_FLAGS, &rollback_dnode_parent);
-    lyd_insert_child(rollback_dnode_parent, rollback_dnode);
+    ret = lyd_insert_child(rollback_dnode_parent, rollback_dnode);
+    if (ret != LY_SUCCESS) {
+        fprintf(stderr, "%s: failed to insert rollback node to its parent node %s\n", __func__,
+                ly_strerrcode(ret));
+        lyd_free_all(rollback_dnode_parent);
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
 
     rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
     if (rollback_cmd_line == NULL) {
