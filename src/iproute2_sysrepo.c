@@ -603,8 +603,24 @@ int sysrepo_start()
         fprintf(stderr, "%s: sr_session_start(): %s\n", __func__, sr_strerror(ret));
         goto cleanup;
     }
+
+    /* load linux running config, this will replace running_ds content */
     load_linux_running_config();
+
+    /* subscribe to config changes on running data store */
     sr_subscribe_config();
+
+    /* merge startup datastore into running datastore, this will trigger config
+    changes on running_ds that will be picked up by config change subcribtion and
+    apply the change */
+    ret = sr_copy_config(sr_session, NULL, SR_DS_STARTUP, 0);
+    if (ret != SR_ERR_OK) {
+        fprintf(stderr, "%s: Error by on applying startup config: %s\n", __func__,
+                sr_strerror(ret));
+        goto cleanup;
+    }
+
+    /* subscribe to operational data pull requests */
     sr_subscribe_operational_pull();
 
     /* loop until ctrl-c is pressed / SIGINT is received */

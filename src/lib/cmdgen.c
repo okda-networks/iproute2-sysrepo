@@ -169,13 +169,19 @@ char *strip_yang_iden_prefix(const char *input)
  * @param [in]dnode lyd_node
  * @return oper_t the time of the operation found on this lyd_node.
  */
-oper_t get_operation(const struct lyd_node *dnode)
+oper_t get_operation(struct lyd_node *dnode)
 {
     struct lyd_meta *dnode_meta = NULL;
     const char *operation;
     dnode_meta = lyd_find_meta(dnode->meta, NULL, "yang:operation");
-    if (dnode_meta == NULL)
-        return UNKNOWN_OPR;
+    if (dnode_meta == NULL) {
+        /* set dnode operation to "none" if its not set */
+        operation = "none";
+        const struct ly_ctx *ctx = sr_acquire_context(sr_session_get_connection(sr_session));
+        lyd_new_meta(ctx, dnode, NULL, "yang:operation", operation, 0, NULL);
+        sr_release_context(sr_session_get_connection(sr_session));
+        return UPDATE_OPR;
+    }
     operation = lyd_get_meta_value(dnode_meta);
     if (!strcmp("create", operation))
         return ADD_OPR;
@@ -849,8 +855,11 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     // this is needed when fetching data from sr, otherwise the fetch will fail.
     struct lyd_node *rollback_dnode_parent = NULL;
     lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_FLAGS, &rollback_dnode_parent);
-    lyd_insert_child(rollback_dnode_parent, rollback_dnode);
-
+    if (lyd_insert_child(rollback_dnode_parent, rollback_dnode) != LY_SUCCESS) {
+        fprintf(stderr, "%s: failed to insert rollback node to its parent node\n", __func__);
+        lyd_free_all(rollback_dnode_parent);
+        goto cleanup;
+    }
     rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
     if (rollback_cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n", __func__,
