@@ -83,5 +83,7 @@ jobs:
           fi
       - name: yanglint
         run: make check
-      - name: run iproute2-sysrepo tests
-        run : chmod +x tests/run_tests.sh && sudo ./tests/run_tests.sh
+      - name: load yang modules to sysrepo
+        run : chmod +x tests/load_yang_modules.sh && sudo ./tests/load_yang_modules.sh
+      - name: run iproute2-sysrepo configuration tests
+        run : chmod +x tests/run_config_tests.sh && sudo ./tests/run_config_tests.sh
