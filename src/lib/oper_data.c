@@ -41,7 +41,7 @@ extern int apply_ipr2_cmd(char *ipr2_show_cmd);
 int process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
                  struct lyd_node **parent_data_node);
 
-void free_list_params(const char ***key_values, int **values_lengths, int key_count)
+void free_list_params(const char ***key_values, uint32_t **values_lengths, int key_count)
 {
     if (*key_values) {
         for (int i = 0; i < key_count; ++i) {
@@ -128,7 +128,7 @@ int get_lys_extension(oper_extension_t ex_t, const struct lysc_node *s_node, cha
  * @return Returns EXIT_SUCCESS if keys are successfully extracted; otherwise, returns EXIT_FAILURE.
  */
 int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj,
-                  const char ***key_values, int **values_lengths, int *keys_num)
+                  const char ***key_values, uint32_t **values_lengths, int *keys_num)
 {
     int ret = EXIT_SUCCESS;
     int key_count = 0;
@@ -487,7 +487,8 @@ void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_
 {
     const struct lysc_node_list *list = (const struct lysc_node_list *)s_node;
     const char **key_values;
-    int *values_lengths, keys_count;
+    uint32_t *values_lengths;
+    int keys_count;
     if (get_list_keys(list, json_obj, &key_values, &values_lengths, &keys_count) == EXIT_SUCCESS) {
         add_missing_parents(s_node, parent_data_node);
         struct lyd_node *new_data_node = NULL;
@@ -629,6 +630,7 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
         break;
     }
     free(arg_name);
+    return EXIT_SUCCESS;
 }
 
 /**
