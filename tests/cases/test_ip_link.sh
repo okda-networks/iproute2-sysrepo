@@ -89,6 +89,20 @@ else
     exit 1
 fi
 
+# Step 3: add ip address 5.5.5.5/24
+sysrepocfg -S '/iproute2-ip-link:links/link[name="testIf0"]/ipv4[address="5.5.5.5/24"]' --value n
+
+# Step 4: check ip address added
+current_ip=($(ip address show testIf0 2>/dev/null | awk '/inet / {print $2}' | head -n 2))
+
+# Step 5: check if both ips added to testIf0
+if [ "${current_ip[0]}" = "4.4.4.4/32" -a "${current_ip[1]}" = "5.5.5.5/24" ]; then
+    echo "TEST-INFO:  IPv4 link testIf0 updated successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to update IPv4 for IP link testIf0, current_ip[0]=${current_ip[0]}, current_ip[1]=${current_ip[1]} (FAIL)"
+    exit 1
+fi
+
 # Step 3: Check if the qos-map for IP vlan10 is updated by iproute2-sysrepo
 sysrepocfg -S '/iproute2-ip-link:links/vlan[name="vlan10"]/vlan-info/egress-qos-map' --value 10:31
 

@@ -31,6 +31,42 @@ module iproute2-ip-link {
     * Typedefs
     */
 
+    typedef ipv4-with-cider{
+    // we can't use inet, as libyang does subnetting to inet:ipv4-prefix.
+        type string {
+            pattern
+                '(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}'
+                +  '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])'
+                + '/(([0-9])|([1-2][0-9])|(3[0-2]))';
+        }
+        description
+            "ipv4 address with mask, e.g: 192.168.1.1/24";
+    }
+    typedef ipv6-with-cider {
+        type string {
+            pattern '((:|[0-9a-fA-F]{0,4}):)([0-9a-fA-F]{0,4}:){0,5}'
+            + '((([0-9a-fA-F]{0,4}:)?(:|[0-9a-fA-F]{0,4}))|'
+            + '(((25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}'
+            + '(25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])))'
+            + '(/(([0-9])|([0-9]{2})|(1[0-1][0-9])|(12[0-8])))';
+            pattern '(([^:]+:){6}(([^:]+:[^:]+)|(.*\..*)))|'
+            + '((([^:]+:)*[^:]+)?::(([^:]+:)*[^:]+)?)'
+            + '(/.+)';
+        }
+        description
+            "ipv6 address with mask, e.g: 201::4/64";
+    }
+    typedef ip-with-cider {
+        type union {
+            type ipv4-with-cider;
+            type ipv6-with-cider;
+        }
+        description
+            "The ip-prefix type represents an IP prefix and is IP
+            version neutral.  The format of the textual representations
+            implies the IP version.";
+    }
+
     typedef link-ref {
         type leafref {
             path "/iplink:links/iplink:link/iplink:name";
@@ -664,12 +700,12 @@ module iproute2-ip-link {
     }
 
     container links {
-        ipr2cgen:cmd-add "ip link add";
-        ipr2cgen:cmd-update "ip link set";
-        ipr2cgen:cmd-delete "ip link delete";
         description "ip-link - network device configuration";
         list vrf{
             ipr2cgen:cmd-start;
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:oper-cmd "ip link show type vrf";
             key "name";
             leaf name {
@@ -684,6 +720,9 @@ module iproute2-ip-link {
             }
         }
         list link {
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip link show";
             ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\"]}";
@@ -699,6 +738,20 @@ module iproute2-ip-link {
             uses link-essentials;
             uses link-advance;
             uses link-layer2;
+            list ipv4 {
+                ipr2cgen:cmd-start;
+                ipr2cgen:cmd-add "ip address add";
+                ipr2cgen:cmd-update "ip address replace";
+                ipr2cgen:cmd-delete "ip address del";
+                description "link ipv4 address";
+                key "address";
+                leaf address {
+                    ipr2cgen:after-node-add-static-arg "dev (../../name)";
+                    ipr2cgen:value-only;
+                    description "ip address with cider, e.g 192.168.1.1/24";
+                    type ipv4-with-cider;
+                }
+            }
             leaf type {
                 ipr2cgen:oper-arg-name "info_kind";
                 type identityref {
@@ -736,6 +789,9 @@ module iproute2-ip-link {
             uses link-state;
         }
         list vti {
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip link show type vti";
             key "name";
@@ -761,6 +817,9 @@ module iproute2-ip-link {
             uses link-state;
         }
         list vlan {
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip link show type vlan";
             key "name";
