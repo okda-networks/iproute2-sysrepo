@@ -927,7 +927,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-add "ip link add";
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
-//            ipr2cgen:oper-cmd "ip link show type brdige"; // will be added after #84 is fixed
+            ipr2cgen:oper-cmd "ip link show type bridge";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
