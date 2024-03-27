@@ -85,5 +85,7 @@ jobs:
         run: make check
       - name: load yang modules to sysrepo
         run : chmod +x tests/load_yang_modules.sh && sudo ./tests/load_yang_modules.sh
+      - name: run iproute2-sysrepo startup tests
+        run : chmod +x tests/run_startup_tests.sh && sudo ./tests/run_startup_tests.sh
       - name: run iproute2-sysrepo configuration tests
         run : chmod +x tests/run_config_tests.sh && sudo ./tests/run_config_tests.sh
