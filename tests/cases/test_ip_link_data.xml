@@ -9,6 +9,7 @@
     <link>
         <name>testIf0</name>
         <type>dummy</type>
+        <master>br1</master>
         <ipv4>
             <address>4.4.4.4/32</address>
         </ipv4>
@@ -25,4 +26,10 @@
             <id>10</id>
         </vlan-info>
     </vlan>
+    <bridge>
+        <name>br1</name>
+        <br-info>
+            <ageing_time>1000</ageing_time>
+        </br-info>
+    </bridge>
 </links>

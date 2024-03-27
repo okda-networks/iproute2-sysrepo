@@ -88,7 +88,15 @@ module iproute2-ip-link {
             path "/iplink:links/iplink:vlan/iplink:name";
         }
         description
-            "This type is used by data models that need to reference
+            "This type is used by data models that need to reference vlan
+            interfaces.";
+    }
+    typedef bridge-ref {
+        type leafref {
+            path "/iplink:links/iplink:bridge/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference bridge
             interfaces.";
     }
     typedef l3-links-ref {
@@ -208,12 +216,6 @@ module iproute2-ip-link {
             "vxcan device.";
     }
 
-    identity bridge {
-        base link-type;
-        description
-            "VLAN device.";
-    }
-
     identity ether {
         base oper-link-type;
         description
@@ -306,13 +308,16 @@ module iproute2-ip-link {
     grouping link-advance {
         leaf master{
             ipr2cgen:on-node-delete "nomaster";
-            type link-ref;
+            type union {
+                type link-ref;
+                type bridge-ref;
+            }
             description "add the link to master link";
             must "../master != ../name" {
                 error-message "cannot use same link as master link!";
             }
             must "(/links/link[name=current()/../master]/type = 'iplink:bond') or
-            (/links/link[name=current()/../master]/type = 'iplink:bridge')" {
+            (/links/bridge[name=current()/../master])" {
                 error-message "The master type must be 'bond' or 'bridge'.";
             }
         }
@@ -725,7 +730,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip link show";
-            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\"]}";
+            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bridge\"]}";
             key "name";
             description "ip-link - network device";
             leaf name {
@@ -914,6 +919,143 @@ module iproute2-ip-link {
                     }
                     description "defines a mapping of Linux internal packet priority to VLAN header prio field but
                     for outgoing frames.The format is FROM:TO with multiple mappings separated by spaces.";
+                }
+            }
+        }
+        list bridge {
+            ipr2cgen:cmd-start;
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
+            ipr2cgen:oper-cmd "ip link show type bridge";
+            key "name";
+            leaf name {
+                ipr2cgen:oper-arg-name "ifname";
+                type string;
+                description "brdige name";
+            }
+            uses link-essentials;
+            uses link-advance;
+            uses link-device;
+            uses link-layer2;
+            container br-info {
+                ipr2cgen:add-static-arg "type bridge";
+                description
+                    "bridge configuraions";
+                leaf ageing_time {
+                    type uint64;
+                    default 30000;
+                    description
+                        "GEING_TIME - configure the bridge's FDB entries ageing time,
+                        ie the number of seconds a MAC address will be kept in the FDB after
+                        a packet has been received from that address. after this time has passed,
+                        entries are cleaned up.";
+                }
+                leaf forward_delay {
+                    type uint64;
+                    default 1500;
+                    description
+                        "FORWARD_DELAY - set the forwarding delay in seconds, ie the time spent in LISTENING state
+                        (before moving to LEARNING) and in LEARNING state (before moving to FORWARDING).
+                        Only relevant if STP is enabled.";
+                }
+                leaf hello_time {
+                    type uint32{
+                        range "10..1000";
+                    }
+                    default 200;
+                    description
+                        "HELLO_TIME - set the time in seconds between hello packets sent by the bridge,
+                        when it is a root bridge or a designated bridges. Only relevant if STP is enabled.";
+
+                }
+                leaf max_age {
+                    type uint32;
+                    default 2000;
+                    description
+                        "MAX_AGE - set the hello packet timeout, ie the time in seconds until another
+                        bridge in the spanning tree is assumed to be dead, after reception of its last
+                        hello message. Only relevant if STP is enabled. Valid values are between 6 and 40.";
+                }
+                leaf stp_state {
+                    type enumeration{
+                        enum 0;
+                        enum 1;
+                    }
+                    default 0;
+                    description
+                        "STP_STATE - turn spanning tree protocol on (STP_STATE == 1) or off (STP_STATE == 0). for this bridge.";
+                }
+                leaf priority {
+                    type uint16;
+                    default 32768;
+                    description
+                        "PRIORITY - set this bridge's spanning tree priority, used during STP root bridge election.";
+                }
+                leaf vlan_filtering {
+                    type enumeration{
+                        enum 0;
+                        enum 1;
+                    }
+                    default 0;
+                    description
+                        "VLAN_FILTERING - turn VLAN filtering on (VLAN_FILTERING == 0) or off (VLAN_FILTERING == 0).
+                        When disabled, the bridge will not consider the VLAN tag when handling packets.";
+                }
+                leaf vlan_protocol {
+                    type enumeration{
+                        enum "802.1Q";
+                        enum "802.1ad";
+                    }
+                    default "802.1Q";
+                    description
+                        "set the protocol used for VLAN filtering.";
+                }
+                leaf vlan_default_pvid {
+                    type uint16;
+                    default 1;
+                    description
+                        "VLAN_DEFAULT_PVID - set the default PVID (native/untagged VLAN ID) for this bridge.";
+                }
+                leaf vlan_stats_enabled {
+                    type enumeration {
+                        enum 0;
+                        enum 1;
+                    }
+                    default 1;
+                    description
+                        "VLAN_STATS_ENABLED - enable (VLAN_STATS_ENABLED == 1) or disable (VLAN_STATS_ENABLED == 0)
+                        per-VLAN stats accounting.";
+                }
+                leaf vlan_stats_per_port {
+                    type enumeration {
+                        enum 0;
+                        enum 1;
+                    }
+                    default 0;
+                    description
+                        "VLAN_STATS_PER_PORT - enable (VLAN_STATS_PER_PORT == 1) or disable (VLAN_STATS_PER_PORT == 0)
+                        per-VLAN per-port stats accounting. Can be changed only when there are no port VLANs configured.";
+                }
+                leaf nf_call_iptables {
+                    type enumeration {
+                        enum 0;
+                        enum 1;
+                    }
+                    default 0;
+                    description
+                        "NF_CALL_IPTABLES - enable (NF_CALL_IPTABLES == 1) or disable
+                        (NF_CALL_IPTABLES == 0) iptables hooks on the bridge.";
+                }
+                leaf nf_call_arptables {
+                    type enumeration {
+                        enum 0;
+                        enum 1;
+                    }
+                    default 0;
+                    description
+                        "NF_CALL_ARPTABLES - enable (NF_CALL_ARPTABLES = 1) or disable (NF_CALL_ARPTABLES == 0)
+                        arptables hooks on the bridge.";
                 }
             }
         }

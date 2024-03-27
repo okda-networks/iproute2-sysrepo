@@ -14,6 +14,12 @@
 # 2. Test updating link
 # 3. Test deleting link
 #####################################################################
+if_clean_up(){
+  ip link del vti_if1
+  ip link del br1
+  ip link del testIf0
+  ip link del testIf1
+}
 
 ret=0
 ####################################################################
@@ -36,6 +42,7 @@ if ip link show testIf0 >/dev/null 2>&1; then
     echo "TEST-INFO: IP link testIf0 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP link testIf0"
+    if_clean_up
     exit 1
 fi
 
@@ -44,6 +51,7 @@ if ip link show testIf1 >/dev/null 2>&1; then
     echo "TEST-INFO: IP link testIf1 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP link testIf1 (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -52,6 +60,7 @@ if ip link show vlan10 >/dev/null 2>&1; then
     echo "TEST-INFO: IP link vlan10 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP link vlan10 (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -60,6 +69,16 @@ if ip link show vti_if1 >/dev/null 2>&1; then
     echo "TEST-INFO: IP link vti_if1 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP link vti_if1 (FAIL)"
+    if_clean_up
+    exit 1
+fi
+
+# Step 6: Check if bridge br1 is created
+if ip link show br1 >/dev/null 2>&1; then
+    echo "TEST-INFO: bridge link br1 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create bridge br1 (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -79,6 +98,7 @@ current_mtu=$(ip link show dev testIf0 2>/dev/null | grep -oP '(?<=mtu )\d+' | h
 
 if [ -z "$current_mtu" ]; then
     echo "TEST-ERROR: Failed to retrieve MTU for IP link testIf0"
+    if_clean_up
     exit 1
 fi
 
@@ -86,6 +106,7 @@ if [ "$current_mtu" -eq 1400 ]; then
     echo "TEST-INFO: MTU for IP link testIf0 updated successfully (OK)"
 else
     echo "TEST-ERROR: Failed to update MTU for IP link testIf0, current_mtu = $current_mtu (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -97,9 +118,10 @@ current_ip=($(ip address show testIf0 2>/dev/null | awk '/inet / {print $2}' | h
 
 # Step 5: check if both ips added to testIf0
 if [ "${current_ip[0]}" = "4.4.4.4/32" -a "${current_ip[1]}" = "5.5.5.5/24" ]; then
-    echo "TEST-INFO:  IPv4 link testIf0 updated successfully (OK)"
+    echo "TEST-INFO:  IPv4 link testIf0 updated successfully (OK)."
 else
     echo "TEST-ERROR: Failed to update IPv4 for IP link testIf0, current_ip[0]=${current_ip[0]}, current_ip[1]=${current_ip[1]} (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -113,6 +135,7 @@ egress_qos_map=$(ip -d link show vlan10 | grep -oP 'egress-qos-map \{\s*\K[^\}]+
 # Check if egress_qos_map is empty
 if [ -z "$egress_qos_map" ]; then
     echo "TEST-ERROR: Failed to retrieve egress-qos-map for vlan10"
+    if_clean_up
     exit 1
 fi
 
@@ -121,6 +144,7 @@ if [[ "$egress_qos_map" =~ "10:7" ]]; then
     echo "TEST-INFO: egress-qos-map updated on vlan10  (OK)"
 else
     echo "TEST-ERROR: egress-qos-map for vlan10 is incorrect, egress-qos-map = $egress_qos_map (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -135,6 +159,7 @@ if [ "$ikey_value" = "0.0.0.100" ]; then
     echo "TEST-INFO: ikey for vti vti_if1 updated successfully (OK)"
 else
     echo "TEST-ERROR: Failed to update ikey for vti vti_if1, ikey_value = $ikey_value (FAIL)"
+    if_clean_up
     exit 1
 fi
 
