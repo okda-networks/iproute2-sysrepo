@@ -128,6 +128,51 @@ void free_cmds_info(struct cmd_info **cmds_info)
 }
 
 /**
+ * @brief this function will extract static_arg and xpath_arg from string input,
+ * example: if input = "dev (../../name)" -result-> static = dev, and xpath = ../../name
+ *          anything added between '(' ')' will be recognized as xpath_arg
+ * @param input [in] input string: "dev" or "dev (../../name)"
+ * @param static_arg [out] extracted static arg, e.a "dev"
+ * @param xpath_arg [out]  extracted xpath arg, e.a "../../name" if there is any
+ */
+void extract_satic_and_xpath_args(char *input, char **static_arg, char **xpath_arg)
+{
+    // Find the position of '(' and ')'
+    char *start = strchr(input, '(');
+    char *end = strrchr(input, ')');
+
+    if (start != NULL && end != NULL && start < end) {
+        // If '(' and ')' are found and '(' comes before ')', treat as static (first) and dynamic (second) parts
+        size_t first_len = start - input;
+        size_t second_len = end - start - 1;
+
+        *static_arg = malloc(first_len + 1);
+        *xpath_arg = malloc(second_len + 1);
+        if (*static_arg == NULL || *xpath_arg == NULL) {
+            printf("Memory allocation failed\n");
+            exit(1);
+        }
+
+        strncpy(*static_arg, input, first_len);
+        (*static_arg)[first_len] = '\0';
+        strncpy(*xpath_arg, start + 1, second_len);
+        (*xpath_arg)[second_len] = '\0';
+    } else {
+        // If '(' and ')' are not found or '(' comes after ')', treat the whole string as the first part
+        size_t input_len = strlen(input);
+        *static_arg = malloc(input_len + 1);
+        if (*static_arg == NULL) {
+            printf("Memory allocation failed\n");
+            exit(1);
+        }
+
+        strncpy(*static_arg, input, input_len);
+        (*static_arg)[input_len] = '\0';
+        *xpath_arg = NULL; // No second part
+    }
+}
+
+/**
  * if input is "iproute2-ip-link:dummy" it return "dummy"
  * @param [in] input string to be stripped.
  * @return the extracted string
@@ -188,26 +233,6 @@ oper_t get_operation(const struct lyd_node *dnode)
 }
 
 /**
- * check if this node is cmd-start node.
- * example in yang the list nexthop is where the cmd-start ext added.
- * @param [in] dnode lyd_node
- * @return 1 if ext found.
- */
-int is_startcmd_node(struct lyd_node *dnode)
-{
-    const struct lysc_node *schema = dnode->schema;
-    LY_ARRAY_COUNT_TYPE i;
-    LY_ARRAY_FOR(schema->exts, i)
-    {
-        if (schema->exts != NULL) {
-            if (!strcmp(schema->exts[i].def->name, "cmd-start"))
-                return 1;
-        }
-    }
-    return 0;
-}
-
-/**
  * get the extension from lyd_node,
  * @param [in] ex_t extension_t to be captured from lyd_node.
  * @param [in] dnode lyd_node where to search for provided ext.
@@ -230,6 +255,19 @@ int get_extension(extension_t ex_t, const struct lyd_node *dnode, char **value)
         }
     }
     return EXIT_FAILURE;
+}
+
+/**
+ * check if this node is cmd-start node.
+ * example in yang the list nexthop is where the cmd-start ext added.
+ * @param [in] dnode lyd_node
+ * @return 1 if ext found.
+ */
+int is_startcmd_node(struct lyd_node *dnode)
+{
+    if (get_extension(CMD_START_EXT, dnode, NULL) == EXIT_SUCCESS)
+        return 1;
+    return 0;
 }
 
 /**
@@ -432,14 +470,37 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
             *arg_value = (char *)strdup(lyd_get_value(dnode));
         char *add_static_arg;
         if (get_extension(AFTER_NODE_ADD_STATIC_ARG, dnode, &add_static_arg) == EXIT_SUCCESS) {
-            size_t final_arg_value_len = strlen(*arg_value) + strlen(add_static_arg) + 2;
-            char *final_arg_value = malloc(final_arg_value_len);
-            memset(final_arg_value, '\0', final_arg_value_len);
-            strlcat(final_arg_value, *arg_value, final_arg_value_len);
-            strlcat(final_arg_value, " ", final_arg_value_len);
-            strlcat(final_arg_value, add_static_arg, final_arg_value_len);
+            char *static_arg = NULL, *xpath_arg = NULL;
+            char fin_arg_value[1024] = { 0 };
+
+            extract_satic_and_xpath_args(add_static_arg, &static_arg, &xpath_arg);
+            strlcat(fin_arg_value, *arg_value, sizeof(fin_arg_value));
+            strlcat(fin_arg_value, " ", sizeof(fin_arg_value));
+            strlcat(fin_arg_value, static_arg, sizeof(fin_arg_value));
+
+            if (xpath_arg != NULL) {
+                struct ly_set *match_set = NULL;
+                int ret = lyd_find_xpath(dnode, xpath_arg, &match_set);
+                //                lyd_find_xpath(dnode, "../../name", &match_set);
+                if (match_set != NULL) {
+                    free(xpath_arg);
+                    xpath_arg = strdup(lyd_get_value(match_set->dnodes[0]));
+                    strlcat(fin_arg_value, xpath_arg, sizeof(fin_arg_value));
+                    //                    ly_set_free(match_set, NULL);
+                } else {
+                    fprintf(
+                        stderr,
+                        "%s: failed to get xpath_arg found in AFTER_NODE_ADD_STATIC_ARG extension."
+                        " for node = \"%s\" : %s\n",
+                        __func__, dnode->schema->name, sr_strerror(ret));
+                    // TODO: fine an exit way. the whole change should fail.
+                }
+            }
+            free(xpath_arg);
+            free(add_static_arg);
+            free(static_arg);
             free(*arg_value);
-            *arg_value = final_arg_value;
+            *arg_value = strdup(fin_arg_value);
         }
     }
 }
@@ -474,23 +535,40 @@ struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *no
 /**
  * create iproute2 arguments out of lyd2 node, this will take the op_val into consideration,
  * @param startcmd_node lyd_node to generate arg for, example link, nexthop, filter ... etc
+ * @param inner_startcmds
  * @param op_val operation value
  * @return
  */
-char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
+char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val,
+                       struct ly_set **inner_startcmds)
 {
     char cmd_line[CMD_LINE_SIZE] = { 0 };
 
     int ret;
     struct lyd_node *next;
-    LYD_TREE_DFS_BEGIN(startcmd_node, next)
+    LYD_TREE_DFS_BEGIN(lyd_child(startcmd_node), next) // skip the starcmd node itself
     {
         char *on_update_include = NULL, *add_static_arg = NULL;
         char *group_list_separator = NULL;
         char *group_leafs_values_separator = NULL;
         char *arg_name = NULL, *arg_value = NULL;
+start:
         switch (next->schema->nodetype) {
         case LYS_LIST:
+            // check if this is inner startcmd, to add it for inner_startcmds set to generate its
+            // cmd later.
+            if (is_startcmd_node(next)) {
+                // if the root startcmd is delete, we don't want to execute this cmd, just skip.
+                if (inner_startcmds != NULL && op_val != DELETE_OPR) {
+                    ly_set_add(*inner_startcmds, next, 1, NULL);
+                }
+                if (next->next) { // move to next sibling and start from beginning,
+                    next = next->next;
+                    goto start;
+                } else
+                    goto done; // no more sibling, go to done.
+            }
+
         case LYS_CONTAINER:
             // if this and empty "when all container" skip.
             // if when condition added, the continer will be included in the lyd tree even if
@@ -635,10 +713,12 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
         }
         LYD_TREE_DFS_END(startcmd_node, next);
     }
+done:
     return strdup(cmd_line);
 }
 
-char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
+char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
+                   struct ly_set **inner_startcmds)
 {
     oper_t op_val;
     char cmd_line[CMD_LINE_SIZE] = { 0 };
@@ -653,7 +733,7 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     // add cmd prefix to the cmd_line
     strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
     // get the cmd args for the startcmd_node
-    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val);
+    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val, inner_startcmds);
     if (cmd_args == NULL) {
         fprintf(stderr, "%s: failed to create cmdline arguments for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
@@ -805,9 +885,10 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     char *oper2cmd_prefix[3] = { NULL };
     char *cmd_line = NULL, *rollback_cmd_line = NULL;
     struct lyd_node *rollback_dnode = NULL;
+    struct ly_set *inner_startcmds = NULL;
+    ly_set_new(&inner_startcmds);
     // first get the add, update, delete cmds prefixis from schema extensions
-    if (get_extension(CMD_ADD_EXT, lyd_parent(startcmd_node), &oper2cmd_prefix[ADD_OPR]) !=
-        EXIT_SUCCESS) {
+    if (get_extension(CMD_ADD_EXT, startcmd_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
         fprintf(stderr,
                 "%s: cmd-add extension is missing from root container "
                 "make sure root container has ipr2cgen:cmd-add\n",
@@ -815,7 +896,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         ret = EXIT_FAILURE;
         goto cleanup;
     }
-    if (get_extension(CMD_DELETE_EXT, lyd_parent(startcmd_node), &oper2cmd_prefix[DELETE_OPR]) !=
+    if (get_extension(CMD_DELETE_EXT, startcmd_node, &oper2cmd_prefix[DELETE_OPR]) !=
         EXIT_SUCCESS) {
         fprintf(stderr,
                 "%s: cmd-delete extension is missing from root container "
@@ -824,7 +905,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         ret = EXIT_FAILURE;
         goto cleanup;
     }
-    if (get_extension(CMD_UPDATE_EXT, lyd_parent(startcmd_node), &oper2cmd_prefix[UPDATE_OPR]) !=
+    if (get_extension(CMD_UPDATE_EXT, startcmd_node, &oper2cmd_prefix[UPDATE_OPR]) !=
         EXIT_SUCCESS) {
         fprintf(stderr,
                 "%s: ipr2cgen:cmd-update extension is missing from root container "
@@ -834,7 +915,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
+    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix, &inner_startcmds);
     if (cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
@@ -848,7 +929,8 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     // the rollback_node into the duplicated parent.
     // this is needed when fetching data from sr, otherwise the fetch will fail.
     struct lyd_node *rollback_dnode_parent = NULL;
-    lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_FLAGS, &rollback_dnode_parent);
+    lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_PARENTS | LYD_DUP_WITH_FLAGS,
+                   &rollback_dnode_parent);
     ret = lyd_insert_child(rollback_dnode_parent, rollback_dnode);
     if (ret != LY_SUCCESS) {
         fprintf(stderr, "%s: failed to insert rollback node to its parent node %s\n", __func__,
@@ -858,7 +940,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
+    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix, NULL);
     if (rollback_cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n", __func__,
                 rollback_dnode->schema->name);
@@ -866,6 +948,16 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
     ret = add_command(cmds, cmd_idx, cmd_line, rollback_cmd_line);
+    if (inner_startcmds->count > 0) {
+        for (int i = 0; i < inner_startcmds->count; i++) {
+            ret = add_cmd_info_core(cmds, cmd_idx, inner_startcmds->dnodes[i]);
+            if (ret != EXIT_SUCCESS) {
+                fprintf(stderr, "%s: failed to generate ipr2 cmd for inner_startcmd node \"%s\" \n",
+                        __func__, inner_startcmds->dnodes[i]->schema->name);
+                goto cleanup;
+            }
+        }
+    }
 
 cleanup:
     if (cmd_line)
@@ -880,6 +972,8 @@ cleanup:
         free(oper2cmd_prefix[UPDATE_OPR]);
     if (oper2cmd_prefix[DELETE_OPR])
         free(oper2cmd_prefix[DELETE_OPR]);
+    if (inner_startcmds)
+        ly_set_free(inner_startcmds, NULL);
     return ret;
 }
 

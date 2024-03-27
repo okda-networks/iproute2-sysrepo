@@ -9,6 +9,9 @@
     <link>
         <name>testIf0</name>
         <type>dummy</type>
+        <ipv4>
+            <address>4.4.4.4/32</address>
+        </ipv4>
     </link>
     <link>
         <name>testIf1</name>
