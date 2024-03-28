@@ -56,7 +56,7 @@ module iproute2-ip-link {
         description
             "ipv6 address with mask, e.g: 201::4/64";
     }
-    typedef ip-with-cider {
+    typedef ip-address-with-cider {
         type union {
             type ipv4-with-cider;
             type ipv6-with-cider;
@@ -743,7 +743,7 @@ module iproute2-ip-link {
             uses link-essentials;
             uses link-advance;
             uses link-layer2;
-            list ipv4 {
+            list ip {
                 ipr2cgen:cmd-start;
                 ipr2cgen:cmd-add "ip address add";
                 ipr2cgen:cmd-update "ip address replace";
@@ -754,7 +754,7 @@ module iproute2-ip-link {
                     ipr2cgen:after-node-add-static-arg "dev (../../name)";
                     ipr2cgen:value-only;
                     description "ip address with cider, e.g 192.168.1.1/24";
-                    type ipv4-with-cider;
+                    type ip-address-with-cider;
                 }
             }
             leaf type {
