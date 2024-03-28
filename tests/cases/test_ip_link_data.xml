@@ -21,6 +21,18 @@
         <name>testIf1</name>
         <type>dummy</type>
     </link>
+    <link>
+        <name>testIf2</name>
+        <type>dummy</type>
+    </link>
+    <vxlan>
+        <name>vxlan20</name>
+        <vxlan-info>
+            <id>20</id>
+            <dev>testIf2</dev>
+            <srcport>0 10</srcport>
+        </vxlan-info>
+    </vxlan>
     <vlan>
         <name>vlan10</name>
         <device>testIf1</device>

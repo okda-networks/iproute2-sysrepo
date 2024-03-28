@@ -730,7 +730,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip link show";
-            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bridge\"]}";
+            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bridge\", \"vxlan\"]}";
             key "name";
             description "ip-link - network device";
             leaf name {
@@ -919,6 +919,207 @@ module iproute2-ip-link {
                     }
                     description "defines a mapping of Linux internal packet priority to VLAN header prio field but
                     for outgoing frames.The format is FROM:TO with multiple mappings separated by spaces.";
+                }
+            }
+        }
+        list vxlan {
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
+            ipr2cgen:cmd-start;
+            key "name";
+            leaf name {
+                ipr2cgen:oper-arg-name "ifname";
+                type string;
+                description "vxlan name";
+            }
+            uses link-essentials;
+            uses link-advance;
+            uses link-device;
+            uses link-layer2;
+            container vxlan-info {
+                ipr2cgen:add-static-arg "type vxlan";
+                description "vxlan configurations";
+                leaf id {
+                    type uint64;
+                    mandatory true;
+                    description
+                        "VNI - specifies the VXLAN Network Identifier (or VXLAN Segment Identifier) to use.";
+                }
+                leaf dev {
+                    type link-ref;
+                    mandatory true;
+                    description
+                        "PHYS_DEV - specifies the physical device to use for tunnel endpoint communication.";
+                }
+                choice remote-or-grp {
+                    case mcast-group{
+                        leaf group {
+                            type inet:ip-address;
+                            description
+                                "IPADDR - specifies the multicast IP address to join.";
+                        }
+
+                    }
+                    case remote-address {
+                        leaf remote {
+                            type inet:ip-address;
+                            description
+                                "IPADDR - specifies the unicast destination IP address to use in outgoing packets
+                                when the destination link layer address is not known in the VXLAN device forwarding database.";
+                        }
+                    }
+                }
+                leaf local {
+                    type inet:ip-address;
+                    description
+                        "IPADDR - specifies the source IP address to use in outgoing packets.";
+                    default "0.0.0.0";
+                }
+                leaf ttl {
+                    type uint8{
+                        range "0..255";
+                    }
+                    description
+                        "TTL - specifies the TTL value to use in outgoing packets.";
+                    default 0;
+                }
+                leaf tos {
+                    type string {
+                        pattern '([0-9A-Fa-f]{2}){1}';
+                    }
+                    description
+                        "TOS - specifies the TOS value to use in outgoing packets.";
+                    default "00";
+                }
+                leaf df {
+                    type enumeration {
+                        enum "set";
+                        enum "unset";
+                        enum "inherit";
+
+                    }
+                    default "unset";
+                    description
+                        "DF - specifies the usage of the Don't Fragment flag (DF) bit in outgoing
+                        packets with IPv4 headers. The value inherit causes the bit to be copied from the original
+                        IP header. The values unset and set cause the bit to be always unset or always set,
+                        respectively. By default, the bit is not set.";
+                }
+                leaf dstport {
+                    type inet:port-number;
+                    default 8472;
+                    description
+                        "PORT - specifies the UDP destination port to communicate to the remote
+                        VXLAN tunnel endpoint.";
+                }
+                leaf srcport {
+                    type string {
+                        pattern '\d+\s+\d+';
+                    }
+                    default "0 0";
+                    description
+                        "MIN MAX - specifies the range of port numbers to use as UDP source ports
+                        to communicate to the remote VXLAN tunnel endpoint. example: 7770 7779";
+                }
+                leaf learning {
+                    ipr2cgen:on-node-delete "nolearning";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies if unknown source link layer addresses and IP addresses are entered
+                        into the VXLAN device forwarding database.";
+
+                }
+                leaf rsc {
+                    ipr2cgen:on-node-delete "norsc";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies if route short circuit is turned on.";
+
+                }
+                leaf proxy {
+                    ipr2cgen:on-node-delete "noproxy";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies ARP proxy is turned on.";
+
+                }
+                leaf l2miss {
+                    ipr2cgen:on-node-delete "nol2miss";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies if netlink LLADDR miss notifications are generated.";
+
+                }
+                leaf l3miss {
+                    ipr2cgen:on-node-delete "nol3miss";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies if netlink IP ADDR miss notifications are generated.";
+
+                }
+                leaf udpcsum {
+                    ipr2cgen:on-node-delete "noudpcsum";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies if UDP checksum is calculated for transmitted packets over IPv4.";
+
+                }
+                leaf ageing {
+                    type uint32;
+                    default 300;
+                    description
+                        "SECONDS - specifies the lifetime in seconds of FDB entries learnt by the kernel.";
+                }
+                leaf maxaddress {
+                    type uint32;
+                    default 10000000;
+                    description
+                        "NUMBER - specifies the maximum number of FDB entries.";
+                }
+                leaf external {
+                    ipr2cgen:on-node-delete "noexternal";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies whether an external control plane (e.g. ip route encap)
+                        or the internal FDB should be used.";
+
+                }
+                leaf vnifilter {
+                    ipr2cgen:on-node-delete "novnifilter";
+                    ipr2cgen:flag;
+                    type enumeration {
+                        enum "on";
+                    }
+                    description
+                        "specifies whether the vxlan device is capable of vni filtering.
+                        Only works with a vxlan device with external flag set. once enabled,
+                        bridge vni command is used to manage the vni filtering table on the device.
+                        The device can only receive packets with vni's configured in the vni filtering table.
+
+                        ";
+
                 }
             }
         }
