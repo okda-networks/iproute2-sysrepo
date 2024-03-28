@@ -19,6 +19,8 @@ if_clean_up(){
   ip link del br1
   ip link del testIf0
   ip link del testIf1
+  ip link del testIf2
+  ip link del vxlan20
 }
 
 ret=0
@@ -78,6 +80,16 @@ if ip link show br1 >/dev/null 2>&1; then
     echo "TEST-INFO: bridge link br1 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create bridge br1 (FAIL)"
+    if_clean_up
+    exit 1
+fi
+
+
+# Step 6: Check if vxlan vxlan20 is created
+if ip link show vxlan20 >/dev/null 2>&1; then
+    echo "TEST-INFO: vxlan link vxlan20 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create vxlan vxlan20 (FAIL)"
     if_clean_up
     exit 1
 fi
