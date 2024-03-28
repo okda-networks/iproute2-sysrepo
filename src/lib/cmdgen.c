@@ -775,7 +775,7 @@ int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
 }
 
 /**
- * @brief get all leafrefs of startcmd node, and create
+ * @brief get all leafrefs of startcmd node, and add them to found_leafrefs
  * @param all_change_nodes [in]  all change nodes
  * @param startcmd_node     [in]  lyd_node to create cmd_info for and add it to cmds.
  * @param found_leafrefs   [out] all leafrefs founded, the leafrefs will be duplicates of the
@@ -801,8 +801,12 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
                 struct ly_set *s_set;
                 y_union_t = (struct lysc_type_union *)((struct lysc_node_leaf *)next->schema)->type;
                 LY_ARRAY_COUNT_TYPE i_sized;
+                // loop through all types and check which one
                 LY_ARRAY_FOR(y_union_t->types, i_sized)
                 {
+                    // check if the type is leafref
+                    if (y_union_t->types[i_sized]->basetype != LY_TYPE_LEAFREF)
+                        continue;
                     // get the schema node of the leafref.
                     struct lysc_node *target_startcmd_y_node = NULL;
 
@@ -810,7 +814,7 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
                         (struct lysc_type_leafref *)y_union_t->types[i_sized];
                     ret = lys_find_expr_atoms(next->schema, next->schema->module, lref_t->path,
                                               lref_t->prefixes, 0, &s_set);
-                    if (s_set == NULL) {
+                    if (s_set == NULL || ret != LY_SUCCESS) {
                         printf("%s: failed to get target leafref for node \"%s\": %s\n", __func__,
                                next->schema->name, ly_strerrcode(ret));
                         return EXIT_FAILURE;

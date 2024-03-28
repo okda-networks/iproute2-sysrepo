@@ -111,16 +111,26 @@ else
 fi
 
 # Step 3: add ip address 5.5.5.5/24
-sysrepocfg -S '/iproute2-ip-link:links/link[name="testIf0"]/ipv4[address="5.5.5.5/24"]' --value n
+sysrepocfg -S '/iproute2-ip-link:links/link[name="testIf0"]/ip[address="5.5.5.5/24"]' --value n
 
 # Step 4: check ip address added
-current_ip=($(ip address show testIf0 2>/dev/null | awk '/inet / {print $2}' | head -n 2))
+current_ip4=($(ip address show testIf0 2>/dev/null | awk '/inet / {print $2}' | head -n 2))
+current_ip6=$(ip address show testIf0 2>/dev/null | awk '/inet6 / {print $2}' | head -n 1)
 
 # Step 5: check if both ips added to testIf0
-if [ "${current_ip[0]}" = "4.4.4.4/32" -a "${current_ip[1]}" = "5.5.5.5/24" ]; then
+if [ "${current_ip4[0]}" = "4.4.4.4/32" -a "${current_ip4[1]}" = "5.5.5.5/24" ]; then
     echo "TEST-INFO:  IPv4 link testIf0 updated successfully (OK)."
 else
     echo "TEST-ERROR: Failed to update IPv4 for IP link testIf0, current_ip[0]=${current_ip[0]}, current_ip[1]=${current_ip[1]} (FAIL)"
+    if_clean_up
+    exit 1
+fi
+
+if [ "${current_ip6}" = "2001:bd8::11/64" ]; then
+    echo "TEST-INFO:  IPv6 was set properly to link testIf0 (OK)."
+else
+    echo "TEST-ERROR: Failed to get IPv6 for link testIf0, current_ip6=${current_ip6} (FAIL),
+     current_ip[2]="${current_ip[2]}" "
     if_clean_up
     exit 1
 fi
