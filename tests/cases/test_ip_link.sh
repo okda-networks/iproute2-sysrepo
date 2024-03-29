@@ -21,6 +21,7 @@ if_clean_up(){
   ip link del testIf1
   ip link del testIf2
   ip link del vxlan20
+  ip link del gre3
 }
 
 ret=0
@@ -90,6 +91,15 @@ if ip link show vxlan20 >/dev/null 2>&1; then
     echo "TEST-INFO: vxlan link vxlan20 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create vxlan vxlan20 (FAIL)"
+    if_clean_up
+    exit 1
+fi
+
+# Step 6: Check if gre gre3 is created
+if ip link show gre3 >/dev/null 2>&1; then
+    echo "TEST-INFO: gre link gre3 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create gre gre3 (FAIL)"
     if_clean_up
     exit 1
 fi
