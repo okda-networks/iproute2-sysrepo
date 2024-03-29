@@ -711,7 +711,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-add "ip link add";
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
-            ipr2cgen:oper-cmd "ip link show type vrf";
+            ipr2cgen:oper-cmd "ip address show type vrf";
             key "name";
             leaf name {
                 ipr2cgen:after-node-add-static-arg "type vrf";
@@ -729,7 +729,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
-            ipr2cgen:oper-cmd "ip link show";
+            ipr2cgen:oper-cmd "ip address show";
             ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bridge\", \"vxlan\"]}";
             key "name";
             description "ip-link - network device";
@@ -748,11 +748,14 @@ module iproute2-ip-link {
                 ipr2cgen:cmd-add "ip address add";
                 ipr2cgen:cmd-update "ip address replace";
                 ipr2cgen:cmd-delete "ip address del";
+                ipr2cgen:oper-arg-name "addr_info";
                 description "link ipv4 address";
                 key "address";
                 leaf address {
                     ipr2cgen:after-node-add-static-arg "dev (../../name)";
                     ipr2cgen:value-only;
+                    ipr2cgen:oper-arg-name "local";
+                    ipr2cgen:oper-combine-values "{\"separator\":\"/\", \"values\": [\"local\", \"prefixlen\"]}";
                     description "ip address with cider, e.g 192.168.1.1/24";
                     type ip-address-with-cider;
                 }
@@ -798,7 +801,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
-            ipr2cgen:oper-cmd "ip link show type vti";
+            ipr2cgen:oper-cmd "ip address show type vti";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -826,7 +829,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
-            ipr2cgen:oper-cmd "ip link show type vlan";
+            ipr2cgen:oper-cmd "ip address show type vlan";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -1128,7 +1131,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-add "ip link add";
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
-            ipr2cgen:oper-cmd "ip link show type bridge";
+            ipr2cgen:oper-cmd "ip address show type bridge";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";

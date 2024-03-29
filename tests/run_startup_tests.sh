@@ -6,6 +6,8 @@ operation="add"
 
 # Interface configuration
 link_name="oper_link"
+link_address1="10.0.0.1/32"
+link_address2="192.1.1.0/24"
 mtu_value="1450"
 vlan_name="oper_vlan"
 vlan_id="10"
@@ -17,6 +19,12 @@ vti_remote="10.10.20.30"
 create_interfaces() {
     ip link $operation name $1 mtu $2 type $3
     echo "created interface $1"
+}
+
+# Function to set link ip address
+add_dev_address() {
+    ip address add dev $1 $2
+    echo "Added address $2 to interface $1"
 }
 
 # Function to create VLAN
@@ -47,6 +55,8 @@ echo "#############################################"
 echo -e "\nCREATING INTERFACES ON LINUX"
 # Create dummy, VLAN, and VTI interfaces with specified attributes
 create_interfaces $link_name $mtu_value "dummy"
+add_dev_address $link_name $link_address1
+add_dev_address $link_name $link_address2
 create_vlan $vlan_name $mtu_value $link_name $vlan_id
 create_vti $vti_name $mtu_value $vti_local $vti_remote
 
@@ -75,7 +85,7 @@ check_interface() {
         exit 1
     fi
 
-    echo "Checking field"
+    echo "Checking name field"
     if ! echo "$output" | grep -qP "<name>\s*$1\s*</name>"; then
         echo "Error: Name $1 not found (FAIL)."
         cleanup
@@ -85,6 +95,18 @@ check_interface() {
     echo "Checking mtu field"
     if ! echo "$output" | grep -qP "<mtu>\s*$mtu_value\s*</mtu>"; then
         echo "Error: MTU value $mtu_value for $1 not found (FAIL)."
+        cleanup
+        exit 1
+    fi
+
+    echo "Checking address field"
+    if ! echo "$output" | grep -qP "<address>\s*$link_address1\s*</address>"; then
+        echo "Error: Address $link_address1 not found (FAIL)."
+        cleanup
+        exit 1
+    fi
+    if ! echo "$output" | grep -qP "<address>\s*$link_address2\s*</address>"; then
+        echo "Error: Address $link_address2 not found (FAIL)."
         cleanup
         exit 1
     fi
