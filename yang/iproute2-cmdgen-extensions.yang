@@ -66,6 +66,20 @@ module iproute2-cmdgen-extensions {
        argument "flag_map";
     }
 
+    extension oper-combine-values {
+       description "used to combine iproute2 operational json data keys in one leaf, comined 
+       json key names are expressed in json list format, the list key should be the combination 
+       separator and the values are the iproute2 json output key names to have their values combined.
+       This extension json list should be defined as follows:
+       {'separator':'separator_value', 'values': ['key_of_value1', 'key_of_value2' , 'key_of_valueN']}
+       
+       Example use case : {\"separator\" : \"/\" , \"values\" : [\"local\" , \"prefixlen\"]}
+       This will instruct the code to lookup 'local' key value and 'prefixlen' key value from iproute2
+       show command json outputs and combine them togther using the separator value defined the extension
+       list key '/'";
+       argument "combine_list";
+    }
+
     extension oper-ck-argname-presence {
        description "used to instruct operational data to lookup the argname only in iproute2 operational data 
                     outputs, if found the value is defined by the extension argument this is typically used 

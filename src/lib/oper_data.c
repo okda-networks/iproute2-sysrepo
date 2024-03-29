@@ -27,6 +27,7 @@ typedef enum {
     OPER_FLAG_MAP_EXT,
     OPER_CK_ARGNAME_PRESENCE_EXT,
     OPER_STOP_IF_EXT,
+    OPER_COMBINE_VALUES_EXT,
 } oper_extension_t;
 
 /* to be merged with cmdgen */
@@ -35,7 +36,8 @@ char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
                               [OPER_VALUE_MAP_EXT] = "oper-value-map",
                               [OPER_FLAG_MAP_EXT] = "oper-flag-map",
                               [OPER_CK_ARGNAME_PRESENCE_EXT] = "oper-ck-argname-presence",
-                              [OPER_STOP_IF_EXT] = "oper-stop-if" };
+                              [OPER_STOP_IF_EXT] = "oper-stop-if",
+                              [OPER_COMBINE_VALUES_EXT] = "oper-combine-values" };
 
 extern int apply_ipr2_cmd(char *ipr2_show_cmd);
 int process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
@@ -118,6 +120,61 @@ int get_lys_extension(oper_extension_t ex_t, const struct lysc_node *s_node, cha
 }
 
 /**
+ * Combine values from a JSON object based on keys and a separator from another JSON object.
+ *
+ * @param [in] cmd_out_jobj JSON object containing the values to be combined.
+ * @param [in] combine_obj JSON object specifying the keys to combine and the separator.
+ * @return A dynamically allocated string containing the combined values, its the caller
+ * responsibility to free the return value.
+ */
+char *combine_values(struct json_object *cmd_out_jobj, struct json_object *combine_obj)
+{
+    struct json_object *separator_obj, *values_array, *temp_val;
+    const char *separator;
+    char *combined_value = NULL;
+    int i, combined_value_size = 0;
+
+    // Extract separator
+    if (!json_object_object_get_ex(combine_obj, "separator", &separator_obj)) {
+        return NULL;
+    }
+    separator = json_object_get_string(separator_obj);
+
+    if (!json_object_object_get_ex(combine_obj, "values", &values_array)) {
+        return NULL;
+    }
+    int values_count = json_object_array_length(values_array);
+
+    // Initial allocation for combined_value
+    combined_value = malloc(1);
+    combined_value[0] = '\0';
+    combined_value_size = 1;
+
+    // Iterate over the values array
+    for (i = 0; i < values_count; ++i) {
+        const char *value_key = json_object_get_string(json_object_array_get_idx(values_array, i));
+
+        // Retrieve value for the current key from cmd_out_jobj
+        if (find_json_value_by_key(cmd_out_jobj, value_key, &temp_val)) {
+            const char *value_str = json_object_get_string(temp_val);
+            combined_value_size += strlen(value_str) + (i > 0 ? strlen(separator) : 0);
+
+            if (combined_value == NULL) {
+                combined_value = malloc(combined_value_size);
+            } else {
+                combined_value = realloc(combined_value, combined_value_size + 1);
+            }
+
+            if (i > 0) {
+                strlcat(combined_value, separator, combined_value_size + 1);
+            }
+            strlcat(combined_value, value_str, combined_value_size + 1);
+        }
+    }
+    return combined_value;
+}
+
+/**
  * Extracts keys and their values from a JSON array object based on the YANG list Schema keys.
  * This function is used to map JSON array data to YANG schema list keys.
  * @param [in] list: YANG list schema node.
@@ -134,9 +191,9 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
     int key_count = 0;
     *key_values = NULL;
     *values_lengths = NULL;
-    struct json_object *temp_value;
+    struct json_object *temp_value, *combine_ext_jobj = NULL;
     char *key_name;
-
+    char *combine_ext_str = NULL;
     const struct lysc_node *child;
     for (child = list->child; child; child = child->next) {
         if (lysc_is_key(child)) {
@@ -152,6 +209,30 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
                 key_name = strdup(child->name);
             }
 
+            if (get_lys_extension(OPER_COMBINE_VALUES_EXT, child, &combine_ext_str) ==
+                EXIT_SUCCESS) {
+                if (combine_ext_str == NULL) {
+                    fprintf(stderr,
+                            "%s: ipr2cgen:oper-combine-values extension found but failed to "
+                            "get the combined values list for node \"%s\"\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
+
+                combine_ext_jobj = combine_ext_str ? json_tokener_parse(combine_ext_str) : NULL;
+                if (combine_ext_str != NULL) {
+                    free(combine_ext_str);
+                }
+
+                if (combine_ext_jobj == NULL) {
+                    fprintf(stderr,
+                            "%s: Error reading schema node \"%s\" ipr2cgen:oper-stop-if extension,"
+                            " the extension value has a bad json format\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
+            }
+
             if (json_object_object_get_ex(json_array_obj, key_name, &temp_value)) {
                 // Resize the arrays to accommodate key additions
                 *key_values = (const char **)realloc(*key_values, (key_count + 1) * sizeof(char *));
@@ -164,14 +245,26 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
                     goto cleanup;
                 }
 
+                char *combined_value = NULL;
                 // Store the new key
-                (*key_values)[key_count] = strdup(json_object_get_string(temp_value));
+                if (combine_ext_jobj != NULL) {
+                    combined_value = combine_values(json_array_obj, combine_ext_jobj);
+                    (*key_values)[key_count] = strdup(combined_value);
+                    json_object_put(combine_ext_jobj);
+                } else
+                    (*key_values)[key_count] = strdup(json_object_get_string(temp_value));
+
                 if (!(*key_values)[key_count]) {
                     fprintf(stderr, "%s: Failed to duplicate list key value\n", __func__);
                     ret = EXIT_FAILURE;
                     goto cleanup;
                 }
-                (*values_lengths)[key_count] = strlen(json_object_get_string(temp_value));
+                if (combined_value != NULL) {
+                    (*values_lengths)[key_count] = strlen(combined_value);
+                    free(combined_value);
+                } else
+                    (*values_lengths)[key_count] = strlen(json_object_get_string(temp_value));
+
                 key_count++;
             } else {
                 // key value not found in json data.
@@ -345,7 +438,7 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
 void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                    struct lyd_node **parent_data_node, const struct lysc_node *s_node)
 {
-    char *vmap_str = NULL, *fmap_str = NULL, *static_value = NULL;
+    char *vmap_str = NULL, *fmap_str = NULL, *combine_ext_str = NULL, *static_value = NULL;
     if (get_lys_extension(OPER_FLAG_MAP_EXT, s_node, &fmap_str) == EXIT_SUCCESS) {
         if (fmap_str == NULL) {
             fprintf(stderr,
@@ -364,14 +457,50 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
         }
     }
 
+    if (get_lys_extension(OPER_COMBINE_VALUES_EXT, s_node, &combine_ext_str) == EXIT_SUCCESS) {
+        if (combine_ext_str == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-combine-values extension found but failed to "
+                    "get the combined values list for node \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+    }
+    struct json_object *combine_ext_jobj = combine_ext_str ? json_tokener_parse(combine_ext_str) :
+                                                             NULL;
+    if (combine_ext_str) {
+        if (combine_ext_jobj == NULL) {
+            fprintf(stderr,
+                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-combine-value extension,"
+                    " the extension value has a bad json format\n",
+                    __func__, s_node->name);
+            return;
+        }
+        free(combine_ext_str);
+    }
+
     struct json_object *fmap_jobj = fmap_str ? strmap_to_jsonmap(fmap_str) : NULL;
     if (fmap_str) {
         free(fmap_str);
+        if (fmap_jobj == NULL) {
+            fprintf(stderr,
+                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-flag-map extension,"
+                    " the extension value has a bad format\n",
+                    __func__, s_node->name);
+            return;
+        }
     }
 
     struct json_object *vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
     if (vmap_str) {
         free(vmap_str);
+        if (vmap_jobj == NULL) {
+            fprintf(stderr,
+                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-value-map extension,"
+                    " the extension value has a bad format\n",
+                    __func__, s_node->name);
+            return;
+        }
     }
 
     struct json_object *temp_obj = NULL;
@@ -405,11 +534,20 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                 flags_to_leafs(temp_obj, fmap_jobj, parent_data_node, s_node);
             } else {
                 // Process a single value
-                const char *value =
-                    map_value_if_needed(vmap_jobj, json_object_get_string(temp_obj));
-                if (LY_SUCCESS !=
-                    lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
-                    fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+                if (combine_ext_jobj != NULL) {
+                    char *combined_value = combine_values(json_obj, combine_ext_jobj);
+                    if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name,
+                                                   combined_value, 0, NULL)) {
+                        fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+                    }
+                    free(combined_value);
+                } else {
+                    const char *value =
+                        map_value_if_needed(vmap_jobj, json_object_get_string(temp_obj));
+                    if (LY_SUCCESS !=
+                        lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
+                        fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+                    }
                 }
             }
         }
@@ -492,8 +630,11 @@ void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_
     if (get_list_keys(list, json_obj, &key_values, &values_lengths, &keys_count) == EXIT_SUCCESS) {
         add_missing_parents(s_node, parent_data_node);
         struct lyd_node *new_data_node = NULL;
-        lyd_new_list3(*parent_data_node, NULL, s_node->name, key_values, values_lengths, 0,
-                      &new_data_node);
+        if (LY_SUCCESS != lyd_new_list3(*parent_data_node, NULL, s_node->name, key_values,
+                                        values_lengths, 0, &new_data_node)) {
+            fprintf(stderr, "%s: list \"%s\" creation failed.\n", __func__, s_node->name);
+        }
+
         free_list_params(&key_values, &values_lengths, keys_count);
 
         if (!new_data_node)
