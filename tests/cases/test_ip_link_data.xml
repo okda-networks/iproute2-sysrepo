@@ -47,4 +47,13 @@
             <ageing_time>1000</ageing_time>
         </br-info>
     </bridge>
+    <gre>
+        <name>gre3</name>
+        <tunnel-info>
+            <type>gretap</type>
+            <local>6.6.6.6</local>
+            <remote>7.7.7.7</remote>
+            <pmtudisc>on</pmtudisc>
+        </tunnel-info>
+    </gre>
 </links>
