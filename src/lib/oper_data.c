@@ -414,7 +414,7 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
         }
         break; // break after the first iteration, we need to check only the first element of fmap json object.
     }
-    if (!value) {
+    if (value == NULL) {
         json_object *flag_unset_obj = NULL;
         json_object_object_get_ex(fmap_jobj, "FLAG-UNSET", &flag_unset_obj);
         value = json_object_get_string(flag_unset_obj);
@@ -468,7 +468,8 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
     }
     struct json_object *combine_ext_jobj = combine_ext_str ? json_tokener_parse(combine_ext_str) :
                                                              NULL;
-    if (combine_ext_str) {
+    if (combine_ext_str != NULL) {
+        free(combine_ext_str);
         if (combine_ext_jobj == NULL) {
             fprintf(stderr,
                     "%s: Error reading schema node \"%s\" ipr2cgen:oper-combine-value extension,"
@@ -476,11 +477,10 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     __func__, s_node->name);
             return;
         }
-        free(combine_ext_str);
     }
 
     struct json_object *fmap_jobj = fmap_str ? strmap_to_jsonmap(fmap_str) : NULL;
-    if (fmap_str) {
+    if (fmap_str != NULL) {
         free(fmap_str);
         if (fmap_jobj == NULL) {
             fprintf(stderr,
@@ -492,7 +492,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
     }
 
     struct json_object *vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
-    if (vmap_str) {
+    if (vmap_str != NULL) {
         free(vmap_str);
         if (vmap_jobj == NULL) {
             fprintf(stderr,
@@ -524,6 +524,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
             if (LY_SUCCESS !=
                 lyd_new_term(*parent_data_node, NULL, s_node->name, static_value, 0, NULL)) {
                 fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+                free(static_value);
                 return;
             }
             free(static_value);
@@ -553,10 +554,13 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
         }
     }
 cleanup:
-    if (vmap_jobj) {
+    if (combine_ext_jobj != NULL) {
+        json_object_put(combine_ext_jobj);
+    }
+    if (vmap_jobj != NULL) {
         json_object_put(vmap_jobj);
     }
-    if (fmap_jobj) {
+    if (fmap_jobj != NULL) {
         json_object_put(fmap_jobj);
     }
 }
