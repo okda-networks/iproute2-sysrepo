@@ -104,7 +104,7 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     exit "$ret"
 fi
 
-# Step 2: check if interface deleted by iproute2-sysrepo
+# Step 2: check if nexthops deleted by iproute2-sysrepo
 if ! ip nexthop show id 1 >/dev/null 2>&1 && ! ip nexthop show id 2 >/dev/null 2>&1 && ! ip nexthop show id 12 >/dev/null 2>&1 ; then
     echo "TEST-INFO: IP nexthops 1, 2, 3 and 12 are deleted successfully (OK)"
 else

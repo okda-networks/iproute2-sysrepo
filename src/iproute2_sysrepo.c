@@ -90,7 +90,8 @@ struct yang_module {
     const char *oper_pull_path; // Stores operational pull subscription path
 } ipr2_ip_modules[] = { { "iproute2-ip-link", "/iproute2-ip-link:links" },
                         { "iproute2-ip-nexthop", "/iproute2-ip-nexthop:nexthops" },
-                        { "iproute2-ip-netns", "/iproute2-ip-netns:netnses" } };
+                        { "iproute2-ip-netns", "/iproute2-ip-netns:netnses" },
+                        { "iproute2-ip-route", "/iproute2-ip-route:routes" } };
 
 volatile int exit_application = 0;
 static jmp_buf jbuf;
@@ -533,6 +534,7 @@ int load_linux_running_config()
     fprintf(stdout, "%s: Done loading iproute2 running configuration successfully.\n", __func__);
 cleanup:
     lyd_free_all(root_node);
+    sr_discard_changes(sr_session);
     root_node = NULL;
     return ret;
 }

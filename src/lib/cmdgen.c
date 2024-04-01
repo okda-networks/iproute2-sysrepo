@@ -35,8 +35,8 @@ typedef enum {
 typedef enum {
     // list extensions
     CMD_START_EXT,
-    GROUP_LIST_WITH_SEPARATOR,
-    GROUP_LEAFS_VALUES_SEPARATOR,
+    GROUP_LIST_WITH_SEPARATOR_EXT,
+    GROUP_LEAFS_VALUES_SEPARATOR_EXT,
 
     // root container extensions
     CMD_ADD_EXT,
@@ -49,12 +49,13 @@ typedef enum {
     VALUE_ONLY_EXT,
     VALUE_ONLY_ON_UPDATE_EXT,
 
-    AFTER_NODE_ADD_STATIC_ARG,
-    ON_NODE_DELETE,
+    AFTER_NODE_ADD_STATIC_ARG_EXT,
+    ON_NODE_DELETE_EXT,
 
     //other
-    ON_UPDATE_INCLUDE,
-    ADD_STATIC_ARG
+    ON_UPDATE_INCLUDE_EXT,
+    ADD_STATIC_ARG_EXT,
+    REPLACE_ON_UPDATE_EXT
 
 } extension_t;
 
@@ -62,20 +63,21 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [CMD_ADD_EXT] = "cmd-add",
                          [CMD_DELETE_EXT] = "cmd-delete",
                          [CMD_UPDATE_EXT] = "cmd-update",
-                         [GROUP_LIST_WITH_SEPARATOR] = "group-list-with-separator",
-                         [GROUP_LEAFS_VALUES_SEPARATOR] = "group-leafs-values-separator",
+                         [GROUP_LIST_WITH_SEPARATOR_EXT] = "group-list-with-separator",
+                         [GROUP_LEAFS_VALUES_SEPARATOR_EXT] = "group-leafs-values-separator",
 
                          // leaf extensions
                          [ARG_NAME_EXT] = "arg-name",
                          [FLAG_EXT] = "flag",
                          [VALUE_ONLY_EXT] = "value-only",
                          [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
-                         [AFTER_NODE_ADD_STATIC_ARG] = "after-node-add-static-arg",
-                         [ON_NODE_DELETE] = "on-node-delete",
+                         [AFTER_NODE_ADD_STATIC_ARG_EXT] = "after-node-add-static-arg",
+                         [ON_NODE_DELETE_EXT] = "on-node-delete",
 
                          // other
-                         [ON_UPDATE_INCLUDE] = "on-update-include",
-                         [ADD_STATIC_ARG] = "add-static-arg" };
+                         [ON_UPDATE_INCLUDE_EXT] = "on-update-include",
+                         [ADD_STATIC_ARG_EXT] = "add-static-arg",
+                         [REPLACE_ON_UPDATE_EXT] = "replace-on-update" };
 
 void dup_argv(char ***dest, char **src, int argc)
 {
@@ -368,7 +370,7 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
     oper_t leaf_op_val = get_operation(dnode);
     if (leaf_op_val == DELETE_OPR) {
         char *on_node_delete = NULL;
-        if (get_extension(ON_NODE_DELETE, dnode, &on_node_delete) == EXIT_SUCCESS) {
+        if (get_extension(ON_NODE_DELETE_EXT, dnode, &on_node_delete) == EXIT_SUCCESS) {
             if (on_node_delete == NULL) {
                 fprintf(stderr,
                         "%s: ipr2cgen:on-leaf-delete extension found but failed to "
@@ -430,10 +432,10 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
     if (dnode->schema->nodetype == LYS_LIST) {
         char *group_list_separator = NULL;
         char *group_leafs_values_separator = NULL;
-        if ((get_extension(GROUP_LIST_WITH_SEPARATOR, dnode, &group_list_separator) ==
+        if ((get_extension(GROUP_LIST_WITH_SEPARATOR_EXT, dnode, &group_list_separator) ==
              EXIT_SUCCESS) &&
-            (get_extension(GROUP_LEAFS_VALUES_SEPARATOR, dnode, &group_leafs_values_separator) ==
-             EXIT_SUCCESS)) {
+            (get_extension(GROUP_LEAFS_VALUES_SEPARATOR_EXT, dnode,
+                           &group_leafs_values_separator) == EXIT_SUCCESS)) {
             // add space
             char temp_value[50] = { 0 };
 
@@ -469,7 +471,7 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
         else
             *arg_value = (char *)strdup(lyd_get_value(dnode));
         char *add_static_arg;
-        if (get_extension(AFTER_NODE_ADD_STATIC_ARG, dnode, &add_static_arg) == EXIT_SUCCESS) {
+        if (get_extension(AFTER_NODE_ADD_STATIC_ARG_EXT, dnode, &add_static_arg) == EXIT_SUCCESS) {
             char *static_arg = NULL, *xpath_arg = NULL;
             char fin_arg_value[1024] = { 0 };
 
@@ -513,20 +515,26 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
  */
 struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *node_name)
 {
-    char xpath[512] = { 0 };
+    char xpath[1024] = { 0 };
     int ret;
-    lyd_path(startcmd_node, LYD_PATH_STD, xpath, 512);
-    strlcat(xpath, "/", sizeof(xpath));
-    strlcat(xpath, node_name, sizeof(xpath));
+    lyd_path(startcmd_node, LYD_PATH_STD, xpath, 1024);
+    if (node_name) {
+        strlcat(xpath, "/", sizeof(xpath));
+        strlcat(xpath, node_name, sizeof(xpath));
+    }
     sr_data_t *sr_data;
-    // get the dnode from sr
 
-    ret = sr_get_node(sr_session, xpath, 0, &sr_data);
+    // get the dnode from sr
+    if (node_name)
+        ret = sr_get_node(sr_session, xpath, 0, &sr_data);
+    else
+        ret = sr_get_data(sr_session, xpath, 0, 0, 0, &sr_data);
+    //        ret = sr_get_subtree(sr_session, xpath, 0, &sr_data);
     if (ret != SR_ERR_OK) {
         fprintf(stderr,
-                "%s: failed to get include node data from sysrepo ds."
-                " include node name = \"%s\" : %s\n",
-                __func__, node_name, sr_strerror(ret));
+                "%s: failed to get node data from sysrepo ds."
+                " xpath = \"%s\": %s\n",
+                __func__, xpath, sr_strerror(ret));
         return NULL;
     }
     return sr_data->tree;
@@ -567,6 +575,12 @@ start:
                     goto start;
                 } else
                     goto done; // no more sibling, go to done.
+            } else if (op_val == DELETE_OPR || get_operation(next) == DELETE_OPR) {
+                if (next->next) { // move to next sibling and start from beginning,
+                    next = next->next;
+                    goto start;
+                } else
+                    goto done; // no more sibling, go to done.
             }
 
         case LYS_CONTAINER:
@@ -575,7 +589,7 @@ start:
             // no data inside the container, container will have LYD_DEFAULT|LYD_WHEN_TRUE flags
             if ((next->flags & LYD_DEFAULT) && (next->flags & LYD_WHEN_TRUE))
                 break;
-            if (get_extension(ADD_STATIC_ARG, next, &add_static_arg) == EXIT_SUCCESS) {
+            if (get_extension(ADD_STATIC_ARG_EXT, next, &add_static_arg) == EXIT_SUCCESS) {
                 if (add_static_arg == NULL) {
                     fprintf(stderr,
                             "%s: ADD_STATIC_ARG extension found,"
@@ -584,12 +598,17 @@ start:
                             __func__, next->schema->name);
                     return NULL;
                 }
-                strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, add_static_arg, sizeof(cmd_line));
-                free(on_update_include);
+                // check if the container has child nodes, when container has extention, libyang
+                // create an empty node container. if the container has children then add the
+                // static arg
+                if (lyd_child(next)) {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, add_static_arg, sizeof(cmd_line));
+                }
+                free(add_static_arg);
             }
             if (op_val == UPDATE_OPR &&
-                get_extension(ON_UPDATE_INCLUDE, next, &on_update_include) == EXIT_SUCCESS) {
+                get_extension(ON_UPDATE_INCLUDE_EXT, next, &on_update_include) == EXIT_SUCCESS) {
                 // capture the on-update-include ext,
                 if (on_update_include == NULL) {
                     fprintf(stderr,
@@ -637,9 +656,9 @@ start:
                 }
                 break;
 
-            } else if ((get_extension(GROUP_LIST_WITH_SEPARATOR, next, &group_list_separator) ==
+            } else if ((get_extension(GROUP_LIST_WITH_SEPARATOR_EXT, next, &group_list_separator) ==
                         EXIT_SUCCESS) &&
-                       (get_extension(GROUP_LEAFS_VALUES_SEPARATOR, next,
+                       (get_extension(GROUP_LEAFS_VALUES_SEPARATOR_EXT, next,
                                       &group_leafs_values_separator) == EXIT_SUCCESS)) {
                 if (group_list_separator == NULL) {
                     fprintf(stderr,
@@ -717,6 +736,53 @@ done:
     return strdup(cmd_line);
 }
 
+/**
+ * @brief this will fetch the startcmd_node from sysrepo, and merge it with the change node
+ * this will result on a replace on update change node.
+ * @param dnode the change lyd_node.
+ * @return EXIST_SUCCESS
+ * @return EXIST_FAILURE
+ */
+
+int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
+{
+    int ret;
+    // get the original node from sysrepo
+    struct lyd_node *original_dnode = get_node_from_sr(*dnode, NULL);
+    if (!original_dnode) {
+        fprintf(stderr, "%s: failed to get original_dnode from sysrepo ds. \"%s\" \n", __func__,
+                (*dnode)->schema->name);
+        return EXIT_FAILURE;
+    }
+
+    struct lyd_node *dnode_top_level = lyd_parent(*dnode);
+
+    struct lyd_node *dnext;
+    LYD_TREE_DFS_BEGIN(original_dnode, dnext)
+    {
+        ret = lyd_new_meta(original_dnode->schema->module->ctx, dnext, NULL, "yang:operation",
+                           "create", 0, NULL);
+        if (ret != LY_SUCCESS) {
+            fprintf(stderr,
+                    "%s: failed to set meta data 'yang:operation=create' for node. \"%s\" \n",
+                    __func__, (*dnode)->schema->name);
+            lyd_free_all(original_dnode);
+            return EXIT_FAILURE;
+        }
+        LYD_TREE_DFS_END(original_dnode, dnext)
+    }
+
+    ret =
+        lyd_merge_tree(&dnode_top_level, original_dnode, LYD_MERGE_WITH_FLAGS | LYD_MERGE_DESTRUCT);
+
+    if (ret != LY_SUCCESS) {
+        fprintf(stderr, "%s: failed to merge original and change node.\n", __func__);
+        lyd_free_all(original_dnode);
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
 char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
                    struct ly_set **inner_startcmds)
 {
@@ -729,6 +795,10 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
         fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
         return NULL;
+    }
+    if (op_val == UPDATE_OPR &&
+        (get_extension(REPLACE_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS)) {
+        ext_onupdate_replace_hdlr(&startcmd_node);
     }
     // add cmd prefix to the cmd_line
     strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
@@ -927,7 +997,13 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
     // get the rollback node.
-    lyd_diff_reverse_all(startcmd_node, &rollback_dnode);
+    ret = lyd_diff_reverse_all(startcmd_node, &rollback_dnode);
+    if (ret != LY_SUCCESS) {
+        fprintf(stderr, "%s: failed create rollback_dnode by lyd_diff_reverse_all(): %s\n",
+                __func__, ly_strerrcode(ret));
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
 
     // the reversed node come with no parent, so we need to duplicate startcmd parent, and insert
     // the rollback_node into the duplicated parent.
@@ -937,7 +1013,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
                    &rollback_dnode_parent);
     ret = lyd_insert_child(rollback_dnode_parent, rollback_dnode);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to insert rollback node to its parent node %s\n", __func__,
+        fprintf(stderr, "%s: failed to insert rollback node to its parent node: %s\n", __func__,
                 ly_strerrcode(ret));
         lyd_free_all(rollback_dnode_parent);
         ret = EXIT_FAILURE;
