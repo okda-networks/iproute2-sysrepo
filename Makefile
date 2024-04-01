@@ -23,6 +23,8 @@ IPR2_SR_SRC = $(wildcard src/*.c)
 IPR2_SR_LIB_OBJ = $(IPR2_SR_LIB_SRC:.c=.o)
 IPR2_SR_OBJ = $(IPR2_SR_SRC:.c=.o)
 
+PREFIX = /usr/local
+BINDIR = $(PREFIX)/bin
 
 all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	@echo "Checking if json_print patch is already applied..."
@@ -48,6 +50,18 @@ all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	$(CC) -o $(BIN)/$(EXEC) $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) `find iproute2/ip -name '*.[o]'` `find iproute2/bridge -name '*.[o]'` `find iproute2/tc -name '*.[o]'` `find iproute2/lib -name '*.[o]'` $(LDFLAGS)
 	@echo ""
 	@echo "Make complete"
+
+install: all
+	@echo "Installing $(EXEC) to $(BINDIR)"
+	@mkdir -p $(BINDIR)
+	@cp -f $(BIN)/$(EXEC) $(BINDIR)
+	@chmod +x $(BINDIR)/$(EXEC)
+	@echo "Installation complete."
+
+uninstall:
+	@echo "Removing $(EXEC) from $(BINDIR)"
+	@rm -f $(BINDIR)/$(EXEC)
+	@echo "Uninstallation complete."
 
 clean:
 	@echo "Checking if json_print patch is already applied..."
