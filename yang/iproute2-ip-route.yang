@@ -1,10 +1,13 @@
 module iproute2-ip-route {
     yang-version 1.1;
     namespace "urn:okda:iproute2:ip:route";
-    prefix "iprt";
+    prefix "iproute";
 
     import ietf-inet-types { prefix inet; }
-    //import ietf-yang-types { prefix yang; }
+    import iproute2-net-types { prefix ipr2net; }
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+    import iproute2-ip-link { prefix iplink; }
+
     organization
         "Okda Networks";
 
@@ -24,30 +27,162 @@ module iproute2-ip-route {
             "YANG model for iproute2 ip route case.";
     }
 
-    container ip-routes {
+    container routes {
         description
             "ip route configuration";
         list route {
+            ipr2cgen:cmd-add "ip route add";
+            ipr2cgen:cmd-update "ip route replace";
+            ipr2cgen:cmd-delete "ip route del";
+            ipr2cgen:cmd-start;
+            ipr2cgen:replace-on-update;
             description
                 "ip route details";
-            key "prefix";
+            key "prefix table metric tos";
+            // NODE_SPEC
             leaf prefix{
                 type inet:ipv4-prefix;
+                ipr2cgen:value-only;
                 description
                     "ipv4 prifix";
             }
-            leaf interface{
+            leaf table {
+                type uint16;
                 description
-                    "nexthop interfaces names";
-                type string;
+                    "[254 for default] the table to add this route to. TABLEID may be a number or a string from the file
+                    /etc/iproute2/rt_tables. If this parameter is omitted, ip assumes the main table,
+                    with the exception of local, broadcast and nat routes, which are put into the local table by default.";
+                default 254;
             }
-            leaf gateway{
+            leaf metric {
+                type uint32;
                 description
-                    "nexthop ip";
-                type inet:ipv4-address;
+                    "route metric [default 0]";
+                default 0;
+            }
+            leaf tos {
+                type ipr2net:tos;
+                default "default";
+                description
+                    "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
+                    understood as: First, compare the TOS of the route and of the packet. If they are not equal,
+                    then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
+                    number or an identifier from /etc/iproute2/rt_dsfield.";
+            }
+
+            // INFO_SPEC
+            choice encap {
+                container mpls-encap {
+                    leaf label {
+                        ipr2cgen:arg-name "encap mpls";
+                        type string{
+                            pattern '[0-9]+(/[0-9]+)*';
+                        }
+                        description
+                            "MPLSLABEL - mpls label stack with labels separated by /";
+                    }
+                }
+                container ip-encap {
+                    ipr2cgen:add-static-arg "encap ip";
+                    leaf id {
+                        type uint32;
+                        description
+                            "tunnel id";
+                    }
+                    leaf dst {
+                        type inet:ip-address;
+                        description
+                            "remote ip";
+                    }
+                    leaf tos {
+                        type ipr2net:tos;
+                        description
+                            "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
+                            understood as: First, compare the TOS of the route and of the packet. If they are not equal,
+                            then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
+                            number or an identifier from /etc/iproute2/rt_dsfield.";
+                    }
+                    leaf ttl {
+                        type ipr2net:ttl;
+                        description
+                            "TTL - specifies the TTL value to use in outgoing packets.";
+                        default 0;
+                    }
+                }
+            }
+            /// OPTIONS
+            leaf preference {
+                type uint32;
+                description
+                    "NUMBER - the preference value of the route. NUMBER is an arbitrary 32bit number";
+            }
+            leaf mtu {
+                type ipr2net:mtu;
+                description
+                    "mtu value";
+            }
+            leaf advmss {
+                type uint16{
+                    range "64..9000";
+                }
+                description
+                    "the MSS ('Maximal Segment Size') to advertise to these destinations when establishing
+                    TCP connections. If it is not given, Linux uses a default value calculated from the first
+                    hop device MTU. (If the path to these destination is asymmetric, this guess may be wrong.)";
+            }
+            /// NH
+            //// NHFLAGS
+            leaf flag {
+                ipr2cgen:value-only;
+                type enumeration {
+                    enum "onlink";
+                    enum "pervasive";
+                }
+            }
+            list nexthop {
+                ipr2cgen:add-static-arg "nexthop";
+                key "dev";
+                leaf dev {
+                // workaround until issue #2211 in libyang is fixed
+                    type union{
+                        type iplink:link-ref;
+                        type iplink:vti-ref;
+                        type iplink:gre-ref;
+                    }
+                    description
+                        "nexthop link";
+                }
+                container via {
+                    ipr2cgen:add-static-arg "via";
+                    leaf family {
+                        ipr2cgen:value-only;
+                        type enumeration {
+                            enum "inet";
+                            enum "inet6";
+                            enum "ipx";
+                            enum "dnet";
+                            enum "mpls";
+                            enum "bridge";
+                            enum "link";
+                        }
+                        description
+                            "via address family";
+                    }
+                    leaf address {
+                        ipr2cgen:value-only;
+                        type inet:ip-address;
+                        description
+                            "via address";
+                    }
+                }
+                leaf weight {
+                    type uint32;
+                    description
+                        "NUMBER - is a weight for this element of a multipath route
+                        reflecting its relative bandwidth or quality.";
+                }
             }
 
         }
     }
-
 }

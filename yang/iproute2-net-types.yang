@@ -1,0 +1,58 @@
+module iproute2-net-types {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:net:types";
+    prefix "ipr2net";
+
+    organization
+        "Okda Networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+        "This module contain the iproute2 types";
+
+    revision "2024-04-02" {
+        description "Revision 1";
+        reference
+            "iproute2 Yang net types";
+    }
+    typedef mtu {
+        type uint16{
+            range "64..9000";
+        }
+    }
+    typedef ttl {
+        type uint8{
+            range "0..255";
+        }
+    }
+    typedef tos {
+        type enumeration {
+            enum "default";
+            enum "AF11";
+            enum "AF12";
+            enum "AF13";
+            enum "AF21";
+            enum "AF22";
+            enum "AF23";
+            enum "AF31";
+            enum "AF32";
+            enum "AF33";
+            enum "AF41";
+            enum "AF42";
+            enum "AF43";
+            enum "CS1";
+            enum "CS2";
+            enum "CS3";
+            enum "CS4";
+            enum "CS5";
+            enum "CS6";
+            enum "CS7";
+            enum "EF";
+        }
+    }
+}
+
+

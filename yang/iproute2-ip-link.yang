@@ -66,7 +66,14 @@ module iproute2-ip-link {
             version neutral.  The format of the textual representations
             implies the IP version.";
     }
-
+    typedef vrf-ref {
+        type leafref {
+            path "/iplink:links/iplink:vrf/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference
+            interfaces.";
+    }
     typedef link-ref {
         type leafref {
             path "/iplink:links/iplink:link/iplink:name";
@@ -99,10 +106,19 @@ module iproute2-ip-link {
             "This type is used by data models that need to reference bridge
             interfaces.";
     }
+    typedef gre-ref {
+        type leafref {
+            path "/iplink:links/iplink:gre/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference gre
+            interfaces.";
+    }
     typedef l3-links-ref {
         type union{
             type link-ref;
             type vti-ref;
+            type gre-ref;
         }
     }
 
@@ -780,6 +796,7 @@ module iproute2-ip-link {
             leaf table{
                 type uint16;
                 description "vrf table id";
+                mandatory true;
             }
         }
         list link {
@@ -820,6 +837,7 @@ module iproute2-ip-link {
             }
             leaf type {
                 ipr2cgen:oper-arg-name "info_kind";
+//                mandatory true;  // this should be mandatory, will be uncomment after fix #91
                 type identityref {
                     base link-type;
                 }
