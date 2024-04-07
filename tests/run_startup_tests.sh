@@ -10,11 +10,19 @@ link_address_v4_1="10.0.0.1/32"
 link_address_v4_2="192.1.1.0/24"
 link_address_v6_1="2002:bb9::20/64"
 mtu_value="1450"
+
 vlan_name="oper_vlan"
 vlan_id="10"
+
 vti_name="oper_vti"
 vti_local="10.1.2.3"
 vti_remote="10.10.20.30"
+
+vxlan_name="oper_vxlan"
+vxlan_id="1000"
+vxlan_local="10.20.30.40"
+vxlan_remote="10.120.130.140"
+vxlan_dstport="4789"
 
 # Function to create LINK
 create_interfaces() {
@@ -40,12 +48,19 @@ create_vti() {
     echo "created interface $1"
 }
 
+# Function to create VXLAN
+create_vxlan() {
+    ip link $operation name $1 mtu $2 type vxlan id $3 remote $4 local $5 dstport $6 l3miss
+    echo "created interface $1"
+}
+
 # Function to delete network interfaces
 delete_interfaces() {
     operation="del"
     ip link $operation name $vlan_name
     ip link $operation name $link_name
     ip link $operation name $vti_name
+    ip link $operation name $vxlan_name
     
 }
 
@@ -61,7 +76,7 @@ add_dev_address $link_name $link_address_v6_1
 add_dev_address $link_name $link_address_v4_2
 create_vlan $vlan_name $mtu_value $link_name $vlan_id
 create_vti $vti_name $mtu_value $vti_local $vti_remote
-
+create_vxlan $vxlan_name $mtu_value $vxlan_id $vxlan_remote $vxlan_local $vxlan_dstport
 # Run iproute2-sysrepo and store its PID
 echo -e "\nSTARTING IPROUTE2-SYSREPO"
 ./bin/iproute2-sysrepo 2>&1 &
@@ -157,7 +172,7 @@ check_vlan() {
     echo "VLAN $1 configuration verified successfully (PASS)."
 }
 
-# Function to check interface VLAN in sysrepo
+# Function to check interface VTI in sysrepo
 check_vti() {
     echo "- Checking vti ($1) configuration on sysrepo:"
     output=$(sysrepocfg -X -d running -f xml -x "/iproute2-ip-link:links/vti[name=\"$1\"]")
@@ -200,12 +215,72 @@ check_vti() {
     echo "VTI Interface $1 configuration verified successfully (PASS)."
 }
 
+# Function to check interface VXLAN in sysrepo
+check_vxlan() {
+    echo "- Checking vxlan ($1) configuration on sysrepo:"
+    output=$(sysrepocfg -X -d running -f xml -x "/iproute2-ip-link:links/vxlan[name=\"$1\"]")
+    echo -e "sysrepo outputs:\n $output"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: sysrepo failed to extract data for $1 (SYSREPO PROBLEM ?)"
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "Checking name field"
+    if ! echo "$output" | grep -qP "<name>\s*$1\s*</name>"; then
+        echo "Error: VXLAN interface Name $1 not found (FAIL)."
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "Checking mtu field"
+    if ! echo "$output" | grep -qP "<mtu>\s*$mtu_value\s*</mtu>"; then
+        echo "Error: MTU value $mtu_value for $1 not found for VXLAN interface $1 (FAIL)."
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "Checking local address field"
+    if ! echo "$output" | grep -qP "<local>\s*$vxlan_local\s*</local>"; then
+        echo "Error: Local address $vxlan_local not found for VXLAN interface $1 (FAIL)."
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "Checking remote address field"
+    if ! echo "$output" | grep -qP "<remote>\s*$vxlan_remote\s*</remote>"; then
+        echo "Error: Local address $vxlan_remote not found for VXLAN interface $1 (FAIL)."
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "Checking dstport field"
+    if ! echo "$output" | grep -qP "<dstport>\s*$vxlan_dstport\s*</dstport>"; then
+        echo "Error: VXLAN dstport $vxlan_dstport not found for VXLAN interface $1 (FAIL)."
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "Checking l3miss field"
+    if ! echo "$output" | grep -qP "<l3miss>on</l3miss>"; then
+        echo "Error: VXLAN l3miss flag not found for VXLAN interface $1 (FAIL)."
+        delete_interfaces
+        exit 1
+    fi
+
+    echo "VXLAN Interface $1 configuration verified successfully (PASS)."
+}
+
+
 echo -e "\nVLIDATING DATA ON SYSREPO"
 check_interface $link_name
 echo -e "\n"
 check_vlan $vlan_name
 echo -e "\n"
 check_vti $vti_name
+echo -e "\n"
+check_vxlan $vxlan_name
 echo -e "\n"
 cleanup
 
