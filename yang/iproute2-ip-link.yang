@@ -888,6 +888,7 @@ module iproute2-ip-link {
             uses link-advance;
             container tunnel-info{
                 ipr2cgen:add-static-arg "type vti";
+                ipr2cgen:oper-sub-jobj "info_data";
                 description "vti tunnel info details";
                 uses tunnel-common;
                 uses tunnel-keyed;
@@ -917,6 +918,7 @@ module iproute2-ip-link {
             uses link-device;
             uses link-layer2;
             container vlan-info {
+                ipr2cgen:oper-sub-jobj "info_data";
                 ipr2cgen:add-static-arg "type vlan";
                 must "../iplink:device" {
                     description "VLAN configuration requires 'device' to be set";
@@ -1019,6 +1021,7 @@ module iproute2-ip-link {
             uses link-layer2;
             container vxlan-info {
                 ipr2cgen:add-static-arg "type vxlan";
+                ipr2cgen:oper-sub-jobj "info_data";
                 description "vxlan configurations";
                 leaf id {
                     type uint64;
@@ -1233,6 +1236,7 @@ module iproute2-ip-link {
             uses link-layer2;
             container br-info {
                 ipr2cgen:add-static-arg "type bridge";
+                ipr2cgen:oper-sub-jobj "info_data";
                 description
                     "bridge configuraions";
                 leaf ageing_time {
@@ -1367,6 +1371,7 @@ module iproute2-ip-link {
             uses link-advance;
             container tunnel-info{
                 ipr2cgen:on-update-include "tunnel-info/type";
+                ipr2cgen:oper-sub-jobj "info_data";
                 description "vti tunnel info details";
                 leaf type {
                     type enumeration {
