@@ -1006,6 +1006,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
+            ipr2cgen:oper-cmd "ip address show type vxlan";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -1026,14 +1027,15 @@ module iproute2-ip-link {
                         "VNI - specifies the VXLAN Network Identifier (or VXLAN Segment Identifier) to use.";
                 }
                 leaf dev {
+                    ipr2cgen:oper-arg-name "link";
                     type link-ref;
-                    mandatory true;
                     description
                         "PHYS_DEV - specifies the physical device to use for tunnel endpoint communication.";
                 }
                 choice remote-or-grp {
                     case mcast-group{
                         leaf group {
+                            must "../dev"{ error-message "vxlan-info 'dev' leaf is required when 'group' is specified."; }
                             type inet:ip-address;
                             description
                                 "IPADDR - specifies the multicast IP address to join.";
@@ -1086,6 +1088,7 @@ module iproute2-ip-link {
                         respectively. By default, the bit is not set.";
                 }
                 leaf dstport {
+                    ipr2cgen:oper-arg-name "port";
                     type inet:port-number;
                     default 8472;
                     description
@@ -1104,6 +1107,7 @@ module iproute2-ip-link {
                 leaf learning {
                     ipr2cgen:on-node-delete "nolearning";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on;false:off";
                     type enumeration {
                         enum "on";
                     }
@@ -1115,6 +1119,7 @@ module iproute2-ip-link {
                 leaf rsc {
                     ipr2cgen:on-node-delete "norsc";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
@@ -1125,6 +1130,7 @@ module iproute2-ip-link {
                 leaf proxy {
                     ipr2cgen:on-node-delete "noproxy";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
@@ -1135,6 +1141,7 @@ module iproute2-ip-link {
                 leaf l2miss {
                     ipr2cgen:on-node-delete "nol2miss";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
@@ -1145,6 +1152,7 @@ module iproute2-ip-link {
                 leaf l3miss {
                     ipr2cgen:on-node-delete "nol3miss";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
@@ -1155,6 +1163,8 @@ module iproute2-ip-link {
                 leaf udpcsum {
                     ipr2cgen:on-node-delete "noudpcsum";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "udp_csum";
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
@@ -1169,6 +1179,7 @@ module iproute2-ip-link {
                         "SECONDS - specifies the lifetime in seconds of FDB entries learnt by the kernel.";
                 }
                 leaf maxaddress {
+                    ipr2cgen:oper-arg-name "limit";
                     type uint32;
                     default 10000000;
                     description
@@ -1177,6 +1188,7 @@ module iproute2-ip-link {
                 leaf external {
                     ipr2cgen:on-node-delete "noexternal";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
@@ -1188,6 +1200,7 @@ module iproute2-ip-link {
                 leaf vnifilter {
                     ipr2cgen:on-node-delete "novnifilter";
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map "true:on";
                     type enumeration {
                         enum "on";
                     }
