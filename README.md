@@ -56,7 +56,7 @@ sudo make install
 ldconfig
 ```
 
-## Building:
+## Build IPRoute2-Sysrepo:
 ```
 git clone --recursive https://github.com/okda-networks/iproute2-sysrepo.git
 cd iproute2-sysrepo
@@ -149,6 +149,7 @@ sysrepocfg --edit test_links.xml -d running
 4- Interfaces should be created automaticlly on your linux  
 You can use legacy iproute2 commands to view config:
 ```
+ip link show
 ip address show
 ```
 
