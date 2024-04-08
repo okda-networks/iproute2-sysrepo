@@ -28,6 +28,7 @@ typedef enum {
     OPER_CK_ARGNAME_PRESENCE_EXT,
     OPER_STOP_IF_EXT,
     OPER_COMBINE_VALUES_EXT,
+    OPER_SUB_JOBJ_EXT,
 } oper_extension_t;
 
 /* to be merged with cmdgen */
@@ -37,7 +38,8 @@ char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
                               [OPER_FLAG_MAP_EXT] = "oper-flag-map",
                               [OPER_CK_ARGNAME_PRESENCE_EXT] = "oper-ck-argname-presence",
                               [OPER_STOP_IF_EXT] = "oper-stop-if",
-                              [OPER_COMBINE_VALUES_EXT] = "oper-combine-values" };
+                              [OPER_COMBINE_VALUES_EXT] = "oper-combine-values",
+                              [OPER_SUB_JOBJ_EXT] = "oper-sub-jobj" };
 
 extern int apply_ipr2_cmd(char *ipr2_show_cmd);
 int process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
@@ -772,13 +774,31 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
     }
     case LYS_CHOICE:
     case LYS_CASE:
-    case LYS_CONTAINER:
+    case LYS_CONTAINER: {
+        char *sub_jobj_name = NULL;
+        json_object *container_job = NULL;
+        if (get_lys_extension(OPER_SUB_JOBJ_EXT, s_node, &sub_jobj_name) == EXIT_SUCCESS) {
+            if (sub_jobj_name == NULL) {
+                fprintf(stderr,
+                        "%s: ipr2cgen:oper-sub-job extension found but failed to "
+                        "get the sub json object name value for node \"%s\"\n",
+                        __func__, s_node->name);
+                return EXIT_FAILURE;
+            }
+        }
+        if (sub_jobj_name != NULL) {
+            find_json_value_by_key(json_obj, sub_jobj_name, &container_job);
+        } else {
+            container_job = json_obj;
+        }
+        free(sub_jobj_name);
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
         {
-            if (process_node(s_child, json_obj, lys_flags, &new_data_node))
+            if (process_node(s_child, container_job, lys_flags, &new_data_node))
                 return EXIT_FAILURE;
         }
         break;
+    }
     default:
         break;
     }

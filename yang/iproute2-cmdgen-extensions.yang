@@ -95,6 +95,14 @@ module iproute2-cmdgen-extensions {
        argument "stop_key_and_values";
     }
 
+    extension oper-sub-jobj {
+       description "Instructs oper data to extract specific json object from the main outputs json data to be used for further data porcessing.
+       This helps avoiding leaf names conflicts in cases the leaf name matches two objects in the main json data updating the json object to 
+       a subset of the main object resolves this conflict, this is typically used inside containers to narrow down their data json object to 
+       subset of the main data object";
+       argument "sub_json_object_name";
+    }
+
     extension oper-cmd {
        description "define node which a new show cmd is needed, typically used in the first list in the schema, example
                     ir2cmdgen:oper-cmd \"ip link show type vrf\"";
