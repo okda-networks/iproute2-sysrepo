@@ -528,6 +528,7 @@ module iproute2-ip-link {
                     enum "LOWER_UP";
                     enum "DORMANT";
                     enum "ECHO";
+                    enum "M-DOWN";
                 }
                 description "A list of flags representing various states and capabilities of the interface.
                 Each flag denotes a specific characteristic or status";
@@ -1000,6 +1001,7 @@ module iproute2-ip-link {
                     for outgoing frames.The format is FROM:TO with multiple mappings separated by spaces.";
                 }
             }
+            uses link-state;
         }
         list vxlan {
             ipr2cgen:cmd-add "ip link add";
@@ -1201,6 +1203,7 @@ module iproute2-ip-link {
 
                 }
             }
+            uses link-state;
         }
         list bridge {
             ipr2cgen:cmd-start;
@@ -1338,6 +1341,7 @@ module iproute2-ip-link {
                         arptables hooks on the bridge.";
                 }
             }
+            uses link-state;
         }
         list gre {
             ipr2cgen:cmd-add "ip link add";
