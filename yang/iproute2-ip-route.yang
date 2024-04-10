@@ -4,6 +4,7 @@ module iproute2-ip-route {
     prefix "iproute";
 
     import ietf-inet-types { prefix inet; }
+    import okda-onmcli-extensions{ prefix onmcli; }
     import iproute2-net-types { prefix ipr2net; }
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-link { prefix iplink; }
@@ -47,22 +48,23 @@ module iproute2-ip-route {
                     "ipv4 prifix";
             }
             leaf table {
+                onmcli:key-default-val "254";
                 type uint16;
                 description
                     "[254 for default] the table to add this route to. TABLEID may be a number or a string from the file
                     /etc/iproute2/rt_tables. If this parameter is omitted, ip assumes the main table,
                     with the exception of local, broadcast and nat routes, which are put into the local table by default.";
-                default 254;
+
             }
             leaf metric {
+                onmcli:key-default-val "0";
                 type uint32;
                 description
                     "route metric [default 0]";
-                default 0;
             }
             leaf tos {
+                onmcli:key-default-val "default";
                 type ipr2net:tos;
-                default "default";
                 description
                     "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
                     understood as: First, compare the TOS of the route and of the packet. If they are not equal,

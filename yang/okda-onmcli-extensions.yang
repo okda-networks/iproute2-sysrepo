@@ -1,0 +1,20 @@
+module okda-onmcli-extensions {
+    yang-version 1.1;
+    namespace "urn:okda:onm:onmcli:extensions";
+    prefix "onmcli";
+
+    organization
+        "Okda networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+        "defines onmcli extensions";
+    extension key-default-val{
+        description
+            "add support for default values to list keys, onmcli will add list key as optional argument";
+        argument "arg";
+    }
+}
