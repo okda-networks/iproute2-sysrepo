@@ -1,221 +1,244 @@
 module iproute2-tc-qdisc {
-  yang-version 1.1;
-  namespace "urn:okda:iproute2:tc:qdisc";
-  prefix "qdisc";
-  
-  import iproute2-ip-link {prefix iplink;}
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:tc:qdisc";
+    prefix "qdisc";
 
-  organization "Okda Networks";
+    import iproute2-ip-link {prefix iplink;}
+    import okda-onmcli-extensions{ prefix onmcli; }
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
 
-  contact
-    "Author: Amjad Daraiseh
-    <adaraiseh@okdanetworks.com>";
+    organization "Okda Networks";
 
-  description
-    "This module contain the iproute2 'tc qdisc' configurations.
-    This is module contains tc - show / manipulate 'queueing discipline' settings.
-    refer to https://manpages.debian.org/bookworm/iproute2/tc.8.en.html";
+    contact
+        "Author: Amjad Daraiseh
+        <adaraiseh@okdanetworks.com>";
 
-  revision "2024-02-17" {
-    description "Initial version.";
-  }
-  
-  typedef parent-id {
-    description "Specifies qdisc or class parent, can be specified using ID or root";
-    type union {
-      type uint16; // review
-      type enumeration {
-        enum root {
-          description "Indicates the qdisc is at the root.";
+    description
+        "This module contain the iproute2 'tc qdisc' configurations.
+        This is module contains tc - show / manipulate 'queueing discipline' settings.
+        refer to https://manpages.debian.org/bookworm/iproute2/tc.8.en.html";
+
+    revision "2024-02-17" {
+        description "Initial version.";
+    }
+
+    typedef parent-id {
+        description "Specifies qdisc or class parent, can be specified using ID or root";
+        type union {
+            type uint16; // review
+            type enumeration {
+                enum root {
+                    description "Indicates the qdisc is at the root.";
+                }
+            }
         }
-      }
-    }       
-  }
+    }
 
-  typedef qdisc-kind {
-    type enumeration {
-      // classless qdiscs
-      enum "choke" {
-        description "Choose and Keep for responsive flows,  a classless qdisc designed to 
-                     both identify and penalize flows that monopolize the queue.";
-      }
-      enum "codel" {
-        description "Controlled Delay, adaptive 'no-knobs' active queue management algorithm (AQM) scheme 
-                     that was developed to address the shortcomings of RED and its variants.";
-      }
-      enum "bfifo" {
-        description "Byte-limited First In, First Out queue.";
-      }
-      enum "pfifo" {
-        description "Packet-limited First In, First Out queue.";
-      }
-      enum "fq" {
-        description "Fair Queue Scheduler realises TCP pacing and scales to millions of concurrent flows per qdisc.";
-      }
-      enum "fq_codel" {
-        description "Fair Queuing Controlled Delay is queuing discipline 
-                     that combines Fair Queuing with the CoDel AQM scheme.";
-      }
-      enum "fq_pie" {
-        description "Flow Queuing with Proportional Integral controller Enhanced, is a queuing discipline that 
-                     combines Flow Queuing with the PIE AQM scheme.";
-      }
-      enum "gred" {
-        description "Generalized Random Early Detection, 
-                     combines multiple RED queues in order to achieve multiple drop priorities.";
-      }
-      enum "hhf" {
-        description "Heavy-Hitter Filter differentiates between small flows and the opposite, heavy-hitters. 
-                     The goal is to catch the heavy-hitters and move them to a separate queue with less priority 
-                     so that bulk traffic does not affect the latency of critical traffic.";
-      }
-      enum "ingress" {
-        description "a special qdisc as it applies to incoming traffic on an interface, 
-                     allowing for it to be filtered and policed.";
-      }
-      enum "clsact" {
-        description "a special qdisc as it applies to incoming and outgoing traffic on an interface, 
-                     allowing for it to be filtered and policed.";
-      }
-      enum "mqprio" {
-        description "Multiqueue Priority Qdisc is a simple queuing discipline 
-                     that allows mapping traffic flows to hardware queue ranges using priorities 
-                     and a configurable priority to traffic class mapping.";
-      }
-      enum "multiq" {
-        description "Multiqueue is a qdisc optimized for devices with multiple Tx queues. 
-                     It has been added for hardware that wishes to avoid head-of-line blocking.";
-      }
-      enum "netem" {
-        description "Network Emulator is an enhancement of the Linux traffic control 
-                     facilities that allow one to add delay, packet loss, duplication and 
-                     more other characteristics to packets outgoing from a selected network interface.";
-      }
-      enum "pfifo_fast" {
-        description "Standard qdisc for 'Advanced Router' enabled kernels. Consists of a 
-                     three-band queue which honors Type of Service flags, as well as the 
-                     priority that may be assigned to a packet.";
-      }
-      enum "pie" {
-        description "Proportional Integral controller-Enhanced (PIE) is a control 
-                     theoretic active queue management scheme. It is based on the 
-                     proportional integral controller but aims to control delay.";
-      }
-      enum "red" {
-        description "Random Early Detection simulates physical congestion by randomly 
-                     dropping packets when nearing configured bandwidth allocation. Well 
-                     suited to very large bandwidth applications.";
-      }
-      enum "sfb" {
-        description "Stochastic Fair Blue is a classless qdisc to manage congestion based 
-                     on packet loss and link utilization history while trying to prevent 
-                     non-responsive flows (i.e. flows that do not react to congestion 
-                     marking or dropped packets) from impacting performance of responsive flows.";
-      }
-      enum "sfq" {
-        description "Stochastic Fairness Queueing reorders queued traffic so each 
-                     'session' gets to send a packet in turn.";
-      }
-      enum "tbf" {
-        description "The Token Bucket Filter is suited for slowing traffic down to a 
-                     precisely configured rate. Scales well to large bandwidths.";
-      }
-      // classful qdiscs
-      enum "ATM" {
-        description "Map flows to virtual circuits of an underlying asynchronous transfer 
-                     mode device.";
-      }
-      enum "CBQ" {
-        description "";
-      }
-      enum "DRR" {
-        description "";
-      }
-      enum "DSMARK" {
-        description "";
-      }
-      enum "ETS" {
-        description "";
-      }
-      enum "HFSC" {
-        description "";
-      }
-      enum "HTB" {
-        description "";
-      }
-      enum "PRIO" {
-        description "";
-      }
-      enum "QFQ" {
-        description "";
-      }
+    typedef qdisc-kind {
+        type enumeration {
+        // classless qdiscs
+            enum "choke" {
+                description "Choose and Keep for responsive flows,  a classless qdisc designed to
+                both identify and penalize flows that monopolize the queue.";
+            }
+            enum "codel" {
+                description "Controlled Delay, adaptive 'no-knobs' active queue management algorithm (AQM) scheme
+                that was developed to address the shortcomings of RED and its variants.";
+            }
+            enum "bfifo" {
+                description "Byte-limited First In, First Out queue.";
+            }
+            enum "pfifo" {
+                description "Packet-limited First In, First Out queue.";
+            }
+            enum "fq" {
+                description "Fair Queue Scheduler realises TCP pacing and scales to millions of concurrent flows per qdisc.";
+            }
+            enum "fq_codel" {
+                description "Fair Queuing Controlled Delay is queuing discipline
+                that combines Fair Queuing with the CoDel AQM scheme.";
+            }
+            enum "fq_pie" {
+                description "Flow Queuing with Proportional Integral controller Enhanced, is a queuing discipline that
+                combines Flow Queuing with the PIE AQM scheme.";
+            }
+            enum "gred" {
+                description "Generalized Random Early Detection,
+                combines multiple RED queues in order to achieve multiple drop priorities.";
+            }
+            enum "hhf" {
+                description "Heavy-Hitter Filter differentiates between small flows and the opposite, heavy-hitters.
+                The goal is to catch the heavy-hitters and move them to a separate queue with less priority
+                so that bulk traffic does not affect the latency of critical traffic.";
+            }
+            enum "mqprio" {
+                description "Multiqueue Priority Qdisc is a simple queuing discipline
+                that allows mapping traffic flows to hardware queue ranges using priorities
+                and a configurable priority to traffic class mapping.";
+            }
+            enum "multiq" {
+                description "Multiqueue is a qdisc optimized for devices with multiple Tx queues.
+                It has been added for hardware that wishes to avoid head-of-line blocking.";
+            }
+            enum "netem" {
+                description "Network Emulator is an enhancement of the Linux traffic control
+                facilities that allow one to add delay, packet loss, duplication and
+                more other characteristics to packets outgoing from a selected network interface.";
+            }
+            enum "pfifo_fast" {
+                description "Standard qdisc for 'Advanced Router' enabled kernels. Consists of a
+                three-band queue which honors Type of Service flags, as well as the
+                priority that may be assigned to a packet.";
+            }
+            enum "pie" {
+                description "Proportional Integral controller-Enhanced (PIE) is a control
+                theoretic active queue management scheme. It is based on the
+                proportional integral controller but aims to control delay.";
+            }
+            enum "red" {
+                description "Random Early Detection simulates physical congestion by randomly
+                dropping packets when nearing configured bandwidth allocation. Well
+                suited to very large bandwidth applications.";
+            }
+            enum "sfb" {
+                description "Stochastic Fair Blue is a classless qdisc to manage congestion based
+                on packet loss and link utilization history while trying to prevent
+                non-responsive flows (i.e. flows that do not react to congestion
+                marking or dropped packets) from impacting performance of responsive flows.";
+            }
+            enum "sfq" {
+                description "Stochastic Fairness Queueing reorders queued traffic so each
+                'session' gets to send a packet in turn.";
+            }
+            enum "tbf" {
+                description "The Token Bucket Filter is suited for slowing traffic down to a
+                precisely configured rate. Scales well to large bandwidths.";
+            }
+            // classful qdiscs
+            enum "ATM" {
+                description "Map flows to virtual circuits of an underlying asynchronous transfer
+                mode device.";
+            }
+            enum "CBQ" {
+                description "";
+            }
+            enum "DRR" {
+                description "";
+            }
+            enum "DSMARK" {
+                description "";
+            }
+            enum "ETS" {
+                description "";
+            }
+            enum "HFSC" {
+                description "";
+            }
+            enum "HTB" {
+                description "";
+            }
+            enum "PRIO" {
+                description "";
+            }
+            enum "QFQ" {
+                description "";
+            }
+        }
+        description "Defines the supported queueing discipline kinds.";
     }
-    description "Defines the supported queueing discipline kinds.";
-  }
 
-  grouping qdisc-config {
-    leaf dev {
-      type iplink:link-ref;
-      description "Name of device 'interface' the qdisc is attached to.";
-    }
-    leaf handle {
-      type uint16; // review
-      description "Qdisc identifer, consist of a major number and a minor number, separated by a colon - major:minor. 
-                   Both major and minor are hexadecimal numbers and are limited to 16 bits.";
-    }
-    leaf parent {
-        type parent-id;
-        description "Location of the qdisc in the traffic control hierarchy.";
-    }
-    container estimator {
-      description "Configuration for traffic rate estimation.";
-      leaf interval {
-          type uint32;
-          description "Time interval in milliseconds for rate estimation.";
-      }
-      leaf ewma-log {
-          type uint8;
-          description "Exponential Weighted Moving Average (EWMA) log.
-                       Represents the weight given to older observations in the moving average.";
-      }
-    }
-    container stab {
-      description "Configuration for packet size stabilization.";
-      leaf mtu {
-          type uint32;
-          description "Maximum Transmission Unit (MTU) for the stab feature. 
-                       Helps in defining the largest packet size that can be handled.";
-      }
-      leaf tsize {
-          type uint32;
-          description "Table size for the hash table managing packet sizes. 
-                       Affects the granularity of the stabilization.";
-      }
-    }
-    leaf ingress_block {
-      type uint32; //review
-      description "Ingress tc shared block ID";
-    }
-    leaf egress_block {
-      type uint32; //review
-      description "egress tc shared block ID";
-    }
-    leaf qdisc-kind {
-      type qdisc-kind;
-      // ann: don't use leaf name "qdisc-kind" in iproute2 command, only take the value.
-      mandatory true;
-      description "The kind of qdisc to apply.";
-    }
-  }
+    container qdiscs {
+        description "Container for all qdisc configurations.";
+        list qdisc {
+            ipr2cgen:cmd-start;
+            ipr2cgen:cmd-add "tc qdisc add";
+            ipr2cgen:cmd-delete "tc qdisc del";
+            ipr2cgen:cmd-update "tc qdisc replace";
+            ipr2cgen:replace-on-update;
+            key "dev";
+            description "List of qdisc configurations.";
 
-  container tc-qdiscs {
-    description "Container for all qdisc configurations.";
+            leaf dev {
+                type iplink:link-ref;
+                description "Name of device 'interface' the qdisc is attached to.";
+            }
+            leaf parent {
+                type parent-id;
+                description "Location of the qdisc in the traffic control hierarchy.";
+            }
+            container estimator {
+                ipr2cgen:add-static-arg "estimator";
+                description "Configuration for traffic rate estimation.";
+                leaf interval {
+                    type uint32;
+                    description "Time interval in milliseconds for rate estimation.";
+                }
+                leaf ewma-log {
+                    type uint8;
+                    description "Exponential Weighted Moving Average (EWMA) log.
+                    Represents the weight given to older observations in the moving average.";
+                }
+            }
+            container stab {
+                ipr2cgen:add-static-arg "stab";
+                description "Configuration for packet size stabilization.";
+                leaf mtu {
+                    type uint32;
+                    description "Maximum Transmission Unit (MTU) for the stab feature.
+                    Helps in defining the largest packet size that can be handled.";
+                }
+                leaf tsize {
+                    type uint32;
+                    description "Table size for the hash table managing packet sizes.
+                    Affects the granularity of the stabilization.";
+                }
+            }
+            leaf qdisc-kind {
+                ipr2cgen:value-only;
+                type qdisc-kind;
 
-    list qdisc {
-      key "dev qdisc-kind";
-      description "List of qdisc configurations.";
-
-      uses qdisc-config;
+                // ann: don't use leaf name "qdisc-kind" in iproute2 command, only take the value.
+                mandatory true;
+                description "The kind of qdisc to apply.";
+            }
+        }
+        list special-qdisc {
+            ipr2cgen:cmd-start;
+            ipr2cgen:cmd-add "tc qdisc add";
+            ipr2cgen:cmd-delete "tc qdisc del";
+            ipr2cgen:cmd-update "tc qdisc replace";
+            ipr2cgen:replace-on-update;
+            key "dev kind";
+            unique "dev";
+            description "List of qdisc configurations.";
+            leaf dev {
+                type iplink:link-ref;
+                description "Name of device 'interface' the qdisc is attached to.";
+            }
+            leaf kind {
+                ipr2cgen:value-only;
+                ipr2cgen:add_leaf_at_end;
+                mandatory true;
+                type enumeration {
+                    enum "ingress" {
+                        description "a special qdisc as it applies to incoming traffic on an interface,
+                        allowing for it to be filtered and policed.";
+                    }
+                    enum "clsact" {
+                        description "a special qdisc as it applies to incoming and outgoing traffic on an interface,
+                        allowing for it to be filtered and policed.";
+                    }
+                }
+            }
+            leaf ingress_block {
+                type uint32; //review
+                description "Ingress tc shared block ID";
+            }
+            leaf egress_block {
+                when "../kind='clsact'";
+                type uint32; //review
+                description "egress tc shared block ID";
+            }
+        }
     }
-  }
 }
