@@ -505,7 +505,7 @@ int ipr2_oper_get_items_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
                            const char *xpath, const char *request_xpath, uint32_t request_id,
                            struct lyd_node **parent, void *private_data)
 {
-    return load_module_data(session, module_name, LYS_CONFIG_R, parent);
+    return load_module_data(session, module_name, LYS_CONFIG_R | LYS_CONFIG_W, parent);
 }
 
 int load_linux_running_config()
