@@ -25,7 +25,9 @@ module iproute2-tc-qdisc {
     typedef parent-id {
         description "Specifies qdisc or class parent, can be specified using ID or root";
         type union {
-            type uint16; // review
+            type string{
+                pattern '\d+:\d+';
+            }
             type enumeration {
                 enum root {
                     description "Indicates the qdisc is at the root.";
@@ -119,28 +121,28 @@ module iproute2-tc-qdisc {
                 description "Map flows to virtual circuits of an underlying asynchronous transfer
                 mode device.";
             }
-            enum "CBQ" {
+            enum "cbq" {
                 description "";
             }
-            enum "DRR" {
+            enum "drr" {
                 description "";
             }
-            enum "DSMARK" {
+            enum "dsmark" {
                 description "";
             }
-            enum "ETS" {
+            enum "ets" {
                 description "";
             }
-            enum "HFSC" {
+            enum "hfsc" {
                 description "";
             }
-            enum "HTB" {
+            enum "htb" {
                 description "";
             }
-            enum "PRIO" {
+            enum "prio" {
                 description "";
             }
-            enum "QFQ" {
+            enum "qfq" {
                 description "";
             }
         }
@@ -155,7 +157,8 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-delete "tc qdisc del";
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:replace-on-update;
-            key "dev";
+            key "dev parent";
+            unique "dev";
             description "List of qdisc configurations.";
 
             leaf dev {
@@ -164,7 +167,13 @@ module iproute2-tc-qdisc {
             }
             leaf parent {
                 type parent-id;
-                description "Location of the qdisc in the traffic control hierarchy.";
+                description "[parent_id 'e.g 8001:1' | root ] Location of the qdisc in the traffic control hierarchy. ";
+            }
+            leaf handle {
+                type string {
+                    pattern '\d+:\d+';
+                }
+                description "qdisc handle";
             }
             container estimator {
                 ipr2cgen:add-static-arg "estimator";
@@ -201,6 +210,110 @@ module iproute2-tc-qdisc {
                 mandatory true;
                 description "The kind of qdisc to apply.";
             }
+            container fifo-options {
+                when "(../qdisc-kind = 'pfifo') or (../qdisc-kind = 'bfifo')";
+                description "pfifo/bfifo related settings";
+                leaf limit {
+                    type uint32;
+                    description "Maximum queue size. Specified in bytes for bfifo, in
+                    packets for pfifo. For pfifo, defaults to the interface
+                    txqueuelen, as specified with ifconfig(8) or ip(8).  The
+                    range for this parameter is [0, UINT32_MAX].
+
+                    For bfifo, it defaults to the txqueuelen multiplied by the
+                    interface MTU.  The range for this parameter is [0,
+                    UINT32_MAX] bytes.
+
+                    Note: The link layer header was considered when counting
+                    packets length.";
+                }
+            }
+            container codel-options{
+                when "(../qdisc-kind = 'codel') or (../qdisc-kind = 'fq_codel')";
+                description "CoDel/fq_CoDel related settings";
+                leaf limit {
+                    type uint32;
+                    default 1000;
+                    description "hard limit on the real queue size. When this limit is reached,
+                    incoming packets are dropped. If the value is lowered, packets
+                    are dropped so that the new limit is met. Default is 1000
+                    packets.";
+                }
+                leaf interval {
+                    type uint32;
+                    default 99999;
+                    description
+                        "is used to ensure that the measured minimum delay does not become
+                        too stale. The minimum delay must be experienced in the last
+                        epoch of length interval.  It should be set on the order of the
+                        worst-case RTT through the bottleneck to give endpoints
+                        sufficient time to react. Default value is 100ms.";
+                }
+                leaf memory_limit {
+                    when "../../qdisc-kind = 'fq_codel'";
+                    type uint16;
+                    default 32;
+                    description
+                        "sets a limit on the total number of bytes that can be queued in
+                        this FQ-CoDel instance. The lower of the packet limit of the
+                        limit parameter and the memory limit will be enforced. Default is
+                        32 MB.";
+                }
+                leaf target {
+                    type string {
+                        pattern '\d+ms';
+                    }
+                    description "is the acceptable minimum standing/persistent queue delay. This
+                    minimum delay is identified by tracking the local minimum queue
+                    delay that packets experience.  Default and recommended value is
+                    5ms.";
+                    default "5ms";
+                }
+                leaf flows{
+                    when "../../qdisc-kind = 'fq_codel'";
+                    type uint16;
+                    default 1024;
+                    description
+                        "is the number of flows into which the incoming packets are
+                        classified. Due to the stochastic nature of hashing, multiple
+                        flows may end up being hashed into the same slot. Newer flows
+                        have priority over older ones. This parameter can be set only at
+                        load time since memory has to be allocated for the hash table.
+                        Default value is 1024.";
+                }
+                leaf quantum {
+                    when "../../qdisc-kind = 'fq_codel'";
+                    type uint16;
+                    default 1514;
+                    description
+                        "is the number of bytes used as 'deficit' in the fair queuing
+                        algorithm. Default is set to 1514 bytes which corresponds to the
+                        Ethernet MTU plus the hardware header length of 14 bytes.";
+                }
+                leaf ecn-opt{
+                    ipr2cgen:value-only;
+                    type enumeration {
+                        enum "ecn";
+                        enum "noecn";
+                    }
+                    default "noecn";
+                    description
+                        "can be used to mark packets instead of dropping them. If ecn has
+                        been enabled, noecn can be used to turn it off and vice-a-versa.
+                        By default, ecn is turned off.";
+
+                }
+                leaf drop_batch {
+                    when "../../qdisc-kind = 'fq_codel'";
+                    type uint16;
+                    default 64;
+                    description
+                        "sets the maximum number of packets to drop when limit or
+                        memory_limit is exceeded. Default value is 64.";
+                }
+
+            }
+
         }
         list special-qdisc {
             ipr2cgen:cmd-start;
@@ -208,14 +321,14 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-delete "tc qdisc del";
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:replace-on-update;
-            key "dev kind";
+            key "dev qdisc-kind";
             unique "dev";
             description "List of qdisc configurations.";
             leaf dev {
                 type iplink:link-ref;
                 description "Name of device 'interface' the qdisc is attached to.";
             }
-            leaf kind {
+            leaf qdisc-kind {
                 ipr2cgen:value-only;
                 ipr2cgen:add_leaf_at_end;
                 mandatory true;
@@ -235,7 +348,7 @@ module iproute2-tc-qdisc {
                 description "Ingress tc shared block ID";
             }
             leaf egress_block {
-                when "../kind='clsact'";
+                when "../qdisc-kind='clsact'";
                 type uint32; //review
                 description "egress tc shared block ID";
             }
