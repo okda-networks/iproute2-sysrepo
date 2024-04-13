@@ -1,0 +1,25 @@
+<links xmlns="urn:okda:iproute2:ip:link">
+    <link>
+        <name>if_tc1</name>
+        <type>dummy</type>
+        <admin-status>up</admin-status>
+    </link>
+    <link>
+        <name>if_tc2</name>
+        <type>dummy</type>
+        <admin-status>up</admin-status>
+    </link>
+</links>
+<qdiscs xmlns="urn:okda:iproute2:tc:qdisc">
+    <special-qdisc>
+        <dev>if_tc1</dev>
+        <kind>clsact</kind>
+        <ingress_block>10</ingress_block>
+        <egress_block>30</egress_block>
+    </special-qdisc>
+    <special-qdisc>
+        <dev>if_tc2</dev>
+        <kind>ingress</kind>
+        <ingress_block>10</ingress_block>
+    </special-qdisc>
+</qdiscs>

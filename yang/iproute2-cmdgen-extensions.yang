@@ -162,4 +162,8 @@ module iproute2-cmdgen-extensions {
             example is nomaster with removig vrf from link";
         argument "arg";
     }
+    extension add_leaf_at_end{
+        description
+            "instruct cmdgen to add the leaf at the end of the cmd line";
+    }
 }

@@ -48,6 +48,7 @@ typedef enum {
     FLAG_EXT,
     VALUE_ONLY_EXT,
     VALUE_ONLY_ON_UPDATE_EXT,
+    ADD_LEAF_AT_END,
 
     AFTER_NODE_ADD_STATIC_ARG_EXT,
     ON_NODE_DELETE_EXT,
@@ -55,7 +56,7 @@ typedef enum {
     //other
     ON_UPDATE_INCLUDE_EXT,
     ADD_STATIC_ARG_EXT,
-    REPLACE_ON_UPDATE_EXT
+    REPLACE_ON_UPDATE_EXT,
 
 } extension_t;
 
@@ -73,6 +74,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
                          [AFTER_NODE_ADD_STATIC_ARG_EXT] = "after-node-add-static-arg",
                          [ON_NODE_DELETE_EXT] = "on-node-delete",
+                         [ADD_LEAF_AT_END] = "add_leaf_at_end",
 
                          // other
                          [ON_UPDATE_INCLUDE_EXT] = "on-update-include",
@@ -551,6 +553,7 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val,
                        struct ly_set **inner_startcmds)
 {
     char cmd_line[CMD_LINE_SIZE] = { 0 };
+    char tail_arg[64] = { 0 };
 
     int ret;
     struct lyd_node *next;
@@ -708,7 +711,6 @@ start:
                 break;
         case LYS_LEAF:
         case LYS_LEAFLIST:
-
             arg_name = NULL;
             arg_value = NULL;
             create_cmd_arg_value(next, op_val, &arg_value);
@@ -718,14 +720,27 @@ start:
                         __func__, next->schema->name);
                 return NULL;
             }
+            int is_tail_arg = 0;
+            if (get_extension(ADD_LEAF_AT_END, next, NULL) == EXIT_SUCCESS)
+                is_tail_arg = 1;
             if (arg_name != NULL) {
-                strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                if (is_tail_arg) {
+                    strlcat(tail_arg, " ", sizeof(tail_arg));
+                    strlcat(tail_arg, arg_name, sizeof(tail_arg));
+                } else {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, arg_name, sizeof(cmd_line));
+                }
                 free(arg_name);
             }
             if (arg_value != NULL) {
-                strlcat(cmd_line, " ", sizeof(cmd_line));
-                strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                if (is_tail_arg) {
+                    strlcat(tail_arg, " ", sizeof(tail_arg));
+                    strlcat(tail_arg, arg_value, sizeof(tail_arg));
+                } else {
+                    strlcat(cmd_line, " ", sizeof(cmd_line));
+                    strlcat(cmd_line, arg_value, sizeof(cmd_line));
+                }
                 free(arg_value);
             }
             break;
@@ -733,6 +748,7 @@ start:
         LYD_TREE_DFS_END(startcmd_node, next);
     }
 done:
+    strlcat(cmd_line, tail_arg, sizeof(cmd_line)); // add the tail arg to the line.
     return strdup(cmd_line);
 }
 
@@ -760,26 +776,25 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
     struct lyd_node *dnext;
     LYD_TREE_DFS_BEGIN(original_dnode, dnext)
     {
-        ret = lyd_new_meta(original_dnode->schema->module->ctx, dnext, NULL, "yang:operation",
-                           "create", 0, NULL);
+        char dxpath[1024] = { 0 };
+        lyd_path(dnext, LYD_PATH_STD, dxpath, 1024);
+        // check if the original dnode exist in the change node, if exist skip. we
+        // want to add the none existing node only.
+        ret = lyd_find_path(dnode_top_level, dxpath, 0, NULL);
         if (ret != LY_SUCCESS) {
-            fprintf(stderr,
-                    "%s: failed to set meta data 'yang:operation=create' for node. \"%s\" \n",
-                    __func__, (*dnode)->schema->name);
-            lyd_free_all(original_dnode);
-            return EXIT_FAILURE;
+            struct lyd_node *new_dnode;
+            lyd_new_path(dnode_top_level, NULL, dxpath, lyd_get_value(dnext), 0, &new_dnode);
+            ret = lyd_new_meta(NULL, new_dnode, NULL, "yang:operation", "create", 0, NULL);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr,
+                        "%s: failed to set meta data 'yang:operation=create' for node. \"%s\" \n",
+                        __func__, (*dnode)->schema->name);
+                lyd_free_all(original_dnode);
+            }
         }
         LYD_TREE_DFS_END(original_dnode, dnext)
     }
-
-    ret =
-        lyd_merge_tree(&dnode_top_level, original_dnode, LYD_MERGE_WITH_FLAGS | LYD_MERGE_DESTRUCT);
-
-    if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to merge original and change node.\n", __func__);
-        lyd_free_all(original_dnode);
-        return EXIT_FAILURE;
-    }
+    lyd_free_all(original_dnode);
     return EXIT_SUCCESS;
 }
 
@@ -999,7 +1014,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     // get the rollback node.
     ret = lyd_diff_reverse_all(startcmd_node, &rollback_dnode);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed create rollback_dnode by lyd_diff_reverse_all(): %s\n",
+        fprintf(stderr, "%s: failed to create rollback_dnode by lyd_diff_reverse_all(): %s\n",
                 __func__, ly_strerrcode(ret));
         ret = EXIT_FAILURE;
         goto cleanup;
