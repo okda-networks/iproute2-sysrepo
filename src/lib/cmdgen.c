@@ -139,7 +139,7 @@ void free_cmds_info(struct cmd_info **cmds_info)
  * @param static_arg [out] extracted static arg, e.a "dev"
  * @param xpath_arg [out]  extracted xpath arg, e.a "../../name" if there is any
  */
-void extract_satic_and_xpath_args(char *input, char **static_arg, char **xpath_arg)
+void extract_static_and_xpath_args(char *input, char **static_arg, char **xpath_arg)
 {
     // Find the position of '(' and ')'
     char *start = strchr(input, '(');
@@ -477,7 +477,7 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
             char *static_arg = NULL, *xpath_arg = NULL;
             char fin_arg_value[1024] = { 0 };
 
-            extract_satic_and_xpath_args(add_static_arg, &static_arg, &xpath_arg);
+            extract_static_and_xpath_args(add_static_arg, &static_arg, &xpath_arg);
             strlcat(fin_arg_value, *arg_value, sizeof(fin_arg_value));
             strlcat(fin_arg_value, " ", sizeof(fin_arg_value));
             strlcat(fin_arg_value, static_arg, sizeof(fin_arg_value));

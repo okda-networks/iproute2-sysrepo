@@ -17,8 +17,8 @@
 clean_up(){
   ip link del if_tc1 2>/dev/null
   ip link del if_tc2 2>/dev/null
-  ip tc qdisc del dev if_tc1 clsact 2>/dev/null
-  ip tc qdisc del dev if_tc2 ingress 2>/dev/null
+  ip link del if_tc3 2>/dev/null
+  ip link del if_tc4 2>/dev/null
 }
 
 ret=0
@@ -40,18 +40,36 @@ fi
 
 # Step 2: Check if qdisc created
 if tc qdisc show dev if_tc1 clsact >/dev/null 2>&1; then
-    echo "TEST-INFO: qdisc for if_tc1 created successfully (OK)"
+    echo "TEST-INFO: clsact qdisc for if_tc1 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create qdisc for if_tc1 (FAIL)"
+    echo "TEST-ERROR: Failed to create clsact qdisc for if_tc1 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Step 3: Check if second qdisc is created
 if tc qdisc show dev if_tc2 ingress >/dev/null 2>&1; then
-    echo "TEST-INFO: qdisc for if_tc2  created successfully (OK)"
+    echo "TEST-INFO: ingress qdisc for if_tc2  created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create qdisc for if_tc2 (FAIL)"
+    echo "TEST-ERROR: Failed to create ingress qdisc for if_tc2 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Step 4: Check if qdisc created
+if tc qdisc show dev if_tc3 root >/dev/null 2>&1; then
+    echo "TEST-INFO: pfifo qdisc for if_tc1 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create pfifo qdisc for if_tc1 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Step 5: Check if second qdisc is created
+if tc qdisc show dev if_tc4 root >/dev/null 2>&1; then
+    echo "TEST-INFO: fq_codel qdisc for if_tc2  created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create fq_codel qdisc for if_tc2 (FAIL)"
     clean_up
     exit 1
 fi
@@ -63,29 +81,57 @@ echo "--------------------"
 echo "[1] Test qdisc DELETE"
 echo "---------------------"
 
-# Step 1: delete the routes from sysrepo
+# Step 1: delete the qdisc from sysrepo
 sysrepocfg -C startup -d running -m iproute2-tc-qdisc || ret=$?
 
-# Attempt to delete the first qdisc
+# Attempt to delete the clsact qdisc
 tc qdisc del dev if_tc1 clsact 2>/dev/null
 
 # if cmd exist failed (no such process) then the route deleted successfully.
 if [ $? -ne 0 ]; then
-    echo "qdisc for if_tc1 deleted successfully (OK)"
+    echo "clsact qdisc for if_tc1 deleted successfully (OK)"
 else
-    echo "Failed to delete qdisc for if_tc1 (FAIL)"
+    echo "Failed to delete clsact qdisc for if_tc1 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Attempt to delete the ingress route
+tc qdisc del dev if_tc2 ingress 2>/dev/null
+
+# if cmd exist failed (no such process) then the route deleted successfully.
+if [ $? -ne 0 ]; then
+    echo "ingress qdisc for if_tc2 deleted successfully (OK)"
+else
+    echo "Failed to delete ingress qdisc for if_tc2 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Attempt to delete the first qdisc
+tc qdisc del dev if_tc3 root 2>/dev/null
+
+# if cmd exist failed (no such process) then the route deleted successfully.
+if [ $? -ne 0 ]; then
+    echo "pfifo qdisc for if_tc1 deleted successfully (OK)"
+else
+    echo "Failed to delete pfifo qdisc for if_tc1 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Attempt to delete the second route
-tc qdisc del dev if_tc2 ingress 2>/dev/null
+tc qdisc del dev if_tc4 root 2>/dev/null
 
 # if cmd exist failed (no such process) then the route deleted successfully.
 if [ $? -ne 0 ]; then
-    echo "qdisc for if_tc2 deleted successfully (OK)"
+    echo "fq_codel qdisc for if_tc2 deleted successfully (OK)"
 else
-    echo "Failed to delete qdisc for if_tc2 (FAIL)"
+    echo "Failed to delete fq_codel qdisc for if_tc2 (FAIL)"
     clean_up
     exit 1
 fi
+
+clean_up
+
+exit $ret
