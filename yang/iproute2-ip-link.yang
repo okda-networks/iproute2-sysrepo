@@ -503,10 +503,6 @@ module iproute2-ip-link {
     grouping link-state {
         container state {
             config false;
-            leaf ifindex {
-                type uint64;
-                description "index of the interface.";
-            }
             leaf-list flags {
                 type enumeration {
                     enum "NO-CARRIER";
@@ -533,12 +529,6 @@ module iproute2-ip-link {
                 description "A list of flags representing various states and capabilities of the interface.
                 Each flag denotes a specific characteristic or status";
             }
-            leaf mtu {
-                type uint32{
-                    range "64..65536";
-                }
-                description "Specifies the Maximum Transmission Unit (MTU) size in bytes for the interface.";
-            }
             leaf qdisc {
                 type string; //TODO review
                 description "Reference to the queuing discipline (qdisc) associated with the interface.";
@@ -561,72 +551,6 @@ module iproute2-ip-link {
                     enum "DORMANT";
                 }
                 description "Defines the current link mode of the interface.";
-            }
-            leaf group {
-                type union {
-                    type uint64;
-                    type enumeration {
-                        enum "default";
-                    }
-                }
-                description "Group ID assiciated with the interface, allowing for collective management or categorization.";
-            }
-            leaf txqlen {
-                type uint32;
-                description "Specifies the length of the transmit queue for the interface";
-            }
-            leaf link_type {
-                type union {
-                    type identityref {
-                        base link-type;
-                    }
-                    type identityref {
-                        base oper-link-type;
-                    }
-                }
-                description "Indicates the specific type of the device";
-            }
-            leaf address {
-                type yang:mac-address;
-                description "MAC address of the interface";
-            }
-            leaf broadcast {
-                type yang:mac-address;
-                description "Specifies the broadcast MAC address for the interface";
-
-            }
-            leaf promiscuity {
-                type uint32;
-                description "Indicates the level of promiscuity of the interface.
-                reflecting how many types of packets are accepted by the interface.";
-            }
-            leaf min_mtu {
-                type uint32;
-                description "Specifies the minimum MTU size that the interface supports";
-            }
-            leaf max_mtu {
-                type uint32;
-                description "Specifies the maximum MTU size that the interface supports";
-            }
-            leaf inet6_addr_gen_mode {
-                type union {
-                    type yang:hex-string;
-                    type enumeration {
-                        enum "eui64";
-                        enum "none";
-                        enum "stable_secret";
-                        enum "random";
-                    }
-                }
-                description "Specifies the method used for generating IPv6 addresses for the interface.";
-            }
-            leaf num_tx_queues {
-                type uint32;
-                description "The number of transmit queues available on the interface";
-            }
-            leaf num_rx_queues {
-                type uint32;
-                description "The number of receive queues available on the interface";
             }
             container stats64 {
                 description "Contains 64-bit counters for various network statistics.

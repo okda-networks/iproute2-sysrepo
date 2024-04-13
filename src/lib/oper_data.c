@@ -754,11 +754,10 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
         if (lysc_is_key(s_node))
             break;
 
-        /* on config load don't process read-only leafs
-               on operational load, don't process write leafs */
-        if ((lys_flags & LYS_CONFIG_W) && (s_node->flags & LYS_CONFIG_R))
+        /* stop processing if s_node flags doesn't include the requested "config true|false" flags */
+        if ((s_node->flags & LYS_CONFIG_W) && !(lys_flags & LYS_CONFIG_W))
             break;
-        if ((lys_flags & LYS_CONFIG_R) && (s_node->flags & LYS_CONFIG_W))
+        if ((s_node->flags & LYS_CONFIG_R) && !(lys_flags & LYS_CONFIG_R))
             break;
 
         if (s_node->nodetype == LYS_LEAFLIST)
