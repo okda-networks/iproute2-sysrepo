@@ -313,6 +313,124 @@ module iproute2-tc-qdisc {
                 }
 
             }
+            container tbf-options {
+                when "../qdisc-kind = 'tbf'";
+                must "./rate and ./burst" {
+                    error-message "rate and burst are required for tbf qdisc";
+                }
+                must "./limit or ./latency" {
+                    error-message "either \"limit\" or \"latency\" is required. for tbf qdisc";
+                }
+                description
+                    "The Token Bucket Filter is a classful queueing discipline
+                    available for traffic control with the tc(8) command.
+
+                    TBF is a pure shaper and never schedules traffic. It is non-work-
+                    conserving and may throttle itself, although packets are
+                    available, to ensure that the configured rate is not exceeded.
+                    It is able to shape up to 1mbit/s of normal traffic with ideal
+                    minimal burstiness, sending out data exactly at the configured
+                    rates.
+
+                    Much higher rates are possible but at the cost of losing the
+                    minimal burstiness. In that case, data is on average dequeued at
+                    the configured rate but may be sent much faster at millisecond
+                    timescales. Because of further queues living in network adaptors,
+                    this is often not a problem.";
+                leaf rate {
+                    type string;
+                    description
+                        "The speed knob. See remarks above about limits! See tc(8)
+                        for units. ese parameters accept a floating
+                        point number, possibly followed by either a unit (both SI
+                        and IEC units supported), or a float followed by a '%'
+                        character to specify the rate as a percentage of the
+                        device's speed (e.g. 5%, 99.5%). Warning: specifying the
+                        rate as a percentage means a fraction of the current
+                        speed; if the speed changes, the value will not be
+                        recalculated.
+
+                        bit or a bare number
+                        Bits per second
+
+                        kbit   Kilobits per second
+                        mbit   Megabits per second
+                        gbit   Gigabits per second
+                        tbit   Terabits per second
+                        bps    Bytes per second
+                        kbps   Kilobytes per second
+                        mbps   Megabytes per second
+                        gbps   Gigabytes per second
+                        tbps   Terabytes per second";
+                }
+                leaf burst {
+                    type uint32;
+                    description
+                        "Size of the bucket, in
+                        bytes. This is the maximum amount of bytes that tokens can
+                        be available for instantaneously.  In general, larger
+                        shaping rates require a larger buffer. For 10mbit/s on
+                        Intel, you need at least 10kbyte buffer if you want to
+                        reach your configured rate!
+
+                        If your buffer is too small, packets may be dropped
+                        because more tokens arrive per timer tick than fit in your
+                        bucket.  The minimum buffer size can be calculated by
+                        dividing the rate by HZ.
+
+                        Token usage calculations are performed using a table which
+                        by default has a resolution of 8 packets.  This resolution
+                        can be changed by specifying the cell size with the burst.
+                        For example, to specify a 6000 byte buffer with a 16 byte
+                        cell size, set a burst of 6000/16. You will probably never
+                        have to set this. Must be an integral power of 2.";
+                }
+                choice queue-limit {
+                    case byte-limit{
+                        leaf limit {
+                            type uint32;
+                            description
+                                "Limit the number of bytes that can be queued waiting
+                                for tokens to become available";
+                        }
+                    }
+                    case pkt-latency {
+                        leaf latency {
+                            type uint32;
+                            description
+                                "specifies the maximum amount of time a packet can
+                                sit in the TBF.";
+                        }
+                    }
+
+                }
+                leaf mpu {
+                    type uint16;
+                    default 0;
+                    description
+                        "A zero-sized packet does not use zero bandwidth. For
+                        ethernet, no packet uses less than 64 bytes. The Minimum
+                        Packet Unit determines the minimal token usage (specified
+                        in bytes) for a packet. Defaults to zero.";
+                }
+                leaf peakrate {
+                    type uint32;
+                    description
+                        "Maximum depletion rate of the bucket. The peakrate does
+                        not need to be set, it is only necessary if perfect
+                        millisecond timescale shaping is required.";
+                }
+                leaf mtu {
+                    type uint16;
+                    description
+                        " Specifies the size of the peakrate bucket. For perfect
+                        accuracy, should be set to the MTU of the interface.  If a
+                        peakrate is needed, but some burstiness is acceptable,
+                        this size can be raised. A 3000 byte minburst allows
+                        around 3mbit/s of peakrate, given 1000 byte packets.";
+                }
+
+            }
 
         }
         list special-qdisc {
