@@ -1,0 +1,36 @@
+<tc-filters xmlns="urn:okda:iproute2:tc:filter">
+    <dev-filter>
+        <dev>if_tc_f2</dev>
+        <direction>ingress</direction>
+        <protocol>ip</protocol>
+        <rule>
+            <pref>10</pref>
+            <filter-kind>flower</filter-kind>
+            <flower-options>
+                <match>
+                    <ip_proto>icmp</ip_proto>
+                    <src_ip>1.2.1.2/32</src_ip>
+                </match>
+                <action>pass</action>
+            </flower-options>
+        </rule>
+        <rule>
+            <pref>20</pref>
+            <filter-kind>flower</filter-kind>
+            <flower-options>
+                <action>drop</action>
+            </flower-options>
+        </rule>
+    </dev-filter>
+    <shared-block-filter xmlns="urn:okda:iproute2:tc:filter">
+        <block>10</block>
+        <protocol>ip</protocol>
+        <rule>
+            <pref>10</pref>
+            <filter-kind>flower</filter-kind>
+            <flower-options>
+                <action>pass</action>
+            </flower-options>
+        </rule>
+    </shared-block-filter>
+</tc-filters>

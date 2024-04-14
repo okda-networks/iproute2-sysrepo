@@ -37,6 +37,7 @@ typedef enum {
     CMD_START_EXT,
     GROUP_LIST_WITH_SEPARATOR_EXT,
     GROUP_LEAFS_VALUES_SEPARATOR_EXT,
+    INCLUDE_PARENT_LEAFS,
 
     // root container extensions
     CMD_ADD_EXT,
@@ -66,6 +67,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [CMD_UPDATE_EXT] = "cmd-update",
                          [GROUP_LIST_WITH_SEPARATOR_EXT] = "group-list-with-separator",
                          [GROUP_LEAFS_VALUES_SEPARATOR_EXT] = "group-leafs-values-separator",
+                         [INCLUDE_PARENT_LEAFS] = "include_parent_leafs",
 
                          // leaf extensions
                          [ARG_NAME_EXT] = "arg-name",
@@ -83,7 +85,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
 
 void dup_argv(char ***dest, char **src, int argc)
 {
-    *dest = (char **)malloc(argc * sizeof(char *));
+    *dest = (char **)malloc((argc + 1) * sizeof(char *));
     if (*dest == NULL) {
         fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         exit(EXIT_FAILURE);
@@ -95,6 +97,7 @@ void dup_argv(char ***dest, char **src, int argc)
             exit(EXIT_FAILURE);
         }
     }
+    (*dest)[argc] = NULL; // NULL terminator
 }
 
 void free_argv(char **argv, int argc)
@@ -295,7 +298,7 @@ void parse_command(const char *command, int *argc, char ***argv)
     }
 
     // Allocate memory for argv
-    *argv = (char **)malloc((*argc) * sizeof(char *));
+    *argv = (char **)malloc((*argc + 1) * sizeof(char *));
     if (*argv == NULL) {
         fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         exit(EXIT_FAILURE);
@@ -312,6 +315,7 @@ void parse_command(const char *command, int *argc, char ***argv)
         token = strtok(NULL, " ");
         i++;
     }
+    (*argv)[*argc] = NULL; // NULL terminator
     free(cmd_copy);
 }
 
@@ -545,12 +549,10 @@ struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *no
 /**
  * create iproute2 arguments out of lyd2 node, this will take the op_val into consideration,
  * @param startcmd_node lyd_node to generate arg for, example link, nexthop, filter ... etc
- * @param inner_startcmds
  * @param op_val operation value
  * @return
  */
-char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val,
-                       struct ly_set **inner_startcmds)
+char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
 {
     char cmd_line[CMD_LINE_SIZE] = { 0 };
     char tail_arg[64] = { 0 };
@@ -566,19 +568,9 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val,
 start:
         switch (next->schema->nodetype) {
         case LYS_LIST:
-            // check if this is inner startcmd, to add it for inner_startcmds set to generate its
-            // cmd later.
-            if (is_startcmd_node(next)) {
+            // if the list node is startcmd or it's parent has del operation then skip it.
+            if (is_startcmd_node(next) || op_val == DELETE_OPR) {
                 // if the root startcmd is delete, we don't want to execute this cmd, just skip.
-                if (inner_startcmds != NULL && op_val != DELETE_OPR) {
-                    ly_set_add(*inner_startcmds, next, 1, NULL);
-                }
-                if (next->next) { // move to next sibling and start from beginning,
-                    next = next->next;
-                    goto start;
-                } else
-                    goto done; // no more sibling, go to done.
-            } else if (op_val == DELETE_OPR || get_operation(next) == DELETE_OPR) {
                 if (next->next) { // move to next sibling and start from beginning,
                     next = next->next;
                     goto start;
@@ -798,14 +790,31 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
     return EXIT_SUCCESS;
 }
 
-char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
-                   struct ly_set **inner_startcmds)
+char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 {
     oper_t op_val;
     char cmd_line[CMD_LINE_SIZE] = { 0 };
 
     // prepare for new command
     op_val = get_operation(startcmd_node);
+
+    // special case: for start_cmd that is inside a parent which is not start cmd (e.g tc-filter),
+    // in case of delete the inner start_cmd node will not have an operation, so we take it from
+    // the parent
+    if (op_val == UNKNOWN_OPR) {
+        if (lyd_parent(startcmd_node)) {
+            int ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr,
+                        "%s: failed to set meta data 'yang:operation=delete' for node. \"%s\" \n",
+                        __func__, startcmd_node->schema->name);
+                return NULL;
+            }
+
+            op_val = DELETE_OPR;
+        }
+    }
+
     if (op_val == UNKNOWN_OPR) {
         fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
@@ -817,8 +826,15 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
     }
     // add cmd prefix to the cmd_line
     strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
+    // check if this starcmd is including the parent leafs (tc filter case)
+    if (get_extension(INCLUDE_PARENT_LEAFS, startcmd_node, NULL) == EXIT_SUCCESS) {
+        struct lyd_node *start_cmd_parent = lyd_parent(startcmd_node);
+        char *parent_cmd_args = lyd2cmdline_args(start_cmd_parent, op_val);
+        strlcat(cmd_line, parent_cmd_args, sizeof(cmd_line));
+        free(parent_cmd_args);
+    }
     // get the cmd args for the startcmd_node
-    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val, inner_startcmds);
+    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val);
     if (cmd_args == NULL) {
         fprintf(stderr, "%s: failed to create cmdline arguments for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
@@ -970,12 +986,15 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     if (startcmd_node->priv != NULL)
         return EXIT_SUCCESS;
 
+    // if the parent is startcmd, and the parent is delete, skip this inner startcmd.
+    struct lyd_node *startcmd_parent = lyd_parent(startcmd_node);
+    if (is_startcmd_node(startcmd_parent) && get_operation(startcmd_parent) == DELETE_OPR)
+        return EXIT_SUCCESS;
+
     int ret = EXIT_SUCCESS;
     char *oper2cmd_prefix[3] = { NULL };
     char *cmd_line = NULL, *rollback_cmd_line = NULL;
     struct lyd_node *rollback_dnode = NULL;
-    struct ly_set *inner_startcmds = NULL;
-    ly_set_new(&inner_startcmds);
     // first get the add, update, delete cmds prefixis from schema extensions
     if (get_extension(CMD_ADD_EXT, startcmd_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
         fprintf(stderr,
@@ -1004,15 +1023,20 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix, &inner_startcmds);
+    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
     if (cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
         ret = EXIT_FAILURE;
         goto cleanup;
     }
+    // before calling diff_reserve we need to do dup_single, otherwise all sibling startcmds,
+    // will be reversed
+    struct lyd_node *tmp_startcmd;
+    lyd_dup_single(startcmd_node, NULL, LYD_DUP_RECURSIVE, &tmp_startcmd);
     // get the rollback node.
-    ret = lyd_diff_reverse_all(startcmd_node, &rollback_dnode);
+    ret = lyd_diff_reverse_all(tmp_startcmd, &rollback_dnode);
+    lyd_free_all(tmp_startcmd);
     if (ret != LY_SUCCESS) {
         fprintf(stderr, "%s: failed to create rollback_dnode by lyd_diff_reverse_all(): %s\n",
                 __func__, ly_strerrcode(ret));
@@ -1035,7 +1059,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix, NULL);
+    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
     if (rollback_cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n", __func__,
                 rollback_dnode->schema->name);
@@ -1043,16 +1067,6 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
     ret = add_command(cmds, cmd_idx, cmd_line, rollback_cmd_line);
-    if (inner_startcmds->count > 0) {
-        for (int i = 0; i < inner_startcmds->count; i++) {
-            ret = add_cmd_info_core(cmds, cmd_idx, inner_startcmds->dnodes[i]);
-            if (ret != EXIT_SUCCESS) {
-                fprintf(stderr, "%s: failed to generate ipr2 cmd for inner_startcmd node \"%s\" \n",
-                        __func__, inner_startcmds->dnodes[i]->schema->name);
-                goto cleanup;
-            }
-        }
-    }
 
 cleanup:
     if (cmd_line)
@@ -1067,8 +1081,6 @@ cleanup:
         free(oper2cmd_prefix[UPDATE_OPR]);
     if (oper2cmd_prefix[DELETE_OPR])
         free(oper2cmd_prefix[DELETE_OPR]);
-    if (inner_startcmds)
-        ly_set_free(inner_startcmds, NULL);
     return ret;
 }
 
@@ -1162,58 +1174,52 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     }
 
     const struct lyd_node *change_node;
-    struct lyd_node *next = NULL, *child_node = NULL;
+    struct lyd_node *next = NULL;
+    struct ly_set *start_cmds_set;
+    ly_set_new(&start_cmds_set);
     // initialize ->priv to NULL.
     LY_LIST_FOR(all_change_nodes, change_node)
     {
-        child_node = lyd_child(change_node);
+        LYD_TREE_DFS_BEGIN(change_node, next)
+        {
+            if (is_startcmd_node(next))
+                ly_set_add(start_cmds_set, next, 0, 0);
 
+            LYD_TREE_DFS_END(change_node, next)
+        }
         lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
         fprintf(stdout, "--%s", node_print_text);
         free(node_print_text);
+    }
 
-        LY_LIST_FOR(child_node, next)
-        {
-            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
-                next->priv = NULL;
-            }
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        start_cmds_set->dnodes[i]->priv = NULL;
+    }
+
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        int ret =
+            add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, start_cmds_set->dnodes[i]);
+        if (ret != EXIT_SUCCESS) {
+            free_cmds_info(cmds);
+            return NULL;
         }
     }
 
-    // loop through all modules and add all dependencies first.
-    LY_LIST_FOR(all_change_nodes, change_node)
-    {
-        child_node = lyd_child(change_node);
-        //
-        LY_LIST_FOR(child_node, next)
-        {
-            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
-                int ret = add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, next);
-                if (ret != EXIT_SUCCESS) {
-                    free_cmds_info(cmds);
-                    return NULL;
-                }
-            }
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        int ret =
+            add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, start_cmds_set->dnodes[i]);
+        if (ret != EXIT_SUCCESS) {
+            free_cmds_info(cmds);
+            return NULL;
         }
     }
-
-    // loop through all modules again and add all none processed nodes (->priv == NULL).
-    LY_LIST_FOR(all_change_nodes, change_node)
-    {
-        child_node = lyd_child(change_node);
-        // add none dependencies (->priv == NULL) second.
-        LY_LIST_FOR(child_node, next)
-        {
-            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
-                // check if node is already added (through add_dependencies_cmd_info())
-                if (next->priv == NULL) {
-                    if (add_cmd_info_core(cmds, &cmd_idx, next) != EXIT_SUCCESS) {
-                        free_cmds_info(cmds);
-                        return NULL;
-                    }
-                    next->priv = &processed;
-                }
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        if (start_cmds_set->dnodes[i]->priv == NULL) {
+            if (add_cmd_info_core(cmds, &cmd_idx, start_cmds_set->dnodes[i]) != EXIT_SUCCESS) {
+                free_cmds_info(cmds);
+                return NULL;
             }
+            start_cmds_set->dnodes[i]->priv = &processed;
         }
     }
 
