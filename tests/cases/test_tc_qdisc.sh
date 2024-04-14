@@ -19,6 +19,7 @@ clean_up(){
   ip link del if_tc2 2>/dev/null
   ip link del if_tc3 2>/dev/null
   ip link del if_tc4 2>/dev/null
+  ip link del if_tc5 2>/dev/null
 }
 
 ret=0
@@ -38,7 +39,7 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     exit "$ret"
 fi
 
-# Step 2: Check if qdisc created
+# Step 2: Check if clsact qdisc created
 if tc qdisc show dev if_tc1 clsact >/dev/null 2>&1; then
     echo "TEST-INFO: clsact qdisc for if_tc1 created successfully (OK)"
 else
@@ -47,7 +48,7 @@ else
     exit 1
 fi
 
-# Step 3: Check if second qdisc is created
+# Step 3: Check if ingress qdisc is created
 if tc qdisc show dev if_tc2 ingress >/dev/null 2>&1; then
     echo "TEST-INFO: ingress qdisc for if_tc2  created successfully (OK)"
 else
@@ -56,20 +57,29 @@ else
     exit 1
 fi
 
-# Step 4: Check if qdisc created
+# Step 4: Check if pfifo qdisc created
 if tc qdisc show dev if_tc3 root >/dev/null 2>&1; then
-    echo "TEST-INFO: pfifo qdisc for if_tc1 created successfully (OK)"
+    echo "TEST-INFO: pfifo qdisc for if_tc3 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create pfifo qdisc for if_tc1 (FAIL)"
+    echo "TEST-ERROR: Failed to create pfifo qdisc for if_tc3 (FAIL)"
     clean_up
     exit 1
 fi
 
-# Step 5: Check if second qdisc is created
+# Step 5: Check if fq_codel qdisc is created
 if tc qdisc show dev if_tc4 root >/dev/null 2>&1; then
-    echo "TEST-INFO: fq_codel qdisc for if_tc2  created successfully (OK)"
+    echo "TEST-INFO: fq_codel qdisc for if_tc4  created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create fq_codel qdisc for if_tc2 (FAIL)"
+    echo "TEST-ERROR: Failed to create fq_codel qdisc for if_tc4 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Step 6: Check if tbf qdisc is created
+if tc qdisc show dev if_tc5 root >/dev/null 2>&1; then
+    echo "TEST-INFO: tbf qdisc for if_tc5  created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create tbf qdisc for if_tc5 (FAIL)"
     clean_up
     exit 1
 fi
@@ -96,7 +106,7 @@ else
     exit 1
 fi
 
-# Attempt to delete the ingress route
+# Attempt to delete the ingress qdisc
 tc qdisc del dev if_tc2 ingress 2>/dev/null
 
 # if cmd exist failed (no such process) then the route deleted successfully.
@@ -120,7 +130,7 @@ else
     exit 1
 fi
 
-# Attempt to delete the second route
+# Attempt to delete the qdisc
 tc qdisc del dev if_tc4 root 2>/dev/null
 
 # if cmd exist failed (no such process) then the route deleted successfully.
@@ -128,6 +138,18 @@ if [ $? -ne 0 ]; then
     echo "fq_codel qdisc for if_tc2 deleted successfully (OK)"
 else
     echo "Failed to delete fq_codel qdisc for if_tc2 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Attempt to delete the qdisc
+tc qdisc del dev if_tc5 root 2>/dev/null
+
+# if cmd exist failed (no such process) then the route deleted successfully.
+if [ $? -ne 0 ]; then
+    echo "tbf qdisc for if_tc5 deleted successfully (OK)"
+else
+    echo "Failed to delete tbf qdisc for if_tc5 (FAIL)"
     clean_up
     exit 1
 fi

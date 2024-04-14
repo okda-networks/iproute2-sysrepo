@@ -19,6 +19,11 @@
         <type>dummy</type>
         <admin-status>up</admin-status>
     </link>
+    <link>
+        <name>if_tc5</name>
+        <type>dummy</type>
+        <admin-status>up</admin-status>
+    </link>
 </links>
 <qdiscs xmlns="urn:okda:iproute2:tc:qdisc">
     <qdisc>
@@ -38,6 +43,16 @@
             <flows>1001</flows>
             <drop_batch>70</drop_batch>
         </codel-options>
+    </qdisc>
+    <qdisc>
+        <dev>if_tc5</dev>
+        <parent>root</parent>
+        <qdisc-kind>tbf</qdisc-kind>
+        <tbf-options>
+            <rate>3200bps</rate>
+            <burst>20480</burst>
+            <limit>20300</limit>
+        </tbf-options>
     </qdisc>
     <special-qdisc>
         <dev>if_tc1</dev>
