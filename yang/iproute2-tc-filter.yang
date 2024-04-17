@@ -229,7 +229,9 @@ module iproute2-tc-filter {
             description "A list of filters.";
             key "dev direction";
             leaf dev {
-                type iplink:link-ref;
+                type leafref {
+                    path '/qdisc:qdiscs/qdisc:special-qdisc/qdisc:dev';
+                }
                 description "Name of device 'interface' the filter is attached to.";
                 mandatory true;
             }
@@ -248,16 +250,14 @@ module iproute2-tc-filter {
         list shared-block-filter {
             key "block";
             leaf block {
-            type uint32;
-            // TODO: type should be leafref, once onmcli issue #105
-//                type union{
-//                    type leafref {
-//                        path '/qdisc:qdiscs/qdisc:special-qdisc/qdisc:ingress_block';
-//                    }
-//                    type leafref {
-//                        path '/qdisc:qdiscs/qdisc:special-qdisc/qdisc:egress_block';
-//                    }
-//                }
+                type union{
+                    type leafref {
+                        path '/qdisc:qdiscs/qdisc:special-qdisc/qdisc:ingress_block';
+                    }
+                    type leafref {
+                        path '/qdisc:qdiscs/qdisc:special-qdisc/qdisc:egress_block';
+                    }
+                }
                 description
                     "shared block id";
             }

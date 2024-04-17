@@ -87,7 +87,7 @@ echo "[1] Test route DELETE"
 echo "---------------------"
 
 # Step 1: delete the routes from sysrepo
-sysrepocfg -C startup -d running -m iproute2-ip-route || ret=$?
+sysrepocfg -C startup -d running || ret=$?
 
 # Attempt to delete the first route
 ip route del 11.11.11.11/32 2>/dev/null
@@ -113,4 +113,3 @@ else
     exit 1
 fi
 
-clean_up

@@ -29,7 +29,6 @@ echo "---------------------"
 
 # Step 1: Add filter to RUNNING data store
 sysrepocfg -d running --edit  tests/cases/test_tc_filter_data.xml || ret=$?
-sysrepocfg -d running --edit  tests/cases/test_tc_filter_data2.xml || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     echo "TEST-ERROR: failed to create filter in sysrepo datastore"
@@ -65,7 +64,7 @@ echo "[1] Test filter DELETE"
 echo "---------------------"
 
 # Step 1: delete the filter from sysrepo
-sysrepocfg -C startup -d running -m iproute2-tc-filter || ret=$?
+sysrepocfg -C startup -d running || ret=$?
 
 output=$(tc filter show dev if_tc_f2 ingress)
 # Step 2: Check if dev-filter created
