@@ -26,6 +26,7 @@ typedef enum {
     OPER_VALUE_MAP_EXT,
     OPER_FLAG_MAP_EXT,
     OPER_CK_ARGNAME_PRESENCE_EXT,
+    OPER_DEFAULT_VALUE_EXT,
     OPER_STOP_IF_EXT,
     OPER_COMBINE_VALUES_EXT,
     OPER_SUB_JOBJ_EXT,
@@ -37,6 +38,7 @@ char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
                               [OPER_VALUE_MAP_EXT] = "oper-value-map",
                               [OPER_FLAG_MAP_EXT] = "oper-flag-map",
                               [OPER_CK_ARGNAME_PRESENCE_EXT] = "oper-ck-argname-presence",
+                              [OPER_DEFAULT_VALUE_EXT] = "oper-default-val",
                               [OPER_STOP_IF_EXT] = "oper-stop-if",
                               [OPER_COMBINE_VALUES_EXT] = "oper-combine-values",
                               [OPER_SUB_JOBJ_EXT] = "oper-sub-jobj" };
@@ -194,10 +196,10 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
     *key_values = NULL;
     *values_lengths = NULL;
     struct json_object *temp_value, *combine_ext_jobj = NULL;
-    char *key_name;
-    char *combine_ext_str = NULL;
+
     const struct lysc_node *child;
     for (child = list->child; child; child = child->next) {
+        char *key_name = NULL, *combine_ext_str = NULL, *default_val = NULL;
         if (lysc_is_key(child)) {
             if (get_lys_extension(OPER_ARG_NAME_EXT, child, &key_name) == EXIT_SUCCESS) {
                 if (key_name == NULL) {
@@ -209,6 +211,16 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
                 }
             } else {
                 key_name = strdup(child->name);
+            }
+
+            if (get_lys_extension(OPER_DEFAULT_VALUE_EXT, child, &default_val) == EXIT_SUCCESS) {
+                if (default_val == NULL) {
+                    fprintf(stderr,
+                            "%s: ipr2cgen:oper-default-val extension found but failed to "
+                            "get the value for node \"%s\"\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
             }
 
             if (get_lys_extension(OPER_COMBINE_VALUES_EXT, child, &combine_ext_str) ==
@@ -270,15 +282,39 @@ int get_list_keys(const struct lysc_node_list *list, json_object *json_array_obj
                 key_count++;
             } else {
                 // key value not found in json data.
-                ret = EXIT_FAILURE;
-                goto cleanup;
+                if (default_val != NULL) {
+                    // Resize the arrays to accommodate key additions
+                    *key_values =
+                        (const char **)realloc(*key_values, (key_count + 1) * sizeof(char *));
+                    *values_lengths =
+                        (uint32_t *)realloc(*values_lengths, (key_count + 1) * sizeof(uint32_t));
+
+                    if (!*key_values || !*values_lengths) {
+                        fprintf(stderr, "%s: Memory allocation failed\n", __func__);
+                        ret = EXIT_FAILURE;
+                        goto cleanup;
+                    }
+                    (*key_values)[key_count] = strdup(default_val);
+
+                    if (!(*key_values)[key_count]) {
+                        fprintf(stderr, "%s: Failed to duplicate list key value\n", __func__);
+                        ret = EXIT_FAILURE;
+                        goto cleanup;
+                    }
+                    (*values_lengths)[key_count] = strlen(default_val);
+                    free(default_val);
+                    key_count++;
+                } else {
+                    ret = EXIT_FAILURE;
+                    goto cleanup;
+                }
             }
+            free(key_name);
         }
     }
     (*keys_num) = key_count;
     ret = EXIT_SUCCESS;
 cleanup:
-    free(key_name);
     return ret;
 }
 
@@ -639,6 +675,8 @@ void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_
         if (LY_SUCCESS != lyd_new_list3(*parent_data_node, NULL, s_node->name, key_values,
                                         values_lengths, 0, &new_data_node)) {
             fprintf(stderr, "%s: list \"%s\" creation failed.\n", __func__, s_node->name);
+            free_list_params(&key_values, &values_lengths, keys_count);
+            return;
         }
 
         free_list_params(&key_values, &values_lengths, keys_count);

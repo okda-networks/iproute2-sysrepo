@@ -51,7 +51,6 @@
         <mpls-encap>
             <label>11/20</label>
         </mpls-encap>
-        <preference>100</preference>
         <advmss>1300</advmss>
         <nexthop>
             <dev>if_route3</dev>
