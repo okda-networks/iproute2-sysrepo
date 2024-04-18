@@ -92,7 +92,8 @@ struct yang_module {
                         { "iproute2-ip-nexthop", "/iproute2-ip-nexthop:nexthops" },
                         { "iproute2-ip-netns", "/iproute2-ip-netns:netnses" },
                         { "iproute2-ip-route", "/iproute2-ip-route:routes" },
-                        { "iproute2-tc-qdisc", "/iproute2-tc-qdisc:qdiscs" } };
+                        { "iproute2-tc-qdisc", "/iproute2-tc-qdisc:qdiscs" },
+                        { "iproute2-tc-filter", "/iproute2-tc-filter:tc-filters" } };
 
 volatile int exit_application = 0;
 static jmp_buf jbuf;

@@ -37,6 +37,7 @@ typedef enum {
     CMD_START_EXT,
     GROUP_LIST_WITH_SEPARATOR_EXT,
     GROUP_LEAFS_VALUES_SEPARATOR_EXT,
+    INCLUDE_PARENT_LEAFS,
 
     // root container extensions
     CMD_ADD_EXT,
@@ -66,6 +67,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [CMD_UPDATE_EXT] = "cmd-update",
                          [GROUP_LIST_WITH_SEPARATOR_EXT] = "group-list-with-separator",
                          [GROUP_LEAFS_VALUES_SEPARATOR_EXT] = "group-leafs-values-separator",
+                         [INCLUDE_PARENT_LEAFS] = "include_parent_leafs",
 
                          // leaf extensions
                          [ARG_NAME_EXT] = "arg-name",
@@ -83,7 +85,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
 
 void dup_argv(char ***dest, char **src, int argc)
 {
-    *dest = (char **)malloc(argc * sizeof(char *));
+    *dest = (char **)malloc((argc + 1) * sizeof(char *));
     if (*dest == NULL) {
         fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         exit(EXIT_FAILURE);
@@ -95,6 +97,7 @@ void dup_argv(char ***dest, char **src, int argc)
             exit(EXIT_FAILURE);
         }
     }
+    (*dest)[argc] = NULL; // NULL terminator
 }
 
 void free_argv(char **argv, int argc)
@@ -295,7 +298,7 @@ void parse_command(const char *command, int *argc, char ***argv)
     }
 
     // Allocate memory for argv
-    *argv = (char **)malloc((*argc) * sizeof(char *));
+    *argv = (char **)malloc((*argc + 1) * sizeof(char *));
     if (*argv == NULL) {
         fprintf(stderr, "%s: Memory allocation failed\n", __func__);
         exit(EXIT_FAILURE);
@@ -312,6 +315,7 @@ void parse_command(const char *command, int *argc, char ***argv)
         token = strtok(NULL, " ");
         i++;
     }
+    (*argv)[*argc] = NULL; // NULL terminator
     free(cmd_copy);
 }
 
@@ -545,12 +549,10 @@ struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *no
 /**
  * create iproute2 arguments out of lyd2 node, this will take the op_val into consideration,
  * @param startcmd_node lyd_node to generate arg for, example link, nexthop, filter ... etc
- * @param inner_startcmds
  * @param op_val operation value
  * @return
  */
-char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val,
-                       struct ly_set **inner_startcmds)
+char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
 {
     char cmd_line[CMD_LINE_SIZE] = { 0 };
     char tail_arg[64] = { 0 };
@@ -566,19 +568,9 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val,
 start:
         switch (next->schema->nodetype) {
         case LYS_LIST:
-            // check if this is inner startcmd, to add it for inner_startcmds set to generate its
-            // cmd later.
-            if (is_startcmd_node(next)) {
+            // if the list node is startcmd or it's parent has del operation then skip it.
+            if (is_startcmd_node(next) || op_val == DELETE_OPR) {
                 // if the root startcmd is delete, we don't want to execute this cmd, just skip.
-                if (inner_startcmds != NULL && op_val != DELETE_OPR) {
-                    ly_set_add(*inner_startcmds, next, 1, NULL);
-                }
-                if (next->next) { // move to next sibling and start from beginning,
-                    next = next->next;
-                    goto start;
-                } else
-                    goto done; // no more sibling, go to done.
-            } else if (op_val == DELETE_OPR || get_operation(next) == DELETE_OPR) {
                 if (next->next) { // move to next sibling and start from beginning,
                     next = next->next;
                     goto start;
@@ -745,7 +737,7 @@ start:
             }
             break;
         }
-        LYD_TREE_DFS_END(startcmd_node, next);
+        LYD_TREE_DFS_END(startcmd_node, next)
     }
 done:
     strlcat(cmd_line, tail_arg, sizeof(cmd_line)); // add the tail arg to the line.
@@ -798,14 +790,31 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
     return EXIT_SUCCESS;
 }
 
-char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
-                   struct ly_set **inner_startcmds)
+char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 {
     oper_t op_val;
     char cmd_line[CMD_LINE_SIZE] = { 0 };
 
     // prepare for new command
     op_val = get_operation(startcmd_node);
+
+    // special case: for start_cmd that is inside a parent which is not start cmd (e.g tc-filter),
+    // in case of delete the inner start_cmd node will not have an operation, so we take it from
+    // the parent
+    if (op_val == UNKNOWN_OPR) {
+        if (lyd_parent(startcmd_node)) {
+            int ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr,
+                        "%s: failed to set meta data 'yang:operation=delete' for node. \"%s\" \n",
+                        __func__, startcmd_node->schema->name);
+                return NULL;
+            }
+
+            op_val = DELETE_OPR;
+        }
+    }
+
     if (op_val == UNKNOWN_OPR) {
         fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
@@ -817,8 +826,15 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
     }
     // add cmd prefix to the cmd_line
     strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
+    // check if this starcmd is including the parent leafs (tc filter case)
+    if (get_extension(INCLUDE_PARENT_LEAFS, startcmd_node, NULL) == EXIT_SUCCESS) {
+        struct lyd_node *start_cmd_parent = lyd_parent(startcmd_node);
+        char *parent_cmd_args = lyd2cmdline_args(start_cmd_parent, op_val);
+        strlcat(cmd_line, parent_cmd_args, sizeof(cmd_line));
+        free(parent_cmd_args);
+    }
     // get the cmd args for the startcmd_node
-    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val, inner_startcmds);
+    char *cmd_args = lyd2cmdline_args(startcmd_node, op_val);
     if (cmd_args == NULL) {
         fprintf(stderr, "%s: failed to create cmdline arguments for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
@@ -829,32 +845,57 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3],
     return strdup(cmd_line);
 }
 
-/**
- * duplicate lyd_node with its parent, then link the parent (insert_sibling)
- * to the current provided parent
- * @param parent [in,out] lyd_node parent tree to insert the child's parent to it.
- * @param child  [in]     lyd_node to be duplicated and linked to the parent tree.
- * @return EXIT_SUCCESS
- * @return EXIT_FAILURE
- */
-int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
+int find_matching_target_lrefs(const struct lyd_node *all_change_nodes, struct lyd_node *startcmd,
+                               struct lysc_type_leafref *lref_t, struct ly_set **found_leafrefs_set)
 {
+    char xpath[1024] = { 0 };
+    struct ly_set *target_set, *s_set = NULL;
+    struct lysc_node *target_startcmd_y_node = NULL;
     int ret;
-    struct lyd_node *child_dup = NULL;
-
-    ret = lyd_dup_single(child, NULL, LYD_DUP_WITH_PARENTS | LYD_DUP_RECURSIVE | LYD_DUP_WITH_FLAGS,
-                         &child_dup);
-    if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to duplicate node `%s`: %s.\n", __func__, child->schema->name,
-                ly_strerrcode(ret));
+    // get the schema node of the leafref.
+    ret = lys_find_expr_atoms(startcmd->schema, startcmd->schema->module, lref_t->path,
+                              lref_t->prefixes, 0, &s_set);
+    if (s_set == NULL || ret != LY_SUCCESS) {
+        printf("%s: failed to get target leafref for node \"%s\": %s\n", __func__,
+               startcmd->schema->name, ly_strerrcode(ret));
         return EXIT_FAILURE;
     }
-    ret = lyd_insert_sibling(*parent, lyd_parent(child_dup), parent);
+
+    target_startcmd_y_node = s_set->snodes[s_set->count - 1];
+    // get the xpath of the schema node.
+    lysc_path(target_startcmd_y_node, LYSC_PATH_DATA, xpath, 1024);
+    // get all target nodes.
+    ret = lyd_find_xpath(all_change_nodes, xpath, &target_set);
     if (ret != LY_SUCCESS) {
-        fprintf(stderr, "%s: failed to insert sibling for node \"%s\": %s.\n", __func__,
-                lyd_parent(child)->schema->name, ly_strerrcode(ret));
-        lyd_free_all(child_dup);
+        fprintf(stderr, "%s: failed to found target startcmd nodes for xpath `%s`: %s.\n", __func__,
+                xpath, ly_strerrcode(ret));
         return EXIT_FAILURE;
+    }
+    // loop through all found target dnodes and get the matching one to the current
+    // next dnode.
+    for (uint32_t i = 0; i < target_set->count; i++) {
+        if (!strcmp(lyd_get_value(startcmd), lyd_get_value(target_set->dnodes[i]))) {
+            // get the parnet startcmd node for the matched target dnode.
+            struct lyd_node *target_parent = lyd_parent(target_set->dnodes[i]);
+            while (target_parent != NULL) {
+                if (is_startcmd_node(target_parent))
+                    break;
+                target_parent = lyd_parent(target_parent);
+            }
+            if (target_parent == NULL) {
+                fprintf(stderr, "%s: no matching startcmd node found, target_node`%s`.\n", __func__,
+                        target_set->dnodes[i]->schema->name);
+                return EXIT_FAILURE;
+            }
+            // add the target startcmd to the found_leafrefs_set.
+            ret = ly_set_add(*found_leafrefs_set, target_parent, 0, NULL);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr,
+                        "%s: failed to add target startcmd to found_leafrefs_set `%s`: %s.\n",
+                        __func__, target_set->dnodes[i]->schema->name, ly_strerrcode(ret));
+                return EXIT_FAILURE;
+            }
+        }
     }
     return EXIT_SUCCESS;
 }
@@ -869,13 +910,17 @@ int dup_and_insert_node(struct lyd_node **parent, struct lyd_node *child)
  * @return EXIST_FAILURE
  */
 int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *startcmd,
-                      struct lyd_node **found_leafrefs)
+                      struct ly_set **found_leafrefs_set)
 {
     int ret;
     // in ->priv we add an int flag which indicate that this node has been processed.
     if (startcmd->priv != NULL)
         return EXIT_SUCCESS;
-    struct lyd_node *next, *lefref_node = NULL;
+    struct lyd_node *next = NULL;
+    // check if this startcmd is also including parent node's leafs.
+    if (get_extension(INCLUDE_PARENT_LEAFS, startcmd, NULL) == EXIT_SUCCESS)
+        get_node_leafrefs(all_change_nodes, lyd_parent(startcmd), found_leafrefs_set);
+
     LYD_TREE_DFS_BEGIN(startcmd, next)
     {
         if (next->schema->nodetype == LYS_LEAF) {
@@ -883,8 +928,8 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
             // union might have leafrefs.
             if (type == LY_TYPE_UNION) {
                 struct lysc_type_union *y_union_t = NULL;
-                struct ly_set *s_set;
-                y_union_t = (struct lysc_type_union *)((struct lysc_node_leaf *)next->schema)->type;
+                y_union_t =
+                    (struct lysc_type_union *)(((struct lysc_node_leaf *)next->schema)->type);
                 LY_ARRAY_COUNT_TYPE i_sized;
                 // loop through all types and check which one
                 LY_ARRAY_FOR(y_union_t->types, i_sized)
@@ -892,66 +937,31 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
                     // check if the type is leafref
                     if (y_union_t->types[i_sized]->basetype != LY_TYPE_LEAFREF)
                         continue;
-                    // get the schema node of the leafref.
-                    struct lysc_node *target_startcmd_y_node = NULL;
-
                     struct lysc_type_leafref *lref_t =
                         (struct lysc_type_leafref *)y_union_t->types[i_sized];
-                    ret = lys_find_expr_atoms(next->schema, next->schema->module, lref_t->path,
-                                              lref_t->prefixes, 0, &s_set);
-                    if (s_set == NULL || ret != LY_SUCCESS) {
-                        printf("%s: failed to get target leafref for node \"%s\": %s\n", __func__,
-                               next->schema->name, ly_strerrcode(ret));
+                    ret = find_matching_target_lrefs(all_change_nodes, next, lref_t,
+                                                     found_leafrefs_set);
+                    if (ret != EXIT_SUCCESS) {
+                        fprintf(stderr,
+                                "%s: fail to find and add matching target for node `%s`: %s.\n",
+                                __func__, next->schema->name, ly_strerrcode(ret));
                         return EXIT_FAILURE;
-                    }
-                    target_startcmd_y_node = s_set->snodes[s_set->count - 2];
-
-                    char xpath[1024] = { 0 }, dxpath[1024] = { 0 };
-                    // get the xpath of the schema node.
-                    lysc_path(target_startcmd_y_node, LYSC_PATH_DATA_PATTERN, xpath, 1024);
-                    // create data xpath for the schema node (add list predicate).
-                    sprintf(dxpath, xpath, lyd_get_value(next));
-
-                    ret = lyd_find_path(all_change_nodes, dxpath, 0, &lefref_node);
-
-                    if (ret == LY_SUCCESS) {
-                        if (dup_and_insert_node(found_leafrefs, lefref_node) != EXIT_SUCCESS) {
-                            fprintf(stderr, "%s: failed to insert dependency leafref `%s`: %s.\n",
-                                    __func__, lefref_node->schema->name, ly_strerrcode(ret));
-                            return EXIT_FAILURE;
-                        }
                     }
                 }
             } else if (type == LY_TYPE_LEAFREF) {
                 // get the schema node of the leafref.
-
-                struct lysc_node *target_startcmd_y_node = NULL, *target_y_node = NULL;
-                target_y_node = (struct lysc_node *)lysc_node_lref_target(next->schema);
-                if (target_y_node == NULL) {
-                    fprintf(stderr, "%s: failed to get target leafref for node \"%s\"\n", __func__,
-                            next->schema->name);
+                struct lysc_type_leafref *lref_t =
+                    (struct lysc_type_leafref *)(((struct lysc_node_leaf *)next->schema)->type);
+                ret =
+                    find_matching_target_lrefs(all_change_nodes, next, lref_t, found_leafrefs_set);
+                if (ret != EXIT_SUCCESS) {
+                    fprintf(stderr, "%s: fail to find and add matching target for node `%s`: %s.\n",
+                            __func__, next->schema->name, ly_strerrcode(ret));
                     return EXIT_FAILURE;
-                }
-                target_startcmd_y_node = target_y_node->parent;
-
-                char xpath[1024] = { 0 }, dxpath[1024] = { 0 };
-                // get the xpath of the schema node.
-                lysc_path(target_startcmd_y_node, LYSC_PATH_DATA_PATTERN, xpath, 1024);
-                // create data xpath for the schema node (add list predicate).
-                sprintf(dxpath, xpath, lyd_get_value(next));
-
-                ret = lyd_find_path(all_change_nodes, dxpath, 0, &lefref_node);
-
-                if (ret == LY_SUCCESS) {
-                    if (dup_and_insert_node(found_leafrefs, lefref_node) != EXIT_SUCCESS) {
-                        fprintf(stderr, "%s: failed to insert dependency leafref `%s`: %s.\n",
-                                __func__, lefref_node->schema->name, ly_strerrcode(ret));
-                        return EXIT_FAILURE;
-                    }
                 }
             }
         }
-        LYD_TREE_DFS_END(startcmd, next);
+        LYD_TREE_DFS_END(startcmd, next)
     }
     return EXIT_SUCCESS;
 }
@@ -970,12 +980,15 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     if (startcmd_node->priv != NULL)
         return EXIT_SUCCESS;
 
+    // if the parent is startcmd, and the parent is delete, skip this inner startcmd.
+    struct lyd_node *startcmd_parent = lyd_parent(startcmd_node);
+    if (is_startcmd_node(startcmd_parent) && get_operation(startcmd_parent) == DELETE_OPR)
+        return EXIT_SUCCESS;
+
     int ret = EXIT_SUCCESS;
     char *oper2cmd_prefix[3] = { NULL };
     char *cmd_line = NULL, *rollback_cmd_line = NULL;
     struct lyd_node *rollback_dnode = NULL;
-    struct ly_set *inner_startcmds = NULL;
-    ly_set_new(&inner_startcmds);
     // first get the add, update, delete cmds prefixis from schema extensions
     if (get_extension(CMD_ADD_EXT, startcmd_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
         fprintf(stderr,
@@ -1004,15 +1017,20 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix, &inner_startcmds);
+    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
     if (cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);
         ret = EXIT_FAILURE;
         goto cleanup;
     }
+    // before calling diff_reserve we need to do dup_single, otherwise all sibling startcmds,
+    // will be reversed
+    struct lyd_node *tmp_startcmd;
+    lyd_dup_single(startcmd_node, NULL, LYD_DUP_RECURSIVE, &tmp_startcmd);
     // get the rollback node.
-    ret = lyd_diff_reverse_all(startcmd_node, &rollback_dnode);
+    ret = lyd_diff_reverse_all(tmp_startcmd, &rollback_dnode);
+    lyd_free_all(tmp_startcmd);
     if (ret != LY_SUCCESS) {
         fprintf(stderr, "%s: failed to create rollback_dnode by lyd_diff_reverse_all(): %s\n",
                 __func__, ly_strerrcode(ret));
@@ -1035,7 +1053,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix, NULL);
+    rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
     if (rollback_cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n", __func__,
                 rollback_dnode->schema->name);
@@ -1043,16 +1061,6 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
     ret = add_command(cmds, cmd_idx, cmd_line, rollback_cmd_line);
-    if (inner_startcmds->count > 0) {
-        for (int i = 0; i < inner_startcmds->count; i++) {
-            ret = add_cmd_info_core(cmds, cmd_idx, inner_startcmds->dnodes[i]);
-            if (ret != EXIT_SUCCESS) {
-                fprintf(stderr, "%s: failed to generate ipr2 cmd for inner_startcmd node \"%s\" \n",
-                        __func__, inner_startcmds->dnodes[i]->schema->name);
-                goto cleanup;
-            }
-        }
-    }
 
 cleanup:
     if (cmd_line)
@@ -1067,8 +1075,6 @@ cleanup:
         free(oper2cmd_prefix[UPDATE_OPR]);
     if (oper2cmd_prefix[DELETE_OPR])
         free(oper2cmd_prefix[DELETE_OPR]);
-    if (inner_startcmds)
-        ly_set_free(inner_startcmds, NULL);
     return ret;
 }
 
@@ -1086,7 +1092,8 @@ int add_dependencies_cmd_info(struct cmd_info **cmds, int *cmd_idx,
                               struct lyd_node *startcmd_node)
 {
     int ret = EXIT_SUCCESS;
-    struct lyd_node *node_leafrefs = NULL;
+    struct ly_set *node_leafrefs = NULL;
+    ly_set_new(&node_leafrefs);
 
     // check if node is already processed
     if (startcmd_node->priv != NULL)
@@ -1100,12 +1107,12 @@ int add_dependencies_cmd_info(struct cmd_info **cmds, int *cmd_idx,
     }
     // check if dependencies found.
     if (node_leafrefs != NULL) {
-        struct lyd_node *leafref_node;
-        LY_LIST_FOR(node_leafrefs, leafref_node)
-        {
+        for (uint32_t i = 0; i < node_leafrefs->count; i++) {
+            struct lyd_node *leafref_node = node_leafrefs->dnodes[i];
             // - if the start_cmd node's operation is delete, then add it before it's leafref.
             // - if the start_cmd node's operation is add, then add leafref before
-            if (get_operation(startcmd_node) == DELETE_OPR) {
+            if (get_operation(startcmd_node) == DELETE_OPR ||
+                get_operation(lyd_parent(startcmd_node)) == DELETE_OPR) {
                 if (startcmd_node->priv == NULL) {
                     ret = add_cmd_info_core(cmds, cmd_idx, startcmd_node);
                     if (ret != EXIT_SUCCESS)
@@ -1113,36 +1120,21 @@ int add_dependencies_cmd_info(struct cmd_info **cmds, int *cmd_idx,
                     startcmd_node->priv = &processed;
                 }
             } else {
-                // first get the original leafref node that reside in all_change_nodes, as we need to
-                // change it's ->priv value to processed.
-                char dxpath[1024] = { 0 };
-                struct lyd_node *original_leafref_dnode = NULL;
-                lyd_path(lyd_child(leafref_node), LYD_PATH_STD, dxpath, 1024);
-                ret = lyd_find_path(all_change_nodes, dxpath, 0, &original_leafref_dnode);
-                if (ret != LY_SUCCESS) {
-                    fprintf(stderr, "%s: failed to get the original leafref node \"%s\"\n ",
-                            __func__, startcmd_node->schema->name);
-                    ret = EXIT_FAILURE;
-                    goto cleanup;
-                }
                 // check if the found dependency also has dependencies and add it.
-                ret = add_dependencies_cmd_info(cmds, cmd_idx, all_change_nodes,
-                                                original_leafref_dnode);
+                ret = add_dependencies_cmd_info(cmds, cmd_idx, all_change_nodes, leafref_node);
                 if (ret != EXIT_SUCCESS)
                     goto cleanup;
 
-                if (original_leafref_dnode != NULL) {
-                    ret = add_cmd_info_core(cmds, cmd_idx, original_leafref_dnode);
+                if (leafref_node != NULL) {
+                    ret = add_cmd_info_core(cmds, cmd_idx, leafref_node);
                     if (ret != EXIT_SUCCESS)
                         goto cleanup;
-                    original_leafref_dnode->priv = &processed;
+                    leafref_node->priv = &processed;
                 }
             }
         }
     }
 cleanup:
-    if (node_leafrefs)
-        lyd_free_all(node_leafrefs);
     return ret;
 }
 
@@ -1162,58 +1154,52 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     }
 
     const struct lyd_node *change_node;
-    struct lyd_node *next = NULL, *child_node = NULL;
+    struct lyd_node *next = NULL;
+    struct ly_set *start_cmds_set;
+    ly_set_new(&start_cmds_set);
     // initialize ->priv to NULL.
     LY_LIST_FOR(all_change_nodes, change_node)
     {
-        child_node = lyd_child(change_node);
+        LYD_TREE_DFS_BEGIN(change_node, next)
+        {
+            if (is_startcmd_node(next))
+                ly_set_add(start_cmds_set, next, 0, 0);
 
+            LYD_TREE_DFS_END(change_node, next)
+        }
         lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
         fprintf(stdout, "--%s", node_print_text);
         free(node_print_text);
+    }
 
-        LY_LIST_FOR(child_node, next)
-        {
-            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
-                next->priv = NULL;
-            }
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        start_cmds_set->dnodes[i]->priv = NULL;
+    }
+
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        int ret =
+            add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, start_cmds_set->dnodes[i]);
+        if (ret != EXIT_SUCCESS) {
+            free_cmds_info(cmds);
+            return NULL;
         }
     }
 
-    // loop through all modules and add all dependencies first.
-    LY_LIST_FOR(all_change_nodes, change_node)
-    {
-        child_node = lyd_child(change_node);
-        //
-        LY_LIST_FOR(child_node, next)
-        {
-            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
-                int ret = add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, next);
-                if (ret != EXIT_SUCCESS) {
-                    free_cmds_info(cmds);
-                    return NULL;
-                }
-            }
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        int ret =
+            add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, start_cmds_set->dnodes[i]);
+        if (ret != EXIT_SUCCESS) {
+            free_cmds_info(cmds);
+            return NULL;
         }
     }
-
-    // loop through all modules again and add all none processed nodes (->priv == NULL).
-    LY_LIST_FOR(all_change_nodes, change_node)
-    {
-        child_node = lyd_child(change_node);
-        // add none dependencies (->priv == NULL) second.
-        LY_LIST_FOR(child_node, next)
-        {
-            if (next->schema->nodetype == LYS_LIST && is_startcmd_node(next)) {
-                // check if node is already added (through add_dependencies_cmd_info())
-                if (next->priv == NULL) {
-                    if (add_cmd_info_core(cmds, &cmd_idx, next) != EXIT_SUCCESS) {
-                        free_cmds_info(cmds);
-                        return NULL;
-                    }
-                    next->priv = &processed;
-                }
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        if (start_cmds_set->dnodes[i]->priv == NULL) {
+            if (add_cmd_info_core(cmds, &cmd_idx, start_cmds_set->dnodes[i]) != EXIT_SUCCESS) {
+                free_cmds_info(cmds);
+                return NULL;
             }
+            start_cmds_set->dnodes[i]->priv = &processed;
         }
     }
 

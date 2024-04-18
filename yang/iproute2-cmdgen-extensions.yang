@@ -166,4 +166,8 @@ module iproute2-cmdgen-extensions {
         description
             "instruct cmdgen to add the leaf at the end of the cmd line";
     }
+    extension include_parent_leafs{
+        description
+            "instruct cmdgen to add the leaf at the end of the cmd line";
+    }
 }
