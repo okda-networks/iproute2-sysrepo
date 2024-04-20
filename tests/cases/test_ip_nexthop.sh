@@ -31,24 +31,40 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     exit "$ret"
 fi
 
-# Step 2: Check if nh id 1 is created
-if ip nexthop show id 1 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 1 created successfully (OK)"
+# Step 2: Check if nh id 1001 is created
+if ip nexthop show id 1001 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP nexthop id 1001 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 1 (FAIL)"
+    echo "TEST-ERROR: Failed to create IP nexthop 1001 (FAIL)"
     exit 1
 fi
 
-# Step 3: Check if nh id 2 is created
-if ip nexthop show id 2 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 2 created successfully (OK)"
+# Step 3: Check if nh id 2001 is created
+if ip nexthop show id 2001 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP nexthop id 2001 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 2 (FAIL)"
+    echo "TEST-ERROR: Failed to create IP nexthop 2001 (FAIL)"
     exit 1
 fi
 
-# Step 4: Check if nh id 12 is created
-if ip nexthop show id 12 >/dev/null 2>&1; then
+# Step 4: Check if nh id 3001 is created
+if ip nexthop show id 3001 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP nexthop id 3001 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create IP nexthop 3001 (FAIL)"
+    exit 1
+fi
+
+# Step 5: Check if nh id 4001 is created
+if ip nexthop show id 4001 >/dev/null 2>&1; then
+    echo "TEST-INFO: IP nexthop id 4001 created successfully (OK)"
+else
+    echo "TEST-ERROR: Failed to create IP nexthop 4001 (FAIL)"
+    exit 1
+fi
+
+# Step 6: Check if nh id 12 is created
+if ip nexthop show id 12001 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 12 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 2 (FAIL)"
@@ -91,13 +107,13 @@ echo "--------------------"
 echo "[3] Test nexthop DELETE"
 echo "---------------------"
 
-# step 0: work arround to delete the nexthop id 12 first
-sysrepocfg -C tests/cases/test_ip_nexthop_data2.xml -d running -m iproute2-ip-nexthop 
-sleep 0.1
-sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data2.xml || ret=$?
+## step 0: work arround to delete the nexthop id 12 first
+#sysrepocfg -C tests/cases/test_ip_nexthop_data2.xml -d running -m iproute2-ip-nexthop
+#sleep 0.1
+#sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data2.xml || ret=$?
 
 # Step 1: delete data from sysrepo
-sysrepocfg -C startup -d running -m iproute2-ip-nexthop || ret=$?
+sysrepocfg -C startup -d running || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     echo "TEST-ERROR: failed to delete IP nexthops from sysrepo"
@@ -105,10 +121,12 @@ if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
 fi
 
 # Step 2: check if nexthops deleted by iproute2-sysrepo
-if ! ip nexthop show id 1 >/dev/null 2>&1 && ! ip nexthop show id 2 >/dev/null 2>&1 && ! ip nexthop show id 12 >/dev/null 2>&1 ; then
-    echo "TEST-INFO: IP nexthops 1, 2, 3 and 12 are deleted successfully (OK)"
+if ! ip nexthop show id 1001 >/dev/null 2>&1 && ! ip nexthop show id 2001 >/dev/null 2>&1 \
+  && ! ip nexthop show id 3001 >/dev/null 2>&1  && ! ip nexthop show id 12001 >/dev/null 2>&1\
+   && ! ip nexthop show id 4001 >/dev/null 2>&1 ; then
+    echo "TEST-INFO: IP nexthops 1001, 2001, 3001 and 12 are deleted successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to delete IP nexthops 2 and 1 (FAIL)"
+    echo "TEST-ERROR: Failed to delete IP nexthops 2001, 1001, 3001,4001 or 12001 (FAIL)"
     exit 1
 fi
 
