@@ -319,6 +319,130 @@ cleanup:
 }
 
 /**
+ * Outputs keys in the format needed for lyd_new_list2 as workaround of to libyang bug:
+ * https://github.com/CESNET/libyang/pull/2207
+ * 
+ * Extracts keys and their values from a JSON array object based on the YANG list Schema keys.
+ * This function is used to map JSON array data to YANG schema list keys.
+ * @param [in] list: YANG list schema node.
+ * @param [in] json_array_obj: JSON object containing the list's data.
+ * @param [out] key: extracted keys string in the format [key1="val"][keyN="val"]
+ * @param [out] values_lengths: Pointer to store the lengths of the keys' values.
+ * @param [out] keys_num: Pointer to store the number of keys extracted.
+ * @return Returns EXIT_SUCCESS if keys are successfully extracted; otherwise, returns EXIT_FAILURE.
+ */
+int get_list_keys2(const struct lysc_node_list *list, json_object *json_array_obj, char **keys)
+{
+    int ret = EXIT_SUCCESS;
+    struct json_object *temp_value, *combine_ext_jobj = NULL;
+    json_object *keys_jobj = json_object_new_object();
+    const struct lysc_node *child;
+    for (child = list->child; child; child = child->next) {
+        char *key_name = NULL, *combine_ext_str = NULL, *default_val = NULL;
+        if (lysc_is_key(child)) {
+            if (get_lys_extension(OPER_ARG_NAME_EXT, child, &key_name) == EXIT_SUCCESS) {
+                if (key_name == NULL) {
+                    fprintf(stderr,
+                            "%s: ipr2cgen:oper-arg-name extension found but failed to "
+                            "get the arg-name value for node \"%s\"\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
+            } else {
+                key_name = strdup(child->name);
+            }
+            if (get_lys_extension(OPER_DEFAULT_VALUE_EXT, child, &default_val) == EXIT_SUCCESS) {
+                if (default_val == NULL) {
+                    fprintf(stderr,
+                            "%s: ipr2cgen:oper-default-val extension found but failed to "
+                            "get the value for node \"%s\"\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
+            }
+
+            if (get_lys_extension(OPER_COMBINE_VALUES_EXT, child, &combine_ext_str) ==
+                EXIT_SUCCESS) {
+                if (combine_ext_str == NULL) {
+                    fprintf(stderr,
+                            "%s: ipr2cgen:oper-combine-values extension found but failed to "
+                            "get the combined values list for node \"%s\"\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
+
+                combine_ext_jobj = json_tokener_parse(combine_ext_str);
+                free(combine_ext_str);
+
+                if (combine_ext_jobj == NULL) {
+                    fprintf(stderr,
+                            "%s: Error reading schema node \"%s\" ipr2cgen:oper-stop-if extension,"
+                            " the extension value has a bad json format\n",
+                            __func__, child->name);
+                    return EXIT_FAILURE;
+                }
+            }
+
+            if (json_object_object_get_ex(json_array_obj, key_name, &temp_value)) {
+                char *value = NULL;
+                if (combine_ext_jobj != NULL) {
+                    value = combine_values(json_array_obj, combine_ext_jobj);
+                } else
+                    value = strdup(json_object_get_string(temp_value));
+
+                json_object_object_add(keys_jobj, child->name, json_object_new_string(value));
+                free(value);
+            } else {
+                // key value not found in json data.
+                if (default_val != NULL) {
+                    json_object_object_add(keys_jobj, child->name,
+                                           json_object_new_string(default_val));
+                    free(default_val);
+                } else {
+                    ret = EXIT_FAILURE;
+                    goto cleanup;
+                }
+            }
+            free(key_name);
+        }
+    }
+
+    // Calculate the length of the result string
+    int str_length = 1; // Start with 1 for the null terminator
+    json_object_object_foreach(keys_jobj, key_alloc, val_alloc)
+    {
+        // Add the length of each key-value pair to the total length
+        str_length +=
+            snprintf(NULL, 0, "[%s=%s] ", key_alloc,
+                     json_object_to_json_string_ext(val_alloc, JSON_C_TO_STRING_NOSLASHESCAPE));
+    }
+
+    // Allocate memory for the result string
+    char *result_str = (char *)malloc(str_length * sizeof(char));
+    if (!result_str) {
+        fprintf(stderr, "Failed to allocate memory\n");
+        return 1;
+    }
+    result_str[0] = '\0';
+    json_object_object_foreach(keys_jobj, key, val)
+    {
+        sprintf(result_str + strlen(result_str), "[%s=%s]", key,
+                json_object_to_json_string_ext(val, JSON_C_TO_STRING_NOSLASHESCAPE));
+    }
+    *keys = strdup(result_str);
+    free(result_str);
+    ret = EXIT_SUCCESS;
+cleanup:
+    if (keys_jobj != NULL) {
+        json_object_put(keys_jobj);
+    }
+    if (combine_ext_jobj != NULL) {
+        json_object_put(combine_ext_jobj);
+    }
+    return ret;
+}
+
+/**
  * Converts a semicolon-separated key-value string to a JSON object. Each pair is separated by ';', and key-value within a pair is separated by ':'.
  * This function is useful for converting OPER_VALUE_MAP_EXT and OPER_FLAG_MAP_EXT mapping from string to JSON objects for easier manipulation and access.
  * @param [in] input: A semicolon-separated key-value pairs string.
@@ -662,6 +786,10 @@ void jdata_to_leaflist(struct json_object *json_array_obj, const char *arg_name,
     }
 }
 
+/* 
+Uses lyd_new_list3, on libyang version 2.1.148 there is a bug:
+https://github.com/CESNET/libyang/pull/2207
+*/
 void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_data_node,
                          const struct lysc_node *s_node, uint16_t lys_flags)
 {
@@ -694,6 +822,42 @@ void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_
     }
 }
 
+/* 
+Uses lyd_new_list2 as workaround of to libyang bug:
+https://github.com/CESNET/libyang/pull/2207
+*/
+void single_jobj_to_list2(struct json_object *json_obj, struct lyd_node **parent_data_node,
+                          const struct lysc_node *s_node, uint16_t lys_flags)
+{
+    const struct lysc_node_list *list = (const struct lysc_node_list *)s_node;
+    char *keys = NULL;
+    int keys_count;
+    if (get_list_keys2(list, json_obj, &keys) == EXIT_SUCCESS) {
+        add_missing_parents(s_node, parent_data_node);
+        struct lyd_node *new_data_node = NULL;
+        if (LY_SUCCESS !=
+            lyd_new_list2(*parent_data_node, NULL, s_node->name, keys, 0, &new_data_node)) {
+            fprintf(stderr, "%s: list \"%s\" creation failed.\n", __func__, s_node->name);
+            //free_list_params(&key_values, &values_lengths, keys_count);
+            free(keys);
+            return;
+        }
+        //free_list_params(&key_values, &values_lengths, keys_count);
+
+        if (!new_data_node)
+            new_data_node = *parent_data_node;
+
+        // Recursively process child nodes
+        const struct lysc_node *s_child;
+        LY_LIST_FOR(lysc_node_child(s_node), s_child)
+        {
+            if (process_node(s_child, json_obj, lys_flags, &new_data_node))
+                return;
+        }
+    }
+    free(keys);
+}
+
 /**
  * Converts JSON data into a YANG list(s) and attaches it to YANG parant data node.
  * This function parses a JSON object, identified by a key, into a list according to 
@@ -716,11 +880,11 @@ void jdata_to_list(struct json_object *json_obj, const char *arg_name,
         size_t n_arrays = json_object_array_length(lists_arrays);
         for (size_t i = 0; i < n_arrays; i++) {
             struct json_object *list_obj = json_object_array_get_idx(lists_arrays, i);
-            single_jobj_to_list(list_obj, parent_data_node, s_node, lys_flags);
+            single_jobj_to_list2(list_obj, parent_data_node, s_node, lys_flags);
         }
     } else {
         // Handle case where json_array_obj itself is the list to process
-        single_jobj_to_list(json_obj, parent_data_node, s_node, lys_flags);
+        single_jobj_to_list2(json_obj, parent_data_node, s_node, lys_flags);
     }
 }
 
