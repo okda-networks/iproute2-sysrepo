@@ -37,19 +37,37 @@ module iproute2-ip-route {
             ipr2cgen:cmd-delete "ip route del";
             ipr2cgen:cmd-start;
             ipr2cgen:replace-on-update;
+            ipr2cgen:oper-cmd "ip route list table all";
+            // TODO IPv6 support: oper needs to also apply "ip -6 route show"
             description
                 "ip route details";
             key "prefix table metric tos";
             // NODE_SPEC
             leaf prefix{
-                type inet:ipv4-prefix;
+                type union{
+                    type inet:ip-prefix;
+                    type inet:ip-address;
+                    type enumeration {
+                        enum "default";
+                    }
+                }
                 ipr2cgen:value-only;
+                ipr2cgen:oper-arg-name "dst";
                 description
-                    "ipv4 prifix";
+                    "ipv4 prefix";
             }
             leaf table {
                 onmcli:key-default-val "254";
-                type uint16;
+                ipr2cgen:oper-default-val "254";
+                type union {
+                    type enumeration {
+                        enum "default" {value 253;}
+                        enum "local" {value 255;}
+                        enum "main" {value 254;}
+                        enum "unspec" {value 0;}
+                    }
+                    type uint16;
+                }
                 description
                     "[254 for default] the table to add this route to. TABLEID may be a number or a string from the file
                     /etc/iproute2/rt_tables. If this parameter is omitted, ip assumes the main table,
@@ -58,12 +76,14 @@ module iproute2-ip-route {
             }
             leaf metric {
                 onmcli:key-default-val "0";
+                ipr2cgen:oper-default-val "0";
                 type uint32;
                 description
                     "route metric [default 0]";
             }
             leaf tos {
                 onmcli:key-default-val "default";
+                ipr2cgen:oper-default-val "default";
                 type ipr2net:tos;
                 description
                     "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
@@ -71,12 +91,52 @@ module iproute2-ip-route {
                     then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
                     number or an identifier from /etc/iproute2/rt_dsfield.";
             }
-
+            leaf src {
+                ipr2cgen:oper-arg-name "prefsrc";
+                type inet:ip-address;
+                description
+                    "the source address to prefer when sending to the
+                     destinations covered by the route prefix.";
+            }
+            leaf protocol {
+                type enumeration {
+                    enum "unspec";
+                    enum "redirect";
+                    enum "kernel";
+                    enum "boot";
+                    enum "static";
+                    enum "gated";
+                    enum "ra";
+                    enum "mrt";
+                    enum "zebra";
+                    enum "bird";
+                    enum "babel";
+                    enum "dnrouted";
+                    enum "xorp";
+                    enum "ntk";
+                    enum "dhcp";
+                    enum "keepalived";
+                    enum "bgp";
+                    enum "isis";
+                    enum "ospf";
+                    enum "rip";
+                    enum "eigrp";
+                }
+            }
+            leaf scope {
+                type enumeration {
+                    enum "global";
+                    enum "host";
+                    enum "link";
+                    enum "site";
+                }
+            }
             // INFO_SPEC
             choice encap {
                 container mpls-encap {
                     leaf label {
                         ipr2cgen:arg-name "encap mpls";
+                        ipr2cgen:oper-arg-name "not_supported";
                         type string{
                             pattern '[0-9]+(/[0-9]+)*';
                         }
@@ -88,16 +148,19 @@ module iproute2-ip-route {
                     ipr2cgen:add-static-arg "encap ip";
                     leaf id {
                         type uint32;
+                        ipr2cgen:oper-arg-name "not_supported";
                         description
                             "tunnel id";
                     }
                     leaf dst {
-                        type inet:ip-address;
+                        type inet:ip-prefix;
+                        ipr2cgen:oper-arg-name "not_supported";
                         description
                             "remote ip";
                     }
                     leaf tos {
                         type ipr2net:tos;
+                        ipr2cgen:oper-arg-name "not_supported";
                         description
                             "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
                             understood as: First, compare the TOS of the route and of the packet. If they are not equal,
@@ -106,6 +169,7 @@ module iproute2-ip-route {
                     }
                     leaf ttl {
                         type ipr2net:ttl;
+                        ipr2cgen:oper-arg-name "not_supported";
                         description
                             "TTL - specifies the TTL value to use in outgoing packets.";
                         default 0;
@@ -113,11 +177,6 @@ module iproute2-ip-route {
                 }
             }
             /// OPTIONS
-            leaf preference {
-                type uint32;
-                description
-                    "NUMBER - the preference value of the route. NUMBER is an arbitrary 32bit number";
-            }
             leaf mtu {
                 type ipr2net:mtu;
                 description
@@ -143,6 +202,7 @@ module iproute2-ip-route {
             }
             list nexthop {
                 ipr2cgen:add-static-arg "nexthop";
+                ipr2cgen:oper-arg-name "nexthops";
                 key "dev";
                 leaf dev {
                 // workaround until issue #2211 in libyang is fixed
@@ -150,6 +210,7 @@ module iproute2-ip-route {
                         type iplink:link-ref;
                         type iplink:vti-ref;
                         type iplink:gre-ref;
+                        type iplink:bridge-ref;
                     }
                     description
                         "nexthop link";
@@ -172,6 +233,9 @@ module iproute2-ip-route {
                     }
                     leaf address {
                         ipr2cgen:value-only;
+                        ipr2cgen:oper-arg-name "gateway";
+                        // TODO IPv6 support: oper also uses "host" arg name when via family is set to inet6
+                        // while using gateway when family is set to inet
                         type inet:ip-address;
                         description
                             "via address";
@@ -184,7 +248,22 @@ module iproute2-ip-route {
                         reflecting its relative bandwidth or quality.";
                 }
             }
-
+            // Operational data
+            container state {
+            config false;
+                leaf type{
+                    type enumeration {
+                        enum "unicast";
+                        enum "local";
+                        enum "broadcast";
+                        enum "multicast";
+                        enum "unreachable";
+                        enum "prohibit";
+                        enum "blackhole";
+                        enum "nat";
+                    }
+                }
+            }
         }
     }
 }

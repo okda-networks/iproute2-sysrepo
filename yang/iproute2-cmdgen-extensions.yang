@@ -87,6 +87,12 @@ module iproute2-cmdgen-extensions {
        argument "static_value";
     }
 
+    extension oper-default-val {
+       description "used to instruct operational data to always set default value for a leaf if not found
+       in iproute2 show outputs";
+       argument "default_value";
+    }
+
     extension oper-stop-if {
        description "Instructs oper data to processing node if one of its values matches value list specified, the key and values
        are expected to be expressed in json array format.
