@@ -802,7 +802,7 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     // in case of delete the inner start_cmd node will not have an operation, so we take it from
     // the parent
     if (op_val == UNKNOWN_OPR) {
-        if (lyd_parent(startcmd_node)) {
+        if (lyd_parent(startcmd_node) && !is_startcmd_node(lyd_parent(startcmd_node))) {
             int ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
             if (ret != LY_SUCCESS) {
                 fprintf(stderr,
@@ -856,8 +856,8 @@ int find_matching_target_lrefs(const struct lyd_node *all_change_nodes, struct l
     ret = lys_find_expr_atoms(startcmd->schema, startcmd->schema->module, lref_t->path,
                               lref_t->prefixes, 0, &s_set);
     if (s_set == NULL || ret != LY_SUCCESS) {
-        printf("%s: failed to get target leafref for node \"%s\": %s\n", __func__,
-               startcmd->schema->name, ly_strerrcode(ret));
+        fprintf(stderr, "%s: failed to get target leafref for node \"%s\": %s\n", __func__,
+                startcmd->schema->name, ly_strerrcode(ret));
         return EXIT_FAILURE;
     }
 
@@ -913,9 +913,7 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
                       struct ly_set **found_leafrefs_set)
 {
     int ret;
-    // in ->priv we add an int flag which indicate that this node has been processed.
-    if (startcmd->priv != NULL)
-        return EXIT_SUCCESS;
+
     struct lyd_node *next = NULL;
     // check if this startcmd is also including parent node's leafs.
     if (get_extension(INCLUDE_PARENT_LEAFS, startcmd, NULL) == EXIT_SUCCESS)
@@ -976,10 +974,6 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
  */
 int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *startcmd_node)
 {
-    // if node already processed skip.
-    if (startcmd_node->priv != NULL)
-        return EXIT_SUCCESS;
-
     // if the parent is startcmd, and the parent is delete, skip this inner startcmd.
     struct lyd_node *startcmd_parent = lyd_parent(startcmd_node);
     if (is_startcmd_node(startcmd_parent) && get_operation(startcmd_parent) == DELETE_OPR)
@@ -1079,25 +1073,67 @@ cleanup:
 }
 
 /**
+ * this function will ensure that the lyd_node first is added before the lyd_node second,
+ * weather  the lyd_nodes are already added to the set or not.
+ * @param ordered_set [in,out] the ly_set to insert the nodes in.
+ * @param first [in] the first lyd_node to be inserted.
+ * @param second [in] the second lyd_node to be inserted.
+ */
+void ly_set_insert_before(struct ly_set **ordered_set, struct lyd_node *first,
+                          struct lyd_node *second)
+{
+    uint32_t i_first, i_second;
+    struct ly_set *temp_set;
+    ly_set_new(&temp_set);
+    // check if first is exist in the set
+    if (ly_set_contains(*ordered_set, second, &i_second)) {
+        if (ly_set_contains(*ordered_set, first, &i_first)) {
+            // first already added before second.
+            if (i_first < i_second)
+                return;
+        }
+        // we need to swap.
+        // [1] move the second node and all nodes after it to the temp set.
+        for (uint32_t i = i_second; i < (*ordered_set)->count; i++) {
+            ly_set_add(temp_set, (*ordered_set)->dnodes[i], 0, NULL);
+            // this remove will keep moving the nodes after the index, so we keep deleting the i_second
+        }
+        while (i_second < (*ordered_set)->count) {
+            // till the end of the list.
+            ly_set_rm_index_ordered(*ordered_set, i_second, NULL);
+        }
+        // [2] add the first node
+        ly_set_add(*ordered_set, first, 0, NULL);
+        // [3] add the copied nodes back to the set
+        for (uint32_t i = 0; i < temp_set->count; i++) {
+            ly_set_add(*ordered_set, temp_set->dnodes[i], 0, NULL);
+        }
+        ly_set_add(*ordered_set, second, 0, NULL);
+        return;
+    }
+    // second does not exist then,  add first and then second. NOTE: set handle duplication.
+    ly_set_add(*ordered_set, first, 0, NULL);
+    ly_set_add(*ordered_set, second, 0, NULL);
+}
+
+/**
  * add all dependencies for node startcmd_node, this add dependencies recursively.
- * @param cmds [in,out] array of cmd_info
- * @param cmd_idx [in,out] current index pointer for cmds
  * @param all_change_nodes [in] all change nodes
  * @param startcmd_node [in] startcmd_node to find and add its dependencies.
+ * @param sorted_dependecies [in,out] the ly_set to be sorted.
  * @return EXIST_SUCCESS
  * @return EXIST_FAILURE
  */
-int add_dependencies_cmd_info(struct cmd_info **cmds, int *cmd_idx,
-                              const struct lyd_node *all_change_nodes,
-                              struct lyd_node *startcmd_node)
+int add_node_dependencies(const struct lyd_node *all_change_nodes, struct lyd_node *startcmd_node,
+                          struct ly_set *sorted_dependecies)
 {
     int ret = EXIT_SUCCESS;
+    if (startcmd_node->priv == &processed)
+        return ret;
+
     struct ly_set *node_leafrefs = NULL;
     ly_set_new(&node_leafrefs);
 
-    // check if node is already processed
-    if (startcmd_node->priv != NULL)
-        return EXIT_SUCCESS;
     // get the node leafrefs
     ret = get_node_leafrefs(all_change_nodes, startcmd_node, &node_leafrefs);
     if (ret != EXIT_SUCCESS) {
@@ -1105,37 +1141,76 @@ int add_dependencies_cmd_info(struct cmd_info **cmds, int *cmd_idx,
                 startcmd_node->schema->name);
         return EXIT_FAILURE;
     }
+
     // check if dependencies found.
     if (node_leafrefs != NULL) {
-        for (uint32_t i = 0; i < node_leafrefs->count; i++) {
-            struct lyd_node *leafref_node = node_leafrefs->dnodes[i];
-            // - if the start_cmd node's operation is delete, then add it before it's leafref.
-            // - if the start_cmd node's operation is add, then add leafref before
-            if (get_operation(startcmd_node) == DELETE_OPR ||
-                get_operation(lyd_parent(startcmd_node)) == DELETE_OPR) {
-                if (startcmd_node->priv == NULL) {
-                    ret = add_cmd_info_core(cmds, cmd_idx, startcmd_node);
-                    if (ret != EXIT_SUCCESS)
-                        goto cleanup;
-                    startcmd_node->priv = &processed;
+        // - if the start_cmd node's operation is delete, then add it before it's leafrefs.
+        // - if the start_cmd node's operation is add, then add leafref before
+        if (get_operation(startcmd_node) == DELETE_OPR ||
+            get_operation(lyd_parent(startcmd_node)) == DELETE_OPR) {
+            // check if the startcmd's leafrefs already exist in sorted_dependecies,
+            // if it exist then insert the startcmd before the lowest lref index in sorted_dependecies.
+            // [1] process all the depenencies recurcivly
+            for (uint32_t i = 0; i < node_leafrefs->count; i++) {
+                struct lyd_node *leafref_node = node_leafrefs->dnodes[i];
+                add_node_dependencies(all_change_nodes, leafref_node, sorted_dependecies);
+            }
+            // [2] find the lref with lowest index in sorted_dependecies.
+            uint32_t lowest_lref_index = sorted_dependecies->count;
+            struct lyd_node *lowest_lref_node = NULL;
+            for (uint32_t i = 0; i < node_leafrefs->count; i++) {
+                struct lyd_node *leafref_node = node_leafrefs->dnodes[i];
+                uint32_t lref_i = 0;
+                if (ly_set_contains(sorted_dependecies, leafref_node, &lref_i)) {
+                    if (lowest_lref_index > lref_i) {
+                        lowest_lref_index = lref_i;
+                        lowest_lref_node = leafref_node;
+                    }
                 }
-            } else {
-                // check if the found dependency also has dependencies and add it.
-                ret = add_dependencies_cmd_info(cmds, cmd_idx, all_change_nodes, leafref_node);
-                if (ret != EXIT_SUCCESS)
-                    goto cleanup;
-
-                if (leafref_node != NULL) {
-                    ret = add_cmd_info_core(cmds, cmd_idx, leafref_node);
-                    if (ret != EXIT_SUCCESS)
-                        goto cleanup;
-                    leafref_node->priv = &processed;
-                }
+            }
+            // [2] insert the startcmd before the lowest_lref_node in the sorted_dependecies
+            if (lowest_lref_node) {
+                ly_set_insert_before(&sorted_dependecies, startcmd_node, lowest_lref_node);
+            }
+        } else {
+            // the operations is add, so we need to add all startcmd's lrefs before the startcmd.
+            for (uint32_t i = 0; i < node_leafrefs->count; i++) {
+                struct lyd_node *leafref_node = node_leafrefs->dnodes[i];
+                add_node_dependencies(all_change_nodes, leafref_node, sorted_dependecies);
             }
         }
     }
-cleanup:
+
+    // finally, add the current startcmd_node to the sorted set. if you try to add an existing node,
+    // no problem.
+    ly_set_add(sorted_dependecies, startcmd_node, 0, NULL);
+    startcmd_node->priv = &processed;
+
     return ret;
+}
+
+/**
+ * sort lyd_nodes dependencies based on the startcmd_node leafrefs.
+ * if the startcmd_node is delete, it's added before its leafrefs, if it's add, it's added after
+ * its leafrefs.
+ * @param start_cmds_set [in] ly_set of unsorted startcmds.
+ * @param all_change_nodes  [in] lyd_node for all changed nodes in this trax. need for find/search
+ * @param sorted_startcmds [out] sorted startcmds.
+ * @return EXIT_SUCCESS
+ * @return EXIT_FAILURE
+ */
+int sort_lyd_dependencies(struct ly_set *start_cmds_set, const struct lyd_node *all_change_nodes,
+                          struct ly_set *sorted_startcmds)
+{
+    for (int i = 0; i < start_cmds_set->count; i++) {
+        int ret =
+            add_node_dependencies(all_change_nodes, start_cmds_set->dnodes[i], sorted_startcmds);
+
+        if (ret != EXIT_SUCCESS) {
+            return ret;
+        }
+    }
+    return EXIT_SUCCESS;
 }
 
 struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
@@ -1172,34 +1247,21 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
         free(node_print_text);
     }
 
+    // initialize the ->priv
     for (int i = 0; i < start_cmds_set->count; i++) {
         start_cmds_set->dnodes[i]->priv = NULL;
     }
 
-    for (int i = 0; i < start_cmds_set->count; i++) {
-        int ret =
-            add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, start_cmds_set->dnodes[i]);
-        if (ret != EXIT_SUCCESS) {
-            free_cmds_info(cmds);
-            return NULL;
-        }
-    }
+    // first sort the dependencies.
+    struct ly_set *sorted_startcmds;
+    ly_set_new(&sorted_startcmds);
+    sort_lyd_dependencies(start_cmds_set, all_change_nodes, sorted_startcmds);
 
-    for (int i = 0; i < start_cmds_set->count; i++) {
-        int ret =
-            add_dependencies_cmd_info(cmds, &cmd_idx, all_change_nodes, start_cmds_set->dnodes[i]);
-        if (ret != EXIT_SUCCESS) {
+    // generated command for the sorted dependencies
+    for (int i = 0; i < sorted_startcmds->count; i++) {
+        if (add_cmd_info_core(cmds, &cmd_idx, sorted_startcmds->dnodes[i]) != EXIT_SUCCESS) {
             free_cmds_info(cmds);
             return NULL;
-        }
-    }
-    for (int i = 0; i < start_cmds_set->count; i++) {
-        if (start_cmds_set->dnodes[i]->priv == NULL) {
-            if (add_cmd_info_core(cmds, &cmd_idx, start_cmds_set->dnodes[i]) != EXIT_SUCCESS) {
-                free_cmds_info(cmds);
-                return NULL;
-            }
-            start_cmds_set->dnodes[i]->priv = &processed;
         }
     }
 
