@@ -113,3 +113,4 @@ else
     exit 1
 fi
 
+exit $ret
