@@ -1,32 +1,48 @@
+<links xmlns="urn:okda:iproute2:ip:link">
+    <link>
+        <name>nh_if1</name>
+        <type>dummy</type>
+        <master>nh_br1</master>
+        <admin-status>up</admin-status>
+    </link>
+<!--    adding br to test the nested dependency with delete oper in inter-module dependency scenario.-->
+    <bridge xmlns="urn:okda:iproute2:ip:link">
+        <name>nh_br1</name>
+    </bridge>
+</links>
 <nexthops xmlns="urn:okda:iproute2:ip:nexthop">
     <nexthop>
-        <id>1</id>
+        <id>1001</id>
         <blackhole>true</blackhole>
         <fdb>false</fdb>
     </nexthop>
     <nexthop>
-        <id>2</id>
+        <id>2001</id>
         <ipv4>
             <address>192.168.1.1</address>
         </ipv4>
         <fdb>true</fdb>
     </nexthop>
     <nexthop>
-        <id>3</id>
+        <id>3001</id>
         <ipv4>
             <address>3.3.3.3</address>
         </ipv4>
         <fdb>true</fdb>
     </nexthop>
     <nexthop>
-        <id>12</id>
+        <id>4001</id>
+        <dev>nh_if1</dev>
+    </nexthop>
+    <nexthop>
+        <id>12001</id>
         <group>
             <nh>
-                <id>2</id>
+                <id>2001</id>
                 <weight>3</weight>
             </nh>
             <nh>
-                <id>3</id>
+                <id>3001</id>
                 <weight>4</weight>
             </nh>
         </group>
