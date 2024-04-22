@@ -30,6 +30,28 @@ module iproute2-tc-filter {
             description "The protocol.";
         }
     }
+    grouping filter-result {
+        leaf classid {
+            type leafref {
+                path '/qdisc:classes/qdisc:class/qdisc:classid';
+            }
+            description
+                "[also called flowid] pecify a class to pass matching packets on to.  CLASSID
+                is in the form X:Y, while X and Y are interpreted as
+                numbers in hexadecimal format.";
+        }
+        leaf action {
+            type enumeration {
+                enum "pass";
+                enum "drop";
+                enum "reclassify";
+                enum "continue";
+                enum "pipe";
+            }
+            description
+                "specify action";
+        }
+    }
     grouping filter-rule{
         list rule{
             ipr2cgen:cmd-start;
@@ -42,13 +64,6 @@ module iproute2-tc-filter {
                 type uint32;
                 description "the preference value";
             }
-            leaf filter-kind {
-                ipr2cgen:value-only;
-                type enumeration {
-                    enum "flower";
-                }
-                description "The type of filter.";
-            }
             leaf handle {
                 type uint16; // review
                 description "The filter ID.";
@@ -57,174 +72,234 @@ module iproute2-tc-filter {
                 type uint8;
                 description "The priority.";
             }
-            container flower-options {
-                when "../filter-kind = 'flower'";
-                container match {
-                    leaf indev {
-                        type iplink:link-ref;
-                        description
-                            "Match on incoming interface name. Obviously this makes
-                            sense only for forwarded flows.  ifname is the name of an
-                            interface which must exist at the time of tc invocation.";
-                    }
-                    leaf skip_sw {
-                        ipr2cgen:flag;
-                        type boolean;
-                        description
-                            "Do not process filter by software. If hardware has no
-                            offload support for this filter, or TC offload is not
-                            enabled for the interface, operation will fail.";
-                    }
-                    leaf skip_hw {
-                        ipr2cgen:flag;
-                        type boolean;
-                        description
-                            "Do not process filter by hardware.";
-                    }
-                    leaf dst_mac {
-                        type string; // TODO: add pattern
-                        description
-                            "Match on destination MAC address.  A mask may be
-                            optionally provided to limit the bits of the address which
-                            are matched. A mask is provided by following the address
-                            with a slash and then the mask. It may be provided in
-                            LLADDR format, in which case it is a bitwise mask, or as a
-                            number of high bits to match. If the mask is missing then
-                            a match on all bits is assumed.";
-                    }
-                    leaf src_mac {
-                        type string; // TODO: add pattern
-                        description
-                            "Match on source MAC address.  A mask may be
-                            optionally provided to limit the bits of the address which
-                            are matched. A mask is provided by following the address
-                            with a slash and then the mask. It may be provided in
-                            LLADDR format, in which case it is a bitwise mask, or as a
-                            number of high bits to match. If the mask is missing then
-                            a match on all bits is assumed.";
-                    }
-                    leaf vlan_id {
-                        type uint32;
-                        description
-                            " Match on vlan tag id.  VID is an unsigned 12bit value in
-                            decimal format.";
-                    }
-                    leaf ip_proto {
-                        type union {
+            choice filter {
+                container flower {
+                    ipr2cgen:add-static-arg "flower";
+                    container match {
+                        leaf indev {
+                            type iplink:link-ref;
+                            description
+                                "Match on incoming interface name. Obviously this makes
+                                sense only for forwarded flows.  ifname is the name of an
+                                interface which must exist at the time of tc invocation.";
+                        }
+                        leaf skip_sw {
+                            ipr2cgen:flag;
+                            type boolean;
+                            description
+                                "Do not process filter by software. If hardware has no
+                                offload support for this filter, or TC offload is not
+                                enabled for the interface, operation will fail.";
+                        }
+                        leaf skip_hw {
+                            ipr2cgen:flag;
+                            type boolean;
+                            description
+                                "Do not process filter by hardware.";
+                        }
+                        leaf dst_mac {
+                            type string; // TODO: add pattern
+                            description
+                                "Match on destination MAC address.  A mask may be
+                                optionally provided to limit the bits of the address which
+                                are matched. A mask is provided by following the address
+                                with a slash and then the mask. It may be provided in
+                                LLADDR format, in which case it is a bitwise mask, or as a
+                                number of high bits to match. If the mask is missing then
+                                a match on all bits is assumed.";
+                        }
+                        leaf src_mac {
+                            type string; // TODO: add pattern
+                            description
+                                "Match on source MAC address.  A mask may be
+                                optionally provided to limit the bits of the address which
+                                are matched. A mask is provided by following the address
+                                with a slash and then the mask. It may be provided in
+                                LLADDR format, in which case it is a bitwise mask, or as a
+                                number of high bits to match. If the mask is missing then
+                                a match on all bits is assumed.";
+                        }
+                        leaf vlan_id {
+                            type uint32;
+                            description
+                                " Match on vlan tag id.  VID is an unsigned 12bit value in
+                                decimal format.";
+                        }
+                        leaf ip_proto {
+                            type union {
+                                type string{
+                                    pattern '0x[0-9a-fA-F]+|\d+';
+                                }
+                                type enumeration {
+                                    enum "tcp";
+                                    enum "udp";
+                                    enum "icmp";
+                                    enum "icmpv6";
+                                }
+
+                            }
+                            description
+                                "Match on layer four protocol.  IP_PROTO may be tcp, udp,
+                                sctp, icmp, icmpv6, l2tp or an unsigned 8bit value in
+                                hexadecimal format.";
+                        }
+                        leaf ip_tos {
                             type string{
                                 pattern '0x[0-9a-fA-F]+|\d+';
                             }
-                            type enumeration {
-                                enum "tcp";
-                                enum "udp";
-                                enum "icmp";
-                                enum "icmpv6";
+                            description
+                                "Match on ipv4 TOS or ipv6 traffic-class - eight bits in
+                                hexadecimal format.  A mask may be optionally provided to
+                                limit the bits which are matched. A mask is provided by
+                                following the value with a slash and then the mask. If the
+                                mask is missing then a match on all bits is assumed.";
+                        }
+                        leaf ip_ttl {
+                            type string {
+                                pattern '0x[0-9a-fA-F]+|\d+';
+                            }
+                            description
+                                "Match on ipv4 TTL or ipv6 hop-limit  - eight bits value in
+                                decimal or hexadecimal format.  A mask may be optionally
+                                provided to limit the bits which are matched. Same logic
+                                is used for the mask as with matching on ip_tos.";
+                        }
+                        leaf dst_ip {
+                            type union {
+                                type inet:ip-address;
+                                type inet:ip-prefix;
                             }
 
+                            description
+                                "Match on destination IP address.  PREFIX must be
+                                a valid IPv4 or IPv6 address, depending on the protocol
+                                option to tc filter, optionally followed by a slash and
+                                the prefix length.  If the prefix is missing, tc assumes a
+                                full-length host match.";
                         }
-                        description
-                            "Match on layer four protocol.  IP_PROTO may be tcp, udp,
-                            sctp, icmp, icmpv6, l2tp or an unsigned 8bit value in
-                            hexadecimal format.";
-                    }
-                    leaf ip_tos {
-                        type string{
-                            pattern '0x[0-9a-fA-F]+|\d+';
+                        leaf src_ip {
+                            type union {
+                                type inet:ip-address;
+                                type inet:ip-prefix;
+                            }
+
+                            description
+                                "Match on source IP address.  PREFIX must be
+                                a valid IPv4 or IPv6 address, depending on the protocol
+                                option to tc filter, optionally followed by a slash and
+                                the prefix length.  If the prefix is missing, tc assumes a
+                                full-length host match.";
                         }
-                        description
-                            "Match on ipv4 TOS or ipv6 traffic-class - eight bits in
-                            hexadecimal format.  A mask may be optionally provided to
-                            limit the bits which are matched. A mask is provided by
-                            following the value with a slash and then the mask. If the
-                            mask is missing then a match on all bits is assumed.";
-                    }
-                    leaf ip_ttl {
-                        type string {
-                            pattern '0x[0-9a-fA-F]+|\d+';
+                        leaf dst_port {
+                            when "../ip_proto = 'tcp' or ../ip_proto = 'udp'";
+                            type inet:port-number;
+                            description
+                                "Match on layer 4 protocol  destination port
+                                number, with an optional mask. Alternatively, the minimum
+                                and maximum values can be specified to match on a range of
+                                layer 4 protocol  destination port numbers. Only
+                                available for ip_proto values udp, tcp and sctp which have
+                                to be specified in beforehand.";
                         }
-                        description
-                            "Match on ipv4 TTL or ipv6 hop-limit  - eight bits value in
-                            decimal or hexadecimal format.  A mask may be optionally
-                            provided to limit the bits which are matched. Same logic
-                            is used for the mask as with matching on ip_tos.";
+                        leaf src_port {
+                            when "../ip_proto = 'tcp' or ../ip_proto = 'udp'";
+                            type inet:port-number;
+                            description
+                                "Match on layer 4 protocol source port
+                                number, with an optional mask. Alternatively, the minimum
+                                and maximum values can be specified to match on a range of
+                                layer 4 protocol source  port numbers. Only
+                                available for ip_proto values udp, tcp and sctp which have
+                                to be specified in beforehand..";
+                        }
                     }
-                    leaf dst_ip {
-                        type union {
-                            type inet:ipv4-prefix;
-                            type inet:ipv6-prefix;
+                    uses filter-result;
+
+                }
+                container u32 {
+                    ipr2cgen:add-static-arg "u32";
+                    container match {
+                        ipr2cgen:add-static-arg "match";
+                        container ip {
+                            ipr2cgen:add-static-arg "ip";
+                            leaf src {
+                                type union {
+                                    type inet:ip-address;
+                                    type inet:ip-prefix;
+                                }
+                                description
+                                    "source ip prefix";
+
+                            }
+                            leaf dst {
+                                type union {
+                                    type inet:ip-address;
+                                    type inet:ip-prefix;
+                                }
+                                description
+                                    "destination ip prefix";
+
+                            }
+                        }
+                        container tcp {
+                            ipr2cgen:add-static-arg "tcp";
+                            leaf sport {
+                                type inet:port-number;
+                                description
+                                    "source port number";
+                            }
+                            leaf dport {
+                                type inet:port-number;
+                                description
+                                    "destination port number";
+                            }
+                        }
+                        container udp {
+                            ipr2cgen:add-static-arg "udp";
+                            leaf sport {
+                                type inet:port-number;
+                                description
+                                    "source port number";
+                            }
+                            leaf dport {
+                                type inet:port-number;
+                                description
+                                    "destination port number";
+                            }
                         }
 
-                        description
-                            "Match on destination IP address.  PREFIX must be
-                            a valid IPv4 or IPv6 address, depending on the protocol
-                            option to tc filter, optionally followed by a slash and
-                            the prefix length.  If the prefix is missing, tc assumes a
-                            full-length host match.";
                     }
-                    leaf src_ip {
-                        type union {
-                            type inet:ipv4-prefix;
-                            type inet:ipv6-prefix;
-                        }
+                    uses filter-result;
 
-                        description
-                            "Match on source IP address.  PREFIX must be
-                            a valid IPv4 or IPv6 address, depending on the protocol
-                            option to tc filter, optionally followed by a slash and
-                            the prefix length.  If the prefix is missing, tc assumes a
-                            full-length host match.";
-                    }
-                    leaf dst_port {
-                        when "../ip_proto = 'tcp' or ../ip_proto = 'udp'";
-                        type inet:port-number;
-                        description
-                            "Match on layer 4 protocol  destination port
-                            number, with an optional mask. Alternatively, the minimum
-                            and maximum values can be specified to match on a range of
-                            layer 4 protocol  destination port numbers. Only
-                            available for ip_proto values udp, tcp and sctp which have
-                            to be specified in beforehand.";
-                    }
-                    leaf src_port {
-                        when "../ip_proto = 'tcp' or ../ip_proto = 'udp'";
-                        type inet:port-number;
-                        description
-                            "Match on layer 4 protocol source port
-                            number, with an optional mask. Alternatively, the minimum
-                            and maximum values can be specified to match on a range of
-                            layer 4 protocol source  port numbers. Only
-                            available for ip_proto values udp, tcp and sctp which have
-                            to be specified in beforehand..";
-                    }
-                }
-                leaf classid {
-                    type string {
-                        pattern '\d+:\d+';
-                    }
-                    description
-                        "pecify a class to pass matching packets on to.  CLASSID
-                        is in the form X:Y, while X and Y are interpreted as
-                        numbers in hexadecimal format.";
-                }
-                leaf action {
-                    mandatory "true";
-                    type enumeration {
-                        enum "pass";
-                        enum "drop";
-                        enum "reclassify";
-                        enum "continue";
-                        enum "pipe";
-                    }
-                    description
-                        "specify action";
                 }
             }
+
         }
     }
 
     container tc-filters {
         description "Container for all tc filter configurations.";
+        list qdisc-filter {
+            key "dev parent";
+            description "filter that is applied to qdisc";
+            leaf dev {
+                type leafref {
+                    path '/qdisc:qdiscs/qdisc:qdisc/qdisc:dev';
+                }
+                description "Name of device 'interface' where the qdisc is attached to.";
+                mandatory true;
+            }
+            leaf parent {
+                type leafref {
+                    path '/qdisc:qdiscs/qdisc:qdisc/qdisc:handle';
+                }
+                description "qdisc handler where is filter is attached to.";
+                mandatory true;
+            }
+            uses filter-common;
+            uses filter-rule;
 
+        }
         list dev-filter {
             description "A list of filters.";
             key "dev direction";
@@ -241,8 +316,6 @@ module iproute2-tc-filter {
                     enum "ingress";
                     enum "egress";
                 }
-                description
-                    "direction of filter, ingress or egress";
             }
             uses filter-common;
             uses filter-rule;

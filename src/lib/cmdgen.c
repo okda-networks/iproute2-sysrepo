@@ -584,6 +584,8 @@ start:
             // no data inside the container, container will have LYD_DEFAULT|LYD_WHEN_TRUE flags
             if ((next->flags & LYD_DEFAULT) && (next->flags & LYD_WHEN_TRUE))
                 break;
+            if (op_val == DELETE_OPR)
+                break;
             if (get_extension(ADD_STATIC_ARG_EXT, next, &add_static_arg) == EXIT_SUCCESS) {
                 if (add_static_arg == NULL) {
                     fprintf(stderr,
