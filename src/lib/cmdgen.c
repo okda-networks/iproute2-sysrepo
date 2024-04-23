@@ -584,6 +584,8 @@ start:
             // no data inside the container, container will have LYD_DEFAULT|LYD_WHEN_TRUE flags
             if ((next->flags & LYD_DEFAULT) && (next->flags & LYD_WHEN_TRUE))
                 break;
+            if (op_val == DELETE_OPR)
+                break;
             if (get_extension(ADD_STATIC_ARG_EXT, next, &add_static_arg) == EXIT_SUCCESS) {
                 if (add_static_arg == NULL) {
                     fprintf(stderr,
@@ -802,24 +804,39 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     // in case of delete the inner start_cmd node will not have an operation, so we take it from
     // the parent
     if (op_val == UNKNOWN_OPR) {
-        if (lyd_parent(startcmd_node) && !is_startcmd_node(lyd_parent(startcmd_node))) {
-            int ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
+        if (lyd_parent(startcmd_node)) {
+            oper_t parent_op_val = get_operation(lyd_parent(startcmd_node));
+            int ret = LY_SUCCESS;
+            switch (parent_op_val) {
+            case ADD_OPR:
+                ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "create", 0, NULL);
+                op_val = ADD_OPR;
+                break;
+            case UNKNOWN_OPR:
+            case UPDATE_OPR:
+                ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "update", 0, NULL);
+                op_val = UPDATE_OPR;
+                break;
+            case DELETE_OPR:
+                ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
+                op_val = DELETE_OPR;
+                break;
+            }
             if (ret != LY_SUCCESS) {
-                fprintf(stderr,
-                        "%s: failed to set meta data 'yang:operation=delete' for node. \"%s\" \n",
-                        __func__, startcmd_node->schema->name);
+                fprintf(
+                    stderr,
+                    "%s: failed to set meta data operation for inner startcmd for node. \"%s\" \n",
+                    __func__, startcmd_node->schema->name);
                 return NULL;
             }
 
-            op_val = DELETE_OPR;
+        } else {
+            fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
+                    startcmd_node->schema->name);
+            return NULL;
         }
     }
 
-    if (op_val == UNKNOWN_OPR) {
-        fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
-                startcmd_node->schema->name);
-        return NULL;
-    }
     if (op_val == UPDATE_OPR &&
         (get_extension(REPLACE_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS)) {
         ext_onupdate_replace_hdlr(&startcmd_node);

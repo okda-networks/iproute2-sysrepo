@@ -1,3 +1,4 @@
+<!--this test filter with classes -->
 <links xmlns="urn:okda:iproute2:ip:link">
     <link>
         <name>if_tc_f1</name>
@@ -9,51 +10,181 @@
         <type>dummy</type>
         <admin-status>up</admin-status>
     </link>
+    <link>
+        <name>if_tc_f3</name>
+        <type>dummy</type>
+        <admin-status>up</admin-status>
+    </link>
+    <link>
+        <name>if_tc_f4</name>
+        <type>dummy</type>
+        <admin-status>up</admin-status>
+    </link>
 </links>
 <tc-filters xmlns="urn:okda:iproute2:tc:filter">
-<dev-filter>
-    <dev>if_tc_f2</dev>
-    <direction>ingress</direction>
-    <protocol>ip</protocol>
-    <rule>
-        <pref>10</pref>
-        <filter-kind>flower</filter-kind>
-        <flower-options>
-            <match>
-                <ip_proto>icmp</ip_proto>
-                <src_ip>1.2.1.2/32</src_ip>
-            </match>
-            <action>pass</action>
-        </flower-options>
-    </rule>
-    <rule>
-        <pref>20</pref>
-        <filter-kind>flower</filter-kind>
-        <flower-options>
-            <action>drop</action>
-        </flower-options>
-    </rule>
-</dev-filter>
-<shared-block-filter xmlns="urn:okda:iproute2:tc:filter">
-    <block>10</block>
-    <protocol>ip</protocol>
-    <rule>
-        <pref>10</pref>
-        <filter-kind>flower</filter-kind>
-        <flower-options>
-            <action>pass</action>
-        </flower-options>
-    </rule>
-</shared-block-filter>
-</tc-filters>
-<qdiscs xmlns="urn:okda:iproute2:tc:qdisc">
-    <special-qdisc>
+    <qdisc-filter>
         <dev>if_tc_f1</dev>
+        <parent>8001:</parent>
+        <protocol>ip</protocol>
+        <rule>
+            <pref>20</pref>
+            <flower>
+                <match>
+                    <src_ip>1.1.1.1/32</src_ip>
+                </match>
+                <classid>8001:20</classid>
+                <action>pass</action>
+            </flower>
+        </rule>
+        <rule>
+            <pref>30</pref>
+            <flower>
+                <match>
+                    <src_ip>5.5.5.5/32</src_ip>
+                </match>
+                <classid>8001:30</classid>
+                <action>pass</action>
+            </flower>
+        </rule>
+        <rule>
+            <pref>40</pref>
+            <flower>
+                <match>
+                    <dst_ip>9.9.9.0/24</dst_ip>
+                </match>
+                <classid>8001:40</classid>
+                <action>pass</action>
+            </flower>
+        </rule>
+    </qdisc-filter>
+    <qdisc-filter>
+        <dev>if_tc_f2</dev>
+        <parent>8002:</parent>
+        <protocol>ip</protocol>
+        <rule>
+            <pref>20</pref>
+            <u32>
+                <match>
+                    <ip>
+                        <src>1.1.1.1</src>
+                    </ip>
+                </match>
+                <classid>8002:20</classid>
+            </u32>
+        </rule>
+    </qdisc-filter>
+    <dev-filter>
+        <dev>if_tc_f4</dev>
+        <direction>ingress</direction>
+        <protocol>ip</protocol>
+        <rule>
+            <pref>10</pref>
+            <flower>
+                <match>
+                    <ip_proto>icmp</ip_proto>
+                    <src_ip>1.2.1.2/32</src_ip>
+                </match>
+                <action>pass</action>
+            </flower>
+        </rule>
+        <rule>
+            <pref>20</pref>
+            <flower>
+                <action>drop</action>
+            </flower>
+        </rule>
+    </dev-filter>
+    <shared-block-filter xmlns="urn:okda:iproute2:tc:filter">
+        <block>10</block>
+        <protocol>ip</protocol>
+        <rule>
+            <pref>10</pref>
+            <flower>
+                <action>pass</action>
+            </flower>
+        </rule>
+    </shared-block-filter>
+</tc-filters>
+
+<classes xmlns="urn:okda:iproute2:tc:qdisc">
+    <class>
+        <dev>if_tc_f1</dev>
+        <parent>8001:</parent>
+        <classid>8001:20</classid>
+        <htb>
+            <rate>20mbit</rate>
+        </htb>
+    </class>
+    <class>
+        <dev>if_tc_f1</dev>
+        <parent>8001:</parent>
+        <classid>8001:30</classid>
+        <htb>
+            <rate>30mbit</rate>
+        </htb>
+    </class>
+    <class>
+        <dev>if_tc_f1</dev>
+        <parent>8001:</parent>
+        <classid>8001:40</classid>
+        <htb>
+            <rate>40mbit</rate>
+        </htb>
+    </class>
+    <class>
+        <dev>if_tc_f2</dev>
+        <parent>8002:</parent>
+        <classid>8002:20</classid>
+        <htb>
+            <rate>20mbit</rate>
+        </htb>
+    </class>
+</classes>
+
+<qdiscs xmlns="urn:okda:iproute2:tc:qdisc">
+    <qdisc>
+        <dev>if_tc_f1</dev>
+        <parent>root</parent>
+        <handle>8001:</handle>
+        <qdisc-kind>htb</qdisc-kind>
+    </qdisc>
+    <qdisc>
+        <dev>if_tc_f1</dev>
+        <parent>8001:20</parent>
+        <qdisc-kind>pfifo</qdisc-kind>
+        <fifo-options>
+            <limit>1002</limit>
+        </fifo-options>
+    </qdisc>
+    <qdisc>
+        <dev>if_tc_f1</dev>
+        <parent>8001:30</parent>
+        <qdisc-kind>pfifo</qdisc-kind>
+        <fifo-options>
+            <limit>1003</limit>
+        </fifo-options>
+    </qdisc>
+    <qdisc>
+        <dev>if_tc_f1</dev>
+        <parent>8001:40</parent>
+        <qdisc-kind>pfifo</qdisc-kind>
+        <fifo-options>
+            <limit>1004</limit>
+        </fifo-options>
+    </qdisc>
+    <qdisc>
+        <dev>if_tc_f2</dev>
+        <parent>root</parent>
+        <handle>8002:</handle>
+        <qdisc-kind>htb</qdisc-kind>
+    </qdisc>
+    <special-qdisc>
+        <dev>if_tc_f3</dev>
         <qdisc-kind>clsact</qdisc-kind>
         <ingress_block>10</ingress_block>
     </special-qdisc>
     <special-qdisc>
-        <dev>if_tc_f2</dev>
+        <dev>if_tc_f4</dev>
         <qdisc-kind>ingress</qdisc-kind>
     </special-qdisc>
 </qdiscs>
