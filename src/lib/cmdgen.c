@@ -800,27 +800,26 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     // prepare for new command
     op_val = get_operation(startcmd_node);
 
-    // special case: for start_cmd that is inside a parent which is not start cmd (e.g tc-filter),
-    // in case of delete the inner start_cmd node will not have an operation, so we take it from
-    // the parent
+    // special case: for inner start_cmd, where the operation need to be taken from parent node.
     if (op_val == UNKNOWN_OPR) {
         if (lyd_parent(startcmd_node)) {
             oper_t parent_op_val = get_operation(lyd_parent(startcmd_node));
-            int ret = LY_SUCCESS;
+            int ret;
             switch (parent_op_val) {
             case ADD_OPR:
                 ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "create", 0, NULL);
                 op_val = ADD_OPR;
                 break;
-            case UNKNOWN_OPR:
-            case UPDATE_OPR:
-                ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "update", 0, NULL);
-                op_val = UPDATE_OPR;
-                break;
             case DELETE_OPR:
                 ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
                 op_val = DELETE_OPR;
                 break;
+            case UPDATE_OPR: // if parent is update, we can't confirm if the child is add,delete or update.
+            case UNKNOWN_OPR:
+                fprintf(stderr,
+                        "%s: unknown or update operation for parent startcmd node = \"%s\"\n",
+                        __func__, startcmd_node->schema->name);
+                return NULL;
             }
             if (ret != LY_SUCCESS) {
                 fprintf(
