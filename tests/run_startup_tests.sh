@@ -35,6 +35,16 @@ route_table="100"
 route_metric="8"
 route_tos="EF"
 
+qdisc_if1="qdisc_if1"
+qdisc_if2="qdisc_if2"
+qdisc_if3="qdisc_if3"
+qdisc_if4="qdisc_if4"
+qdisc_if5="qdisc_if5"
+qdisc_if6="qdisc_if6"
+qdisc_if7="qdisc_if7"
+qdisc_if8="qdisc_if8"
+
+
 # Function to create LINK
 create_interfaces() {
     ip link $operation name $1 mtu $2 type $3
@@ -90,8 +100,18 @@ delete_interfaces() {
     ip link del name $link_name
     ip link del name $vti_name
     ip link del name $vxlan_name
+
     ip link del name $route_if1
     ip link del name $route_if2
+
+    ip link del name $qdisc_if1
+    ip link del name $qdisc_if2
+    ip link del name $qdisc_if3
+    ip link del name $qdisc_if4
+    ip link del name $qdisc_if5
+    ip link del name $qdisc_if6
+    ip link del name $qdisc_if7
+    ip link del name $qdisc_if8
 }
 
 # Function to delete network interfaces
@@ -126,6 +146,37 @@ set_interface_status $route_if2 "up"
 # Create Routes
 create_simple_route $route_pref1 $route_if1
 create_advanced_route $route_pref2 $route_table $route_metric $route_tos $route_if1_nh_address "5" $route_if2 "6"
+
+# QDISC
+create_interfaces $qdisc_if1 $mtu_value "dummy"
+create_interfaces $qdisc_if2 $mtu_value "dummy"
+create_interfaces $qdisc_if3 $mtu_value "dummy"
+create_interfaces $qdisc_if4 $mtu_value "dummy"
+create_interfaces $qdisc_if5 $mtu_value "dummy"
+create_interfaces $qdisc_if6 $mtu_value "dummy"
+create_interfaces $qdisc_if7 $mtu_value "dummy"
+create_interfaces $qdisc_if8 $mtu_value "dummy"
+
+#prio
+tc qdisc add dev $qdisc_if1 root handle 1: prio bands 3 priomap 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+#sfq
+tc qdisc add dev $qdisc_if1 parent 1:1 handle 10: sfq
+#tbf
+tc qdisc add dev $qdisc_if1 parent 1:2 handle 20: tbf rate 20kbit buffer 1600 limit 3000
+#codel
+tc qdisc add dev $qdisc_if2 root handle 1: codel limit 1000 interval 100ms target 5ms ecn ce_threshold 20
+#fq_codel
+tc qdisc add dev $qdisc_if3 root handle 1: fq_codel target 5ms interval 100ms limit 1124 flows 1124 quantum 300 memory_limit 50 ecn ce_threshold 64ms
+# bfifo
+tc qdisc add dev $qdisc_if4 root bfifo
+# pfifo_fast
+tc qdisc add dev $qdisc_if5 root handle 20: pfifo_fast
+# pfifo
+tc qdisc add dev $qdisc_if6 root handle 20: pfifo
+#ingress
+tc qdisc add dev $qdisc_if7 ingress_block 10 ingress
+#clsact
+tc qdisc add dev $qdisc_if8 ingress_block 11 egress_block 12 clsact
 
 # Run iproute2-sysrepo and store its PID
 echo -e "\nSTARTING IPROUTE2-SYSREPO"
@@ -405,6 +456,54 @@ check_advanced_route() {
     fi
 }
 
+# Function to check generic qidscs sysrepo
+check_generic_qdiscs() {
+    echo "- Checking interface ($1) qdisc configuration on sysrepo:"
+    output=$(sysrepocfg -X -d running -f xml -x "/iproute2-tc-qdisc:qdiscs/qdisc[dev=\"$1\"]")
+
+    echo -e "sysrepo outputs:\n $output"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: sysrepo failed to extract data for $1 (SYSREPO PROBLEM ?)."
+        cleanup
+        exit 1
+    fi
+
+    echo "Checking qdisc kind field"
+    if ! echo "$output" | grep -qP "<qdisc-kind>\s*$2\s*</qdisc-kind>"; then
+        echo "Error: qdisc kind $2 not found for interface $1 (FAIL)."
+        cleanup
+        exit 1
+    fi
+}
+
+# Function to check special qdiscs sysrepo
+check_special_qdiscs() {
+    echo "- Checking interface ($1) special qdisc configuration on sysrepo:"
+    output=$(sysrepocfg -X -d running -f xml -x "/iproute2-tc-qdisc:qdiscs/special-qdisc[dev=\"$1\"]")
+
+    echo -e "sysrepo outputs:\n $output"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: sysrepo failed to extract data for $1 (SYSREPO PROBLEM ?)."
+        cleanup
+        exit 1
+    fi
+
+    echo "Checking special qdisc kind field"
+    if ! echo "$output" | grep -qP "<qdisc-kind>\s*$2\s*</qdisc-kind>"; then
+        echo "Error: special qdisc kind $2 not found for interface $1 (FAIL)."
+        cleanup
+        exit 1
+    fi
+    echo "Checking special qdisc ingress_block field"
+    if ! echo "$output" | grep -qP "<ingress_block>\s*$3\s*</ingress_block>"; then
+        echo "Error: special qdisc ingress_block $3 not found for interface $1 qdisc kind $2 (FAIL)."
+        cleanup
+        exit 1
+    fi
+}
+
 echo -e "\nVLIDATING DATA ON SYSREPO"
 check_interface $link_name
 echo -e "\n"
@@ -417,6 +516,26 @@ echo -e "\n"
 check_simple_route $route_pref1 $route_if1
 echo -e "\n"
 check_advanced_route $route_pref2 $route_table $route_metric $route_tos $route_if1_nh_address $route_if2
+echo -e "\n"
+check_generic_qdiscs $qdisc_if1 "prio"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if1 "sfq"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if1 "tbf"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if2 "codel"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if3 "fq_codel"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if4 "bfifo"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if5 "pfifo_fast"
+echo -e "\n"
+check_generic_qdiscs $qdisc_if6 "pfifo"
+echo -e "\n"
+check_special_qdiscs $qdisc_if7 "ingress" "10"
+echo -e "\n"
+check_special_qdiscs $qdisc_if8 "clsact" "11"
 echo -e "\n"
 cleanup
 
