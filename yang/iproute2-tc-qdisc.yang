@@ -10,8 +10,9 @@ module iproute2-tc-qdisc {
     organization "Okda Networks";
 
     contact
-        "Author: Amjad Daraiseh
-        <adaraiseh@okdanetworks.com>";
+        "Authors: Amjad Daraiseh <adaraiseh@okdanetworks.com>
+                  Ali Aqrabawi <aaqrabaw@okdanetworks.com>";
+        
 
     description
         "This module contain the iproute2 'tc qdisc' configurations.
@@ -32,6 +33,14 @@ module iproute2-tc-qdisc {
                 enum root {
                     description "Indicates the qdisc is at the root.";
                 }
+            }
+            type string {
+                // Temporary to allow referencing a qdisc
+                pattern '\d+:\d+';
+            }
+            type string {
+                // Temporary to allow referencing a qdisc
+                pattern ':\d+';
             }
         }
     }
@@ -154,6 +163,89 @@ module iproute2-tc-qdisc {
         }
     }
 
+    grouping qdisc-stats{
+        container stats {
+            config false;
+            leaf bytes{
+                type uint32;
+                description " ";
+            }
+            leaf packets {
+                type uint32;
+                description " ";
+            }
+            leaf drops {
+                type uint32;
+                description " ";
+            }
+            leaf overlimits {
+                type uint32;
+                description " ";
+            }
+            leaf requeues {
+                type uint32;
+                description " ";
+            }
+            leaf backlog {
+                type uint32;
+                description " ";
+            }
+            leaf qlen {
+                type uint32;
+                description " ";
+            }
+        }
+    }
+
+    grouping codel-stats{
+        container codel-stats {
+            config false;
+            leaf count {
+                type uint32;
+                description " ";
+            }
+            leaf lastcount {
+                type uint32;
+                description " ";
+            }
+            leaf ldelay {
+                type uint32;
+                description " ";
+            }
+            leaf drop_next {
+                type uint32;
+                description " ";
+            }
+            leaf maxpacket {
+                type uint32;
+                description " ";
+            }
+            leaf ecn_mark {
+                type uint32;
+                description " ";
+            }
+            leaf drop_overlimit {
+                type uint32;
+                description " ";
+            }
+        }
+        container fq_codel-stats {
+            config false;
+            leaf new_flow_count {
+                type uint32;
+                description " ";
+            }
+            leaf new_flows_len {
+                type uint32;
+                description " ";
+            }
+            leaf old_flows_len {
+                type uint32;
+                description " ";
+            }
+        }
+    }
+
     container qdiscs {
         description "Container for all qdisc configurations.";
         list qdisc {
@@ -161,6 +253,8 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-add "tc qdisc add";
             ipr2cgen:cmd-delete "tc qdisc del";
             ipr2cgen:cmd-update "tc qdisc replace";
+            ipr2cgen:oper-cmd "tc qdisc list";
+            ipr2cgen:oper-stop-if "{\"kind\": [\"ingress\", \"clsact\", \"noqueue\", \"mq\"]}";
             ipr2cgen:replace-on-update;
             key "dev parent";
             description "List of qdisc configurations.";
@@ -170,12 +264,13 @@ module iproute2-tc-qdisc {
                 description "Name of device 'interface' the qdisc is attached to.";
             }
             leaf parent {
+                ipr2cgen:oper-default-val "root";
                 type parent-id;
                 description "[parent_id 'e.g 8001:1' | root ] Location of the qdisc in the traffic control hierarchy. ";
             }
             leaf handle {
                 type string {
-                    pattern '\d+:';
+                    pattern '[0-9a-fA-F]+:';
                 }
                 description "qdisc handle";
             }
@@ -208,6 +303,7 @@ module iproute2-tc-qdisc {
             }
             leaf qdisc-kind {
                 ipr2cgen:value-only;
+                ipr2cgen:oper-arg-name "kind";
                 type qdisc-kind;
 
                 // ann: don't use leaf name "qdisc-kind" in iproute2 command, only take the value.
@@ -215,6 +311,10 @@ module iproute2-tc-qdisc {
                 description "The kind of qdisc to apply.";
             }
             container fifo-options {
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\", 
+                \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo-fast\", \"multiq\", \"netem\",
+                \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\", \"qfq\"]}";
+                ipr2cgen:oper-sub-jobj "options";
                 when "(../qdisc-kind = 'pfifo') or (../qdisc-kind = 'bfifo')";
                 description "pfifo/bfifo related settings";
                 leaf limit {
@@ -233,6 +333,10 @@ module iproute2-tc-qdisc {
                 }
             }
             container codel-options{
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"ingress\", \"clsact\", \"tbf\", \"htb\", \"hhf\", \"fq\", \"fq_pie\",
+                \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", \"netem\",  \"red\", \"sfq\",
+                \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
+                ipr2cgen:oper-sub-jobj "options";
                 when "(../qdisc-kind = 'codel') or (../qdisc-kind = 'fq_codel')";
                 description "CoDel/fq_CoDel related settings";
                 leaf limit {
@@ -255,8 +359,8 @@ module iproute2-tc-qdisc {
                 }
                 leaf memory_limit {
                     when "../../qdisc-kind = 'fq_codel'";
-                    type uint16;
-                    default 32;
+                    type uint32;
+                    default 33554432;
                     description
                         "sets a limit on the total number of bytes that can be queued in
                         this FQ-CoDel instance. The lower of the packet limit of the
@@ -264,9 +368,7 @@ module iproute2-tc-qdisc {
                         32 MB.";
                 }
                 leaf target {
-                    type string {
-                        pattern '\d+ms';
-                    }
+                    type string; // TODO to be changed
                     description "is the acceptable minimum standing/persistent queue delay. This
                     minimum delay is identified by tracking the local minimum queue
                     delay that packets experience.  Default and recommended value is
@@ -287,7 +389,7 @@ module iproute2-tc-qdisc {
                 }
                 leaf quantum {
                     when "../../qdisc-kind = 'fq_codel'";
-                    type uint16;
+                    type uint32;
                     default 1514;
                     description
                         "is the number of bytes used as 'deficit' in the fair queuing
@@ -296,6 +398,8 @@ module iproute2-tc-qdisc {
                 }
                 leaf ecn-opt{
                     ipr2cgen:value-only;
+                    ipr2cgen:oper-arg-name "ecn";
+                    ipr2cgen:oper-value-map "true:ecn;false:noecn";
                     type enumeration {
                         enum "ecn";
                         enum "noecn";
@@ -315,9 +419,17 @@ module iproute2-tc-qdisc {
                         "sets the maximum number of packets to drop when limit or
                         memory_limit is exceeded. Default value is 64.";
                 }
-
+                leaf ce_threshold {
+                    type uint16; // TODO to be changed
+                    description "configured in micro seconds";
+                }
+                uses codel-stats;
             }
             container tbf-options {
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"htb\", 
+                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
+                \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
+                ipr2cgen:oper-sub-jobj "options";
                 when "../qdisc-kind = 'tbf'";
                 must "./rate and ./burst" {
                     error-message "rate and burst are required for tbf qdisc";
@@ -368,7 +480,7 @@ module iproute2-tc-qdisc {
                         tbps   Terabytes per second";
                 }
                 leaf burst {
-                    type uint32;
+                    type string; // TODO to be changed
                     description
                         "Size of the bucket, in
                         bytes. This is the maximum amount of bytes that tokens can
@@ -433,9 +545,18 @@ module iproute2-tc-qdisc {
                         this size can be raised. A 3000 byte minburst allows
                         around 3mbit/s of peakrate, given 1000 byte packets.";
                 }
+                leaf linklayer {
+                    config false;
+                    type string;
+                    description "";
+                }
 
             }
             container htb-options {
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\", 
+                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
+                \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
+                ipr2cgen:oper-sub-jobj "options";
                 when "../qdisc-kind = 'htb'";
                 description
                     "The Token Bucket Filter is a classful queueing discipline
@@ -468,7 +589,7 @@ module iproute2-tc-qdisc {
                 }
 
             }
-
+            uses qdisc-stats;
         }
         list special-qdisc {
             ipr2cgen:cmd-start;
@@ -476,6 +597,10 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-delete "tc qdisc del";
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:replace-on-update;
+            ipr2cgen:oper-cmd "tc qdisc list";
+            ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"tbf\", 
+            \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
+            \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\", \"noqueue\", \"mq\"]}";
             key "dev qdisc-kind";
             unique "dev";
             description "List of qdisc configurations.";
@@ -486,6 +611,7 @@ module iproute2-tc-qdisc {
             leaf qdisc-kind {
                 ipr2cgen:value-only;
                 ipr2cgen:add_leaf_at_end;
+                ipr2cgen:oper-arg-name "kind";
                 mandatory true;
                 type enumeration {
                     enum "ingress" {
@@ -499,14 +625,15 @@ module iproute2-tc-qdisc {
                 }
             }
             leaf ingress_block {
-                type uint32; //review
+                type uint32;
                 description "Ingress tc shared block ID";
             }
             leaf egress_block {
                 when "../qdisc-kind='clsact'";
-                type uint32; //review
+                type uint32;
                 description "egress tc shared block ID";
             }
+        uses qdisc-stats;
         }
     }
     container classes {

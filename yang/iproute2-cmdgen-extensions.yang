@@ -94,8 +94,8 @@ module iproute2-cmdgen-extensions {
     }
 
     extension oper-stop-if {
-       description "Instructs oper data to processing node if one of its values matches value list specified, the key and values
-       are expected to be expressed in json array format.
+       description "Instructs oper data to stop processing node (and its children) if one of its values matches a value in the 
+       extension argument values list, the key and values are expected to be expressed in json array format.
        for example: to stop processing node if the node show command outputs contains \"info_kind\" key with values of \"vlan\" or \"vti\"
        then the used argument should be set tp : {\"info_kind\": [\"vlan\", \"vti\"]}";
        argument "stop_key_and_values";
