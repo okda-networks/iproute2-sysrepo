@@ -932,8 +932,8 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
         }
 
         if (terminate_processing(json_obj, term_jobj)) {
-            s_node = (*parent_data_node)->schema->next;
-            return EXIT_FAILURE;
+            s_node = s_node->next;
+            return EXIT_SUCCESS;
         }
     }
 
