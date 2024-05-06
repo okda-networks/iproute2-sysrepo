@@ -762,7 +762,7 @@ module iproute2-ip-link {
             }
             leaf type {
                 ipr2cgen:oper-arg-name "info_kind";
-//                mandatory true;  // this should be mandatory, will be uncomment after fix #91
+                //                mandatory true;  // this should be mandatory, will be uncomment after fix #91
                 type identityref {
                     base link-type;
                 }
@@ -774,6 +774,53 @@ module iproute2-ip-link {
                 description "specifies the virtual pair device name of the VETH/VXCAN tunnel.";
                 must "(../iplink:type = 'iplink:veth') or (../iplink:type = 'iplink:vxcan')"{
                     error-message "virtual_peer_name can be only configured for veth or vxcan links.";
+                }
+            }
+            container bridge {
+
+                list vlan {
+                    must "../../master and /links/bridge[name=current()/../../master]" {
+                        error-message "please set the link 'master' to a bridge, before configuring bridge vlan";
+                    }
+                    ipr2cgen:cmd-start;
+                    ipr2cgen:cmd-add "bridge vlan add";
+                    ipr2cgen:cmd-update "bridge vlan set";
+                    ipr2cgen:cmd-delete "bridge vlan delete";
+                    key "vid";
+                    unique "pvid";
+                    leaf vid {
+                        ipr2cgen:after-node-add-static-arg "dev (../../../name)";
+                        type uint16;
+                        description
+                            "specify vlan id";
+                    }
+                    leaf pvid {
+                        ipr2cgen:flag;
+                        type boolean;
+                        description
+                            "when enabled, this vlan will be considered a PVID at ingress.
+                            Any untagged frames will be assigned to this VLAN.";
+                    }
+                    leaf untagged {
+                        ipr2cgen:flag;
+                        type boolean;
+                        description
+                            "the vlan specified is to be treated as untagged on egress.";
+                    }
+                    leaf self {
+                        ipr2cgen:flag;
+                        type boolean;
+                        description
+                            "the vlan is configured on the specified physical device.
+                            Required if the device is the bridge device.";
+                    }
+                    leaf master {
+                        ipr2cgen:flag;
+                        type boolean;
+                        description
+                            "the vlan is configured on the software bridge (default).";
+                    }
+
                 }
             }
             container bond_slave {
