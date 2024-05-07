@@ -570,7 +570,7 @@ start:
         case LYS_LIST:
             // if the list node is startcmd or it's parent has del operation then skip it.
             if (is_startcmd_node(next) || op_val == DELETE_OPR) {
-                // if the root startcmd is delete, we don't want to execute this cmd, just skip.
+                // if the parent startcmd is delete, we don't want to execute this cmd, just skip.
                 if (next->next) { // move to next sibling and start from beginning,
                     next = next->next;
                     goto start;
@@ -580,7 +580,7 @@ start:
 
         case LYS_CONTAINER:
             // if this and empty "when all container" skip.
-            // if when condition added, the continer will be included in the lyd tree even if
+            // if when condition added, the container will be included in the lyd tree even if
             // no data inside the container, container will have LYD_DEFAULT|LYD_WHEN_TRUE flags
             if ((next->flags & LYD_DEFAULT) && (next->flags & LYD_WHEN_TRUE))
                 break;
@@ -802,38 +802,44 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 
     // special case: for inner start_cmd, where the operation need to be taken from parent node.
     if (op_val == UNKNOWN_OPR) {
-        if (lyd_parent(startcmd_node)) {
-            oper_t parent_op_val = get_operation(lyd_parent(startcmd_node));
-            int ret;
-            switch (parent_op_val) {
-            case ADD_OPR:
-                ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "create", 0, NULL);
-                op_val = ADD_OPR;
+        struct lyd_node *parent_with_oper_val = lyd_parent(startcmd_node);
+        oper_t parent_op_val = UNKNOWN_OPR;
+        // find first parent node with oper_val
+        while (parent_with_oper_val) {
+            parent_op_val = get_operation(parent_with_oper_val);
+            if (parent_op_val != UNKNOWN_OPR)
                 break;
-            case DELETE_OPR:
-                ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
-                op_val = DELETE_OPR;
-                break;
-            case UPDATE_OPR: // if parent is update, we can't confirm if the child is add,delete or update.
-            case UNKNOWN_OPR:
-                fprintf(stderr,
-                        "%s: unknown or update operation for parent startcmd node = \"%s\"\n",
-                        __func__, startcmd_node->schema->name);
-                return NULL;
-            }
-            if (ret != LY_SUCCESS) {
-                fprintf(
-                    stderr,
-                    "%s: failed to set meta data operation for inner startcmd for node. \"%s\" \n",
+            parent_with_oper_val = lyd_parent(parent_with_oper_val);
+        }
+        //        if (parent_with_oper_val) {
+        int ret;
+        switch (parent_op_val) {
+        case ADD_OPR:
+            ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "create", 0, NULL);
+            op_val = ADD_OPR;
+            break;
+        case DELETE_OPR:
+            ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
+            op_val = DELETE_OPR;
+            break;
+        case UPDATE_OPR: // if parent is update, we can't confirm if the child is add,delete or update.
+        case UNKNOWN_OPR:
+            fprintf(stderr, "%s: unknown or update operation for parent startcmd node = \"%s\"\n",
                     __func__, startcmd_node->schema->name);
-                return NULL;
-            }
-
-        } else {
-            fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
-                    startcmd_node->schema->name);
             return NULL;
         }
+        if (ret != LY_SUCCESS) {
+            fprintf(stderr,
+                    "%s: failed to set meta data operation for inner startcmd for node. \"%s\" \n",
+                    __func__, startcmd_node->schema->name);
+            return NULL;
+        }
+
+        //        } else {
+        //            fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
+        //                    startcmd_node->schema->name);
+        //            return NULL;
+        //        }
     }
 
     if (op_val == UPDATE_OPR &&
@@ -1253,13 +1259,25 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     {
         LYD_TREE_DFS_BEGIN(change_node, next)
         {
-            if (is_startcmd_node(next))
+            if (is_startcmd_node(next)) {
+                // if this startcmd is inner and its parent start cmd is delete,
+                // then we don't want to generate cmd for it. as it will create error since
+                // the parent item is deleted from iproute2 already.
+                struct lyd_node *parent_scmd = lyd_parent(next);
+                while (parent_scmd) {
+                    if (is_startcmd_node(parent_scmd)) {
+                        if (get_operation(parent_scmd) == DELETE_OPR)
+                            goto next_iter;
+                    }
+                    parent_scmd = lyd_parent(parent_scmd);
+                }
                 ly_set_add(start_cmds_set, next, 0, 0);
-
+            }
+next_iter:
             LYD_TREE_DFS_END(change_node, next)
         }
         lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
-        fprintf(stdout, "--%s", node_print_text);
+        fprintf(stdout, "(+) change request received:\n%s", node_print_text);
         free(node_print_text);
     }
 

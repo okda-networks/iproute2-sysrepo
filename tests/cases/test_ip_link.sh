@@ -20,6 +20,7 @@ if_clean_up(){
   ip link del testIf0
   ip link del testIf1
   ip link del testIf2
+  ip link del testIf121
   ip link del vxlan20
   ip link del gre3
 }
@@ -85,6 +86,13 @@ else
     exit 1
 fi
 
+# Step : check if testfIf121 is added with correct vlans
+vid=$(bridge vlan show dev testIf121 2>/dev/null | grep '\b1011\b' | awk '{print $1}')
+if [ -z "$vid" ]; then
+    echo "TEST-ERROR: Failed to find VLAN vid 1011 for link testIf121"
+    # if_clean_up   # Uncomment if you have this function defined
+    exit 1
+fi
 
 # Step 6: Check if vxlan vxlan20 is created
 if ip link show vxlan20 >/dev/null 2>&1; then
