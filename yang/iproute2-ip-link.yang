@@ -318,7 +318,6 @@ module iproute2-ip-link {
             type uint64;
             default 0;
         }
-
     }
 
     grouping link-advance {
@@ -480,6 +479,25 @@ module iproute2-ip-link {
                 ipr2cgen:oper-arg-name "peer";
                 type yang:mac-address;
                 description "change the link layer peer address, when the interface is POINTOPOINT.";
+            }
+        }
+    }
+    grouping link-layer3{
+        list ip {
+            ipr2cgen:cmd-start;
+            ipr2cgen:cmd-add "ip address add";
+            ipr2cgen:cmd-update "ip address replace";
+            ipr2cgen:cmd-delete "ip address del";
+            ipr2cgen:oper-arg-name "addr_info";
+            description "link ipv4 address";
+            key "address";
+            leaf address {
+                ipr2cgen:after-node-add-static-arg "dev (../../name)";
+                ipr2cgen:value-only;
+                ipr2cgen:oper-arg-name "local";
+                ipr2cgen:oper-combine-values "{\"separator\":\"/\", \"values\": [\"local\", \"prefixlen\"]}";
+                description "ip address with cider, e.g 192.168.1.1/24";
+                type ip-address-with-cider;
             }
         }
     }
@@ -743,23 +761,7 @@ module iproute2-ip-link {
             uses link-essentials;
             uses link-advance;
             uses link-layer2;
-            list ip {
-                ipr2cgen:cmd-start;
-                ipr2cgen:cmd-add "ip address add";
-                ipr2cgen:cmd-update "ip address replace";
-                ipr2cgen:cmd-delete "ip address del";
-                ipr2cgen:oper-arg-name "addr_info";
-                description "link ipv4 address";
-                key "address";
-                leaf address {
-                    ipr2cgen:after-node-add-static-arg "dev (../../name)";
-                    ipr2cgen:value-only;
-                    ipr2cgen:oper-arg-name "local";
-                    ipr2cgen:oper-combine-values "{\"separator\":\"/\", \"values\": [\"local\", \"prefixlen\"]}";
-                    description "ip address with cider, e.g 192.168.1.1/24";
-                    type ip-address-with-cider;
-                }
-            }
+            uses link-layer3;
             leaf type {
                 ipr2cgen:oper-arg-name "info_kind";
                 //                mandatory true;  // this should be mandatory, will be uncomment after fix #91
@@ -777,7 +779,6 @@ module iproute2-ip-link {
                 }
             }
             container bridge {
-
                 list vlan {
                     must "../../master and /links/bridge[name=current()/../../master]" {
                         error-message "please set the link 'master' to a bridge, before configuring bridge vlan";
@@ -889,6 +890,7 @@ module iproute2-ip-link {
             uses link-advance;
             uses link-device;
             uses link-layer2;
+            uses link-layer3;
             container vlan-info {
                 ipr2cgen:oper-sub-jobj "info_data";
                 ipr2cgen:add-static-arg "type vlan";
@@ -1208,6 +1210,7 @@ module iproute2-ip-link {
             uses link-advance;
             uses link-device;
             uses link-layer2;
+            uses link-layer3;
             container br-info {
                 ipr2cgen:add-static-arg "type bridge";
                 ipr2cgen:oper-sub-jobj "info_data";
