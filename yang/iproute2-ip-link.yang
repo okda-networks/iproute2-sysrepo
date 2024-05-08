@@ -507,12 +507,15 @@ module iproute2-ip-link {
             must "../device != ../name" {
                 error-message "Cannot reference the current link name, you can use other links";
             }
-            must "../mtu <= /links/link[name=current()/../device]/mtu" {
+            must "(../mtu <= /links/link[name=current()/../device]/mtu) or (../mtu <= /links/bridge[name=current()/../device]/mtu)" {
                 error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
             }
             ipr2cgen:arg-name "link";
             ipr2cgen:oper-arg-name "link";
-            type link-ref;
+            type union{
+                type link-ref;
+                type bridge-ref;
+            }
 
             description "specifies the physical device to act operate on";
         }
