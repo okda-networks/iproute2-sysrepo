@@ -29,11 +29,11 @@
         <name>testIf121</name>
         <type>dummy</type>
         <master>br1</master>
-        <bridge>
+        <bridge-conf>
             <vlan>
                 <vid>1011</vid>
             </vlan>
-        </bridge>
+        </bridge-conf>
     </link>
     <vxlan>
         <name>vxlan20</name>

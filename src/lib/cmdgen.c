@@ -58,6 +58,7 @@ typedef enum {
     ON_UPDATE_INCLUDE_EXT,
     ADD_STATIC_ARG_EXT,
     REPLACE_ON_UPDATE_EXT,
+    INCLUDE_ALL_ON_DELETE,
 
 } extension_t;
 
@@ -81,7 +82,8 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          // other
                          [ON_UPDATE_INCLUDE_EXT] = "on-update-include",
                          [ADD_STATIC_ARG_EXT] = "add-static-arg",
-                         [REPLACE_ON_UPDATE_EXT] = "replace-on-update" };
+                         [REPLACE_ON_UPDATE_EXT] = "replace-on-update",
+                         [INCLUDE_ALL_ON_DELETE] = "include-all-on-delete" };
 
 void dup_argv(char ***dest, char **src, int argc)
 {
@@ -277,6 +279,17 @@ int is_startcmd_node(struct lyd_node *dnode)
     return 0;
 }
 
+struct lyd_node *get_parent_startcmd(struct lyd_node *dnode)
+{
+    struct lyd_node *startcmd = dnode;
+    while (startcmd) {
+        if (is_startcmd_node(startcmd))
+            break;
+        startcmd = lyd_parent(startcmd);
+    }
+    return startcmd;
+}
+
 /**
  * parse the command line and convert it to argc, argv
  * @param [in]  command command line string "ip link add ..."
@@ -368,8 +381,15 @@ int add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_
  */
 int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_name)
 {
-    // if list operation is delete, get the keys only
-    if (startcmd_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
+    // if operation delete generate args only if:
+    // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
+    int is_include_all_on_delete = 0;
+    struct lyd_node *startcmd = get_parent_startcmd(dnode);
+    if (startcmd) {
+        if (get_extension(INCLUDE_ALL_ON_DELETE, startcmd, NULL) == EXIT_SUCCESS)
+            is_include_all_on_delete = 1;
+    }
+    if (startcmd_op_val == DELETE_OPR && !lysc_is_key(dnode->schema) && !is_include_all_on_delete)
         return EXIT_SUCCESS;
 
     // check if this is leaf delete
@@ -386,8 +406,8 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
             }
             *arg_name = on_node_delete;
             return EXIT_SUCCESS;
-        }
-        return EXIT_SUCCESS;
+        } else if (!is_include_all_on_delete)
+            return EXIT_SUCCESS;
     }
 
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
@@ -419,13 +439,21 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
  */
 void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_value)
 {
-    // if list operation is delete, get the keys only
-    if (startcmd_op_val == DELETE_OPR && !lysc_is_key(dnode->schema))
+    // if operation delete generate args only if:
+    // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
+    int is_include_all_on_delete = 0;
+    struct lyd_node *startcmd = get_parent_startcmd(dnode);
+    if (startcmd) {
+        if (get_extension(INCLUDE_ALL_ON_DELETE, startcmd, NULL) == EXIT_SUCCESS)
+            is_include_all_on_delete = 1;
+    }
+
+    if (startcmd_op_val == DELETE_OPR && !lysc_is_key(dnode->schema) && !is_include_all_on_delete)
         return;
 
     // check if this is leaf delete
     oper_t leaf_op_val = get_operation(dnode);
-    if (leaf_op_val == DELETE_OPR)
+    if (leaf_op_val == DELETE_OPR && !is_include_all_on_delete)
         return;
 
     // if FLAG extension, add schema name to the cmd and go to next iter.
