@@ -50,6 +50,7 @@ typedef enum {
     VALUE_ONLY_EXT,
     VALUE_ONLY_ON_UPDATE_EXT,
     ADD_LEAF_AT_END,
+    NOT_DEPENDENCY_EXT,
 
     AFTER_NODE_ADD_STATIC_ARG_EXT,
     ON_NODE_DELETE_EXT,
@@ -81,7 +82,8 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          // other
                          [ON_UPDATE_INCLUDE_EXT] = "on-update-include",
                          [ADD_STATIC_ARG_EXT] = "add-static-arg",
-                         [REPLACE_ON_UPDATE_EXT] = "replace-on-update" };
+                         [REPLACE_ON_UPDATE_EXT] = "replace-on-update",
+                         [NOT_DEPENDENCY_EXT] = "not-dependency" };
 
 void dup_argv(char ***dest, char **src, int argc)
 {
@@ -937,7 +939,9 @@ int get_node_leafrefs(const struct lyd_node *all_change_nodes, struct lyd_node *
 
     LYD_TREE_DFS_BEGIN(startcmd, next)
     {
-        if (next->schema->nodetype == LYS_LEAF) {
+        // if the node is leafref, and does not have NOT_DEPENDENCY_EXT, thn add it to found_leafrefs_set
+        if (next->schema->nodetype == LYS_LEAF &&
+            get_extension(NOT_DEPENDENCY_EXT, next, NULL) != EXIT_SUCCESS) {
             LY_DATA_TYPE type = ((struct lysc_node_leaf *)next->schema)->type->basetype;
             // union might have leafrefs.
             if (type == LY_TYPE_UNION) {

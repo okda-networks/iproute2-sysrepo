@@ -1,8 +1,12 @@
 <links xmlns="urn:okda:iproute2:ip:link">
-    <link>
+    <bond>
         <name>bond0</name>
-        <type>bond</type>
-    </link>
+        <bond-info >
+            <mode>802.3ad</mode>
+            <xmit_hash_policy>layer3+4</xmit_hash_policy>
+        </bond-info>
+    </bond>
+
     <link>
         <name>eth_b0</name>
         <master>bond0</master>
