@@ -180,4 +180,8 @@ module iproute2-cmdgen-extensions {
         description
             "instruct cmdgen to add the leaf at the end of the cmd line";
     }
+    extension not-dependency{
+        description
+            "this is used when the leafref is not actually a dependency, so it will not be considered in dep sorting";
+    }
 }

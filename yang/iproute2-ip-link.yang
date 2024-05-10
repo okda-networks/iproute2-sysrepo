@@ -117,9 +117,18 @@ module iproute2-ip-link {
     typedef l3-links-ref {
         type union{
             type link-ref;
+            type bond-ref;
             type vti-ref;
             type gre-ref;
         }
+    }
+    typedef bond-ref {
+        type leafref {
+            path "/iplink:links/iplink:bond/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference bond
+            interfaces.";
     }
 
     /*
@@ -136,11 +145,11 @@ module iproute2-ip-link {
             "Base identity for non-configurable ip link types.";
     }
 
-    identity bond {
-        base link-type;
-        description
-            "Bonding device.";
-    }
+    //    identity bond {
+    //        base link-type;
+    //        description
+    //            "Bonding device.";
+    // }
 
     identity can {
         base link-type;
@@ -324,14 +333,14 @@ module iproute2-ip-link {
         leaf master{
             ipr2cgen:on-node-delete "nomaster";
             type union {
-                type link-ref;
+                type bond-ref;
                 type bridge-ref;
             }
             description "add the link to master link";
             must "../master != ../name" {
                 error-message "cannot use same link as master link!";
             }
-            must "(/links/link[name=current()/../master]/type = 'iplink:bond') or
+            must "(/links/bond[name=current()/../master]) or
             (/links/bridge[name=current()/../master])" {
                 error-message "The master type must be 'bond' or 'bridge'.";
             }
@@ -801,7 +810,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show";
-            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bridge\", \"vxlan\", \"gre\", \"gretab\"]}";
+            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bond\", \"bridge\", \"vxlan\", \"gre\", \"gretab\"]}";
             key "name";
             description "ip-link - network device";
             leaf name {
@@ -1458,6 +1467,156 @@ module iproute2-ip-link {
             }
             uses link-state;
 
+        }
+        list bond {
+            ipr2cgen:cmd-start;
+            ipr2cgen:cmd-add "ip link add";
+            ipr2cgen:cmd-update "ip link set";
+            ipr2cgen:cmd-delete "ip link delete";
+            ipr2cgen:oper-cmd "ip address show type bond";
+            key "name";
+            leaf name {
+                ipr2cgen:oper-arg-name "ifname";
+                type string;
+                description "bond name";
+            }
+            uses link-essentials;
+            uses link-advance;
+            uses link-device;
+            uses link-layer2;
+            container bond-info {
+                ipr2cgen:add-static-arg "type bond";
+                ipr2cgen:oper-sub-jobj "info_data";
+                leaf mode {
+                    type enumeration {
+                        enum "balance-rr";
+                        enum "active-backup";
+                        enum "balance-xor";
+                        enum "broadcast";
+                        enum "802.3ad";
+                        enum "balance-tlb";
+                        enum "balance-alb";
+                    }
+                    default "balance-rr";
+                    description
+                        "specify the bond link mode";
+                }
+                leaf active_slave {
+                    ipr2cgen:not-dependency;
+                    type link-ref;
+                    description
+                        "specify the active link in active-standby mode";
+                }
+                leaf miimon {
+                    type uint32;
+                    description
+                        "Specifies (in milliseconds) how often MII link monitoring occurs.
+                        This is useful if high availability is required because MII is used to verify that the NIC is active.";
+
+                }
+                leaf updelay {
+                    type uint32;
+                    default 0;
+                    description
+                        "Specifies (in milliseconds) how long to wait before enabling a link.
+                        The value must be a multiple of the value specified in the miimon parameter.
+                        The value is set to 0 by default, which disables it.";
+                }
+                leaf downdelay {
+                    type uint32;
+                    default 0;
+                    description
+                        "Specifies (in milliseconds) how long to wait after link failure before disabling the link.
+                        The value must be a multiple of the value specified in the miimon parameter.
+                        The value is set to 0 by default, which disables it.";
+                }
+                leaf use_carrier {
+                    type enumeration {
+                        enum "0";
+                        enum "1";
+                    }
+                    description
+                        "Specifies whether or not miimon should use MII/ETHTOOL ioctls or netif_carrier_ok()
+                        to determine the link state. The netif_carrier_ok() function relies on the device driver
+                        to maintains its state with netif_carrier_on/off; most device drivers support this function.";
+                }
+                leaf arp_interval {
+                    type uint32;
+                    description
+                        "how often ARP monitoring occurs.";
+                }
+                leaf arp_validate {
+                    type enumeration {
+                        enum "none";
+                        enum "active";
+                        enum "backup";
+                        enum "all";
+                    }
+                    description
+                        "Validate source/distribution of ARP probes; default is none.
+                        Other valid values are active, backup, and all.";
+                }
+                leaf primary_reselect {
+                    type enumeration {
+                        enum "always";
+                        enum "better";
+                        enum "failure";
+                    }
+                    description
+                        "Specifies the reselection policy for the primary port. This affects how the primary port is
+                        chosen to become the active port when failure of the active port or recovery of the primary port occurs.
+                        This parameter is designed to prevent flip-flopping between the primary port and other ports.
+                        - always: The primary port becomes the active port whenever it comes back up.
+                        - better: The primary port becomes the active port when it comes back up,
+                        if the speed and duplex of the primary port is better than the speed and duplex of the current active port.
+                        - failure: The primary port becomes the active port only if the current active port fails and the primary port is up.";
+                }
+                leaf fail_over_mac {
+                    type enumeration {
+                        enum "none";
+                        enum "active";
+                    }
+                    description
+                        "Specifies whether active-backup mode should set all ports to the same MAC address at the point
+                        of assignment (the traditional behavior), or, when enabled, perform special handling
+                        of the bond's MAC address in accordance with the selected policy. Possible values are:
+                        - none:  Default setting. This setting disables fail_over_mac, and causes bonding
+                        to set all ports of an active-backup bond to the same MAC address at the point of assignment.
+                        - active: indicates that the MAC address of the bond should always be the MAC address of the
+                        currently active port. The MAC address of the ports is not changed; instead,
+                        the MAC address of the bond changes during a failover.";
+                }
+                leaf xmit_hash_policy {
+                    type enumeration {
+                        enum "layer2";
+                        enum "layer3+4";
+                        enum "layer2+3";
+                    }
+                    default "layer2";
+                    description
+                        "Selects the transmit hash policy used for port selection in balance-xor and 802.3ad modes.";
+                }
+                leaf lacp_active {
+                    ipr2cgen:oper-arg-name "ad_lacp_active";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description
+                        "set the LACP active mode";
+                }
+                leaf lacp_rate {
+                    ipr2cgen:oper-arg-name "ad_lacp_rate";
+                    type enumeration {
+                        enum "slow";
+                        enum "fast";
+                    }
+                    description
+                        "Specifies the rate at which link partners should transmit LACPDU packets in 802.3ad mode";
+                }
+
+            }
+            uses link-state;
         }
     }
 }
