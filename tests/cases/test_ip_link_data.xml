@@ -25,6 +25,16 @@
         <name>testIf2</name>
         <type>dummy</type>
     </link>
+    <link>
+        <name>testIf121</name>
+        <type>dummy</type>
+        <master>br1</master>
+        <bridge-conf>
+            <vlan>
+                <vid>1011</vid>
+            </vlan>
+        </bridge-conf>
+    </link>
     <vxlan>
         <name>vxlan20</name>
         <vxlan-info>
