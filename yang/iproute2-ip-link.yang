@@ -1516,6 +1516,7 @@ module iproute2-ip-link {
 
                 }
                 leaf updelay {
+                    ipr2cgen:oper-stop-if  "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\"]}";
                     must "(../mode = '802.3ad') or (../mode = 'balance-tlb') or (../mode = 'balance-alb')" {
                         error-message "updelay support on 802.3ad, balance-tlb or balance-alb bond modes only.";
                     }
@@ -1526,6 +1527,7 @@ module iproute2-ip-link {
                         The value is set to 0 by default, which disables it.";
                 }
                 leaf downdelay {
+                    ipr2cgen:oper-stop-if  "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\"]}";
                     must "(../mode = '802.3ad') or (../mode = 'balance-tlb') or (../mode = 'balance-alb')" {
                         error-message "'downdelay' is only supported on  802.3ad, balance-tlb or balance-alb bond modes.";
                     }
@@ -1546,8 +1548,9 @@ module iproute2-ip-link {
                         to maintains its state with netif_carrier_on/off; most device drivers support this function.";
                 }
                 leaf arp_interval {
+                    ipr2cgen:oper-stop-if "{\"mode\": [\"802.3ad\", \"balance-tlb\", \"balance-alb\"]}";
                     must "(../mode = 'balance-rr') or (../mode = 'active-backup') or (../mode = 'balance-xor')
-                    or (../mode = broadcast)" {
+                    or (../mode = 'broadcast')" {
                         error-message "'arp_interval' is only supported on balance-rr, active-backup, balance-xor or broadcast bond modes.";
                     }
                     type uint32;
@@ -1555,8 +1558,9 @@ module iproute2-ip-link {
                         "how often ARP monitoring occurs.";
                 }
                 leaf arp_validate {
+                ipr2cgen:oper-stop-if "{\"mode\": [\"802.3ad\", \"balance-tlb\", \"balance-alb\"]}";
                     must "(../mode = 'balance-rr') or (../mode = 'active-backup') or (../mode = 'balance-xor')
-                    or (../mode = broadcast)" {
+                    or (../mode = 'broadcast')" {
                         error-message "'arp_validate' is only supported on balance-rr, active-backup, balance-xor or broadcast bond modes.";
                     }
                     type enumeration {
@@ -1610,6 +1614,7 @@ module iproute2-ip-link {
                         "Selects the transmit hash policy used for port selection in balance-xor and 802.3ad modes.";
                 }
                 leaf lacp_active {
+                    ipr2cgen:oper-stop-if "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\", \"balance-alb\", \"balance-tlb\"]}";
                     must "../mode = '802.3ad'" {
                         error-message "lacp_active is only supported on 802.3ad mode.";
                     }
@@ -1622,6 +1627,7 @@ module iproute2-ip-link {
                         "set the LACP active mode";
                 }
                 leaf lacp_rate {
+                    ipr2cgen:oper-stop-if "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\", \"balance-alb\", \"balance-tlb\"]}";
                     must "../mode = '802.3ad'" {
                         error-message "lacp_rate is only supported on 802.3ad mode.";
                     }
