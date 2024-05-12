@@ -241,6 +241,18 @@ module iproute2-ip-link {
             "vxcan device.";
     }
 
+    identity erspan {
+        base link-type;
+        description
+            "erspan device.";
+    }
+
+    identity ip6erspan {
+        base link-type;
+        description
+            "erspan device.";
+    }
+
     identity ether {
         base oper-link-type;
         description
@@ -252,6 +264,7 @@ module iproute2-ip-link {
         description
             "loopback device.";
     }
+
 
     /*
     * groupings
@@ -843,7 +856,7 @@ module iproute2-ip-link {
             uses link-bridge;
             container bond_slave {
                 ipr2cgen:add-static-arg "type bond_slave";
-                when "../master and /links/link[name=current()/../master]/type = 'iplink:bond'";
+                when "../master and /links/bond[name=current()/../master]";
                 description "set additional bonding related to link with master bond link";
                 leaf queue_id{
                     must "/links/link[name=current()/../../master]/type = 'iplink:bond'" {
@@ -1507,9 +1520,25 @@ module iproute2-ip-link {
                     description
                         "specify the active link in active-standby mode";
                 }
+                leaf primary {
+                    ipr2cgen:not-dependency;
+                    ipr2cgen:oper-stop-if "{\"mode\": [\"balance-rr\", \"802.3ad\", \"balance-xor\", \"broadcast\", \"balance-alb\", \"balance-tlb\"]}";
+                    type link-ref;
+                    must "../mode = 'active-backup'" {
+                        error-message "'primary' support on active-backup bond mode only.";
+                    }
+                    description
+                        "specifiy the primary physical link for the bond";
+
+                }
+                leaf arp_ip_target { // TODO: this should be leaflist, but still not supported.
+                    ipr2cgen:oper-arg-name " "; // workaround to prevent processing in oper_data.
+                    type inet:ip-address;
+                    description
+                        "Specifies the target IP address of ARP requests when the arp_interval parameter is enabled";
+                }
                 leaf miimon {
                     type uint32;
-                    default 100;
                     description
                         "Specifies (in milliseconds) how often MII link monitoring occurs.
                         This is useful if high availability is required because MII is used to verify that the NIC is active.";
@@ -1558,7 +1587,7 @@ module iproute2-ip-link {
                         "how often ARP monitoring occurs.";
                 }
                 leaf arp_validate {
-                ipr2cgen:oper-stop-if "{\"mode\": [\"802.3ad\", \"balance-tlb\", \"balance-alb\"]}";
+                    ipr2cgen:oper-stop-if "{\"mode\": [\"802.3ad\", \"balance-tlb\", \"balance-alb\"]}";
                     must "(../mode = 'balance-rr') or (../mode = 'active-backup') or (../mode = 'balance-xor')
                     or (../mode = 'broadcast')" {
                         error-message "'arp_validate' is only supported on balance-rr, active-backup, balance-xor or broadcast bond modes.";

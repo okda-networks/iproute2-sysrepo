@@ -439,7 +439,7 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
  * @param [in] curr_op_val starnode op_val
  * @param [out] value the captured arg value value
  */
-void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_value)
+int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_value)
 {
     // if operation delete generate args only if:
     // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
@@ -451,16 +451,16 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
     }
 
     if (startcmd_op_val == DELETE_OPR && !lysc_is_key(dnode->schema) && !is_include_all_on_delete)
-        return;
+        return EXIT_SUCCESS;
 
     // check if this is leaf delete
     oper_t leaf_op_val = get_operation(dnode);
     if (leaf_op_val == DELETE_OPR && !is_include_all_on_delete)
-        return;
+        return EXIT_SUCCESS;
 
     // if FLAG extension, add schema name to the cmd and go to next iter.
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
-        return;
+        return EXIT_SUCCESS;
     }
     if (arg_value == NULL)
         arg_value = malloc(sizeof(char *));
@@ -531,7 +531,7 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
                         "%s: failed to get xpath_arg found in AFTER_NODE_ADD_STATIC_ARG extension."
                         " for node = \"%s\" : %s\n",
                         __func__, dnode->schema->name, sr_strerror(ret));
-                    // TODO: fine an exit way. the whole change should fail.
+                    return EXIT_FAILURE;
                 }
             }
             free(xpath_arg);
@@ -541,6 +541,7 @@ void create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char *
             *arg_value = strdup(fin_arg_value);
         }
     }
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -659,11 +660,17 @@ start:
                     if (include_node == NULL)
                         return NULL;
 
-                    create_cmd_arg_value(include_node, op_val, &arg_value);
                     ret = create_cmd_arg_name(include_node, op_val, &arg_name);
                     if (ret != EXIT_SUCCESS) {
                         fprintf(stderr,
                                 "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
+                                __func__, next->schema->name);
+                        return NULL;
+                    }
+                    ret = create_cmd_arg_value(include_node, op_val, &arg_value);
+                    if (ret != EXIT_SUCCESS) {
+                        fprintf(stderr,
+                                "%s: failed to create create_cmd_arg_value for node \"%s\".\n",
                                 __func__, next->schema->name);
                         return NULL;
                     }
@@ -701,10 +708,15 @@ start:
                             __func__, next->schema->name);
                     return NULL;
                 }
-                create_cmd_arg_value(next, op_val, &arg_value);
                 ret = create_cmd_arg_name(next, op_val, &arg_name);
                 if (ret != EXIT_SUCCESS) {
                     fprintf(stderr, "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
+                            __func__, next->schema->name);
+                    return NULL;
+                }
+                ret = create_cmd_arg_value(next, op_val, &arg_value);
+                if (ret != EXIT_SUCCESS) {
+                    fprintf(stderr, "%s: failed to create create_cmd_arg_value for node \"%s\".\n",
                             __func__, next->schema->name);
                     return NULL;
                 }
@@ -733,14 +745,46 @@ start:
             // leaf and leaflist cases to capture the arg_name arg_value for that node.
             if (next->schema->nodetype != LYS_LEAF && next->schema->nodetype != LYS_LEAFLIST)
                 break;
-        case LYS_LEAF:
         case LYS_LEAFLIST:
+            // TODO: add leaflist support.
+            //       example of leaflist change:
+            //        <bond-info yang:operation="none">
+            //            <arp_ip_target yang:operation="create">1.1.1.1</arp_ip_target>
+            //            <arp_ip_target yang:operation="create">2.4.4.4</arp_ip_target>
+            //            <arp_ip_target yang:operation="create">2.2.2.2</arp_ip_target>
+            //        </bond-info>
+            //            char *leaf_list_separatot = NULL;
+            //            arg_name = NULL;
+            //            arg_value = NULL;
+            //            get_extension(GROUP_LEAFS_VALUES_SEPARATOR_EXT,next,&leaf_list_separatot);
+            //            // if the arg_name is not added to cmd, add it first
+            //            if (next->priv == NULL){
+            //                ret = create_cmd_arg_name(next, op_val, &arg_name);
+            //                if (ret != EXIT_SUCCESS) {
+            //                    fprintf(stderr, "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
+            //                            __func__, next->schema->name);
+            //                    return NULL;
+            //                }
+            //                if (arg_name){
+            //                    strlcat(cmd_line, " ", sizeof(cmd_line));
+            //                    strlcat(cmd_line, arg_name, sizeof(cmd_line));
+            //                }
+            //                // add all values
+            //
+            //            }
+
+        case LYS_LEAF:
             arg_name = NULL;
             arg_value = NULL;
-            create_cmd_arg_value(next, op_val, &arg_value);
             ret = create_cmd_arg_name(next, op_val, &arg_name);
             if (ret != EXIT_SUCCESS) {
                 fprintf(stderr, "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
+                        __func__, next->schema->name);
+                return NULL;
+            }
+            ret = create_cmd_arg_value(next, op_val, &arg_value);
+            if (ret != EXIT_SUCCESS) {
+                fprintf(stderr, "%s: failed to create create_cmd_arg_value for node \"%s\".\n",
                         __func__, next->schema->name);
                 return NULL;
             }
