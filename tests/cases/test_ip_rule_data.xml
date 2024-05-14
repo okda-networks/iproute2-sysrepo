@@ -1,0 +1,22 @@
+<rules xmlns="urn:okda:iproute2:ip:rule">
+    <rule>
+        <pref>200</pref>
+        <from>1.1.1.1/32</from>
+        <to>0.0.0.0/0</to>
+        <tos>default</tos>
+        <fwmark>0x00</fwmark>
+        <action>
+            <table>10</table>
+        </action>
+    </rule>
+    <rule>
+        <pref>201</pref>
+        <from>0.0.0.0/0</from>
+        <to>1.1.1.1/32</to>
+        <tos>default</tos>
+        <fwmark>0x00</fwmark>
+        <action>
+            <table>20</table>
+        </action>
+    </rule>
+</rules>

@@ -1,0 +1,131 @@
+module iproute2-ip-rule {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:ip:rule";
+    prefix "iprule";
+
+    import ietf-inet-types { prefix inet; }
+    import okda-onmcli-extensions{ prefix onmcli; }
+    import iproute2-net-types { prefix ipr2net; }
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+    import iproute2-ip-link { prefix iplink; }
+
+    organization
+        "Okda Networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+
+        "This module contain the iproute2 'ip rule' configurations ,
+        this is module contains all IP-RULE(8) related configs,
+        refer to https://manpages.debian.org/stretch/iproute2/ip-rule.8.en.html";
+
+    revision "2024-05-15" {
+        description "Revision 1";
+        reference
+            "YANG model for iproute2 ip rule case.";
+    }
+    container rules {
+        list rule {
+            ipr2cgen:cmd-start;
+            ipr2cgen:replace-on-update;
+            ipr2cgen:cmd-add "ip rule add";
+            ipr2cgen:cmd-update "ip rule add";
+            ipr2cgen:cmd-delete "ip rule del";
+            ipr2cgen:oper-cmd "ip rule show";
+            key "pref from to tos fwmark";
+            leaf pref {
+                ipr2cgen:oper-arg-name "priority";
+                type uint32;
+                description
+                    "PREFERENCE is an unsigned integer value, higher number means lower priority.
+                    Each rule should have an explicitly set unique priority value.
+                    The options preference and order are synonyms with priority.";
+            }
+            leaf from {
+                onmcli:key-default-val "0.0.0.0/0";
+                ipr2cgen:oper-default-val "0.0.0.0/0";
+                ipr2cgen:oper-arg-name "src";
+                type union{
+                    type inet:ip-prefix;
+                    type inet:ip-address;
+                    type enumeration { enum "all";}
+                }
+                description
+                    "the source prefix to match.";
+                default "0.0.0.0/0";
+            }
+            leaf to {
+                onmcli:key-default-val "0.0.0.0/0";
+                ipr2cgen:oper-default-val "0.0.0.0/0";
+                ipr2cgen:oper-arg-name "dst";
+                type union{
+                    type inet:ip-prefix;
+                    type inet:ip-address;
+                    type enumeration { enum "all";}
+                }
+                description
+                    "the destination prefix to match.";
+                default "0.0.0.0/0";
+            }
+            leaf tos {
+                onmcli:key-default-val "default";
+                ipr2cgen:oper-default-val "default";
+                type ipr2net:tos;
+                description
+                    "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
+                    understood as: First, compare the TOS of the route and of the packet. If they are not equal,
+                    then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
+                    number or an identifier from /etc/iproute2/rt_dsfield.";
+            }
+            leaf fwmark {
+                onmcli:key-default-val "0x00";
+                ipr2cgen:oper-default-val "0x00";
+                type string {
+                    pattern '0x[0-9a-fA-F]+|\d+';
+                }
+                default "0x00";
+                description "specify the fwmark value (0x0..0xffffffff)";
+            }
+            leaf oif {
+                type iplink:all-links-ref;
+                description
+                    "specify egress interface match";
+            }
+            leaf iif {
+                type iplink:all-links-ref;
+                description
+                    "specify ingress interface match";
+            }
+            container action {
+                leaf table {
+                    type union {
+                        type leafref {
+                            path "/iplink:links/iplink:vrf/iplink:vrf-info/iplink:table";
+                        }
+                        type enumeration {
+                            enum "main";
+                            enum "local";
+                            enum "default";
+                        }
+                        type string;
+                    }
+                    description
+                        "the routing table identifier to lookup if the rule selector matches.";
+                }
+                leaf nat {
+                    type inet:ipv4-address;
+                    description
+                        "The base of the IP address block to translate (for source addresses).
+                        The ADDRESS may be either the start of the block of NAT addresses (selected by NAT routes)
+                        or a local host address (or even zero). In the last case the router
+                        does not translate the packets, but masquerades them to this address.
+                        Using map-to instead of nat means the same thing.";
+                }
+            }
+        }
+    }
+
+}

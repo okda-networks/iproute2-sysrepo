@@ -136,10 +136,15 @@ module iproute2-cmdgen-extensions {
             on update cmd";
         argument "args-names";
     }
-    extension replace-on-update{
+    extension include-all-on-update{
         description
             "instruct iproute2 to get all leafs in sysrepo, compare it with the changed leaf, and apply the diff.
             typically used where iproute2 cmd require a replace for update, example tc filter, and ip nexthop group";
+    }
+    extension replace-on-update{
+        description
+            "instruct iproute2 to delete the node and recreate it, example ip rule where no update argument, you have to
+            recreate the rule";
     }
     extension include-all-on-delete {
         description
