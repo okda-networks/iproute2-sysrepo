@@ -265,7 +265,6 @@ module iproute2-ip-link {
             "loopback device.";
     }
 
-
     /*
     * groupings
     */
@@ -806,16 +805,21 @@ module iproute2-ip-link {
             ipr2cgen:oper-cmd "ip address show type vrf";
             key "name";
             leaf name {
-                ipr2cgen:after-node-add-static-arg "type vrf";
                 ipr2cgen:oper-arg-name "ifname";
                 type string;
                 description "vrf name";
             }
-            leaf table{
-                type uint16;
-                description "vrf table id";
-                mandatory true;
+            uses link-essentials;
+            container vrf-info{
+                ipr2cgen:add-static-arg "type vrf";
+                ipr2cgen:oper-sub-jobj "info_data";
+                leaf table{
+                    type uint16;
+                    description "vrf table id";
+                    mandatory true;
+                }
             }
+
         }
         list link {
             ipr2cgen:cmd-add "ip link add";
