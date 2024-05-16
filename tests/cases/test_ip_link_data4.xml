@@ -7,7 +7,7 @@
     </vrf>
     <link>
         <name>testvrf</name>
-        <vrf>vpn10</vrf>
+        <master>vpn10</master>
         <type>dummy</type>
     </link>
 </links>
