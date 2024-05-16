@@ -307,13 +307,6 @@ module iproute2-ip-link {
             description "specifies the desired index of the new virtual device.
             The link creation fails, if the index is busy.";
         }
-        leaf vrf {
-            ipr2cgen:on-node-delete "nomaster";
-            type leafref {
-                path "../../vrf/name";
-            }
-            description "add the interface to vrf";
-        }
         choice netns {
             description "create the device in the network namespace associated with process
             PID or the name NETNSNAME or the file NETNSFILE.";
@@ -359,14 +352,15 @@ module iproute2-ip-link {
             type union {
                 type bond-ref;
                 type bridge-ref;
+                type vrf-ref;
             }
             description "add the link to master link";
             must "../master != ../name" {
                 error-message "cannot use same link as master link!";
             }
-            must "(/links/bond[name=current()/../master]) or
-            (/links/bridge[name=current()/../master])" {
-                error-message "The master type must be 'bond' or 'bridge'.";
+            must "(/links/bond[name=current()/../master]) or (/links/bridge[name=current()/../master])
+            or (/links/vrf[name=current()/../master])" {
+                error-message "The master type must be 'bond' 'bridge', or 'vrf'.";
             }
         }
         container advance {
