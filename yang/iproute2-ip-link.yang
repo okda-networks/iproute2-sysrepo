@@ -114,14 +114,6 @@ module iproute2-ip-link {
             "This type is used by data models that need to reference gre
             interfaces.";
     }
-    typedef l3-links-ref {
-        type union{
-            type link-ref;
-            type bond-ref;
-            type vti-ref;
-            type gre-ref;
-        }
-    }
     typedef bond-ref {
         type leafref {
             path "/iplink:links/iplink:bond/iplink:name";
@@ -129,6 +121,26 @@ module iproute2-ip-link {
         description
             "This type is used by data models that need to reference bond
             interfaces.";
+    }
+    typedef l3-links-ref {
+        type union{
+            type link-ref;
+            type bond-ref;
+            type vti-ref;
+            type gre-ref;
+            type vlan-ref;
+        }
+    }
+    typedef all-links-ref {
+        type union{
+            type link-ref;
+            type bond-ref;
+            type vti-ref;
+            type gre-ref;
+            type bridge-ref;
+            type vrf-ref;
+            type vlan-ref;
+        }
     }
 
     /*

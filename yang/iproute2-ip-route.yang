@@ -36,7 +36,7 @@ module iproute2-ip-route {
             ipr2cgen:cmd-update "ip route replace";
             ipr2cgen:cmd-delete "ip route del";
             ipr2cgen:cmd-start;
-            ipr2cgen:replace-on-update;
+            ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "ip route list table all";
             // TODO IPv6 support: oper needs to also apply "ip -6 route show"
             description

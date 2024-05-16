@@ -60,6 +60,7 @@ typedef enum {
     ADD_STATIC_ARG_EXT,
     REPLACE_ON_UPDATE_EXT,
     INCLUDE_ALL_ON_DELETE,
+    INCLUDE_ALL_ON_UPDATE_EXT,
 
 } extension_t;
 
@@ -84,6 +85,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [ON_UPDATE_INCLUDE_EXT] = "on-update-include",
                          [ADD_STATIC_ARG_EXT] = "add-static-arg",
                          [REPLACE_ON_UPDATE_EXT] = "replace-on-update",
+                         [INCLUDE_ALL_ON_UPDATE_EXT] = "include-all-on-update",
                          [INCLUDE_ALL_ON_DELETE] = "include-all-on-delete",
                          [NOT_DEPENDENCY_EXT] = "not-dependency" };
 
@@ -917,7 +919,7 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     }
 
     if (op_val == UPDATE_OPR &&
-        (get_extension(REPLACE_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS)) {
+        (get_extension(INCLUDE_ALL_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS)) {
         ext_onupdate_replace_hdlr(&startcmd_node);
     }
     // add cmd prefix to the cmd_line
@@ -1081,6 +1083,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     char *oper2cmd_prefix[3] = { NULL };
     char *cmd_line = NULL, *rollback_cmd_line = NULL;
     struct lyd_node *rollback_dnode = NULL;
+    struct lyd_node *del_startcmd_node = NULL;
     // first get the add, update, delete cmds prefixis from schema extensions
     if (get_extension(CMD_ADD_EXT, startcmd_node, &oper2cmd_prefix[ADD_OPR]) != EXIT_SUCCESS) {
         fprintf(stderr,
@@ -1107,6 +1110,43 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
                 __func__);
         ret = EXIT_FAILURE;
         goto cleanup;
+    }
+
+    // if this node is replace-on-update (where we need to delete and recreate the node in iproute2)
+    // first create a del_node with del operation then generate and add the command to the cmds before
+    // the original update cmd.
+    if (get_extension(REPLACE_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS &&
+        get_operation(startcmd_node) == UPDATE_OPR) {
+        //
+        ret = lyd_dup_single(startcmd_node, NULL, LYD_DUP_RECURSIVE, &del_startcmd_node);
+        if (ret != LY_SUCCESS) {
+            fprintf(
+                stderr,
+                "%s: ipr2cgen:failed to create del_startcmd_node: failed to duplicate node %s: %s\n",
+                __func__, startcmd_node->schema->name, ly_strerrcode(ret));
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        // set the operation of the del_startcmd to delete.
+        struct lyd_meta *del_meta = lyd_find_meta(del_startcmd_node->meta, NULL, "yang:operation");
+        ret = lyd_change_meta(del_meta, "delete");
+        if (ret != LY_SUCCESS) {
+            fprintf(
+                stderr,
+                "%s: ipr2cgen:failed to add delete operation to del_startcmd_node for node %s: %s \n",
+                __func__, startcmd_node->schema->name, ly_strerrcode(ret));
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        char *del_cmd_line = NULL;
+        del_cmd_line = lyd2cmd_line(del_startcmd_node, oper2cmd_prefix);
+        if (del_cmd_line == NULL) {
+            fprintf(stderr, "%s: failed to generate cmd for del_startcmd node \"%s\" \n", __func__,
+                    startcmd_node->schema->name);
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        add_command(cmds, cmd_idx, del_cmd_line, del_cmd_line);
     }
 
     cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
@@ -1161,6 +1201,8 @@ cleanup:
         free(rollback_cmd_line);
     if (rollback_dnode)
         lyd_free_all(rollback_dnode);
+    if (del_startcmd_node)
+        lyd_free_all(del_startcmd_node);
     if (oper2cmd_prefix[ADD_OPR])
         free(oper2cmd_prefix[ADD_OPR]);
     if (oper2cmd_prefix[UPDATE_OPR])

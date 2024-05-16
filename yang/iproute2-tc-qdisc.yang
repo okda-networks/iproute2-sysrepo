@@ -255,7 +255,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:oper-cmd "tc qdisc list";
             ipr2cgen:oper-stop-if "{\"kind\": [\"ingress\", \"clsact\", \"noqueue\", \"mq\"]}";
-            ipr2cgen:replace-on-update;
+            ipr2cgen:include-all-on-update;
             key "dev parent";
             description "List of qdisc configurations.";
 
@@ -596,7 +596,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-add "tc qdisc add";
             ipr2cgen:cmd-delete "tc qdisc del";
             ipr2cgen:cmd-update "tc qdisc replace";
-            ipr2cgen:replace-on-update;
+            ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "tc qdisc list";
             ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"tbf\", 
             \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
@@ -642,7 +642,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-add "tc class add";
             ipr2cgen:cmd-delete "tc class del";
             ipr2cgen:cmd-update "tc class change";
-            ipr2cgen:replace-on-update;
+            ipr2cgen:include-all-on-update;
             key "dev parent classid";
             leaf dev {
                 type iplink:link-ref;
