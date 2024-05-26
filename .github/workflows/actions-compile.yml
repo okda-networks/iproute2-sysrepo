@@ -48,7 +48,7 @@ jobs:
       - name: basic compilation check
         run : ldd bin/iproute2-sysrepo
       - name: install required kernel mod(s)
-        run : sudo modprobe vrf bonding
+        run : sudo modprobe vrf bonding && sudo modprobe mpls_router mpls_iptunnel mpls_gso
       - name: basic test "ip link add/set"
         run : |
           set -e

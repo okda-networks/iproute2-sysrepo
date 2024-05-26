@@ -57,6 +57,19 @@ else
     exit 1
 fi
 
+# github workflow is failing as mpls is not enabled.
+## Step 3: Check if mpls route is created, try to create same route, if failed (device already exist) then
+## the route created successfully.
+#ip -M route add 10100 as 10111 dev if_route2 2>/dev/null
+#
+#if [ $? -ne 0 ]; then
+#    echo "mpls Route 10100 created successfully (OK)"
+#else
+#    echo "Failed to create mpls route 10100 (FAIL)"
+#    clean_up
+#    exit 1
+#fi
+
 ####################################################################
 # Test: Update IP route
 ####################################################################

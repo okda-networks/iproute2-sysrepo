@@ -28,13 +28,12 @@
         <table>254</table>
         <metric>0</metric>
         <tos>CS1</tos>
-        <mpls-encap>
-            <label>11/20</label>
-        </mpls-encap>
         <advmss>1300</advmss>
         <nexthop>
             <dev>if_route3</dev>
-            <weight>10</weight>
+            <mpls-encap>
+                <label>11/20</label>
+            </mpls-encap>
         </nexthop>
     </route>
 </routes>
