@@ -29,6 +29,7 @@
 #include "utils.h"
 
 /* ip module */
+#include "namespace.h"
 #include "ip_common.h"
 
 /* tc module */
@@ -301,6 +302,26 @@ noexist:
 static int do_cmd(int argc, char **argv)
 {
     preferred_family = AF_UNSPEC;
+    const char *libbpf_version;
+    char *batch_file = NULL;
+    char *basename;
+
+    /* to run vrf exec without root, capabilities might be set, drop them
+	 * if not needed as the first thing.
+	 * execv will drop them for the child command.
+	 * vrf exec requires:
+	 * - cap_dac_override to create the cgroup subdir in /sys
+	 * - cap_bpf to load the BPF program
+	 * - cap_net_admin to set the socket into the cgroup
+	 */
+    if (argc < 3 || strcmp(argv[1], "vrf") != 0 || strcmp(argv[2], "exec") != 0)
+        drop_cap();
+
+    basename = strrchr(argv[0], '/');
+    if (basename == NULL)
+        basename = argv[0];
+    else
+        basename++;
     max_flush_loops = 10;
     const struct cmd *cmds;
     const struct cmd *c;
@@ -327,16 +348,99 @@ static int do_cmd(int argc, char **argv)
                 argv[0]);
         return EXIT_FAILURE;
     }
+    while (argc > 1) {
+        char *opt = argv[1];
+
+        if (strcmp(opt, "--") == 0) {
+            argc--;
+            argv++;
+            break;
+        }
+        if (opt[0] != '-')
+            break;
+        if (opt[1] == '-')
+            opt++;
+        if (matches(opt, "-loops") == 0) {
+            argc--;
+            argv++;
+            if (argc <= 1)
+                missarg("loop count");
+            max_flush_loops = atoi(argv[1]);
+        } else if (matches(opt, "-family") == 0) {
+            argc--;
+            argv++;
+            if (argc <= 1)
+                missarg("family type");
+            else
+                preferred_family = read_family(argv[1]);
+            if (preferred_family == AF_UNSPEC)
+                invarg("invalid protocol family", argv[1]);
+        } else if (strcmp(opt, "-4") == 0) {
+            preferred_family = AF_INET;
+        } else if (strcmp(opt, "-6") == 0) {
+            preferred_family = AF_INET6;
+        } else if (strcmp(opt, "-0") == 0) {
+            preferred_family = AF_PACKET;
+        } else if (strcmp(opt, "-M") == 0) {
+            preferred_family = AF_MPLS;
+        } else if (strcmp(opt, "-B") == 0) {
+            preferred_family = AF_BRIDGE;
+        } else if (matches(opt, "-human") == 0 || matches(opt, "-human-readable") == 0) {
+            ++human_readable;
+        } else if (matches(opt, "-iec") == 0) {
+            ++use_iec;
+        } else if (matches(opt, "-stats") == 0 || matches(opt, "-statistics") == 0) {
+            ++show_stats;
+        } else if (matches(opt, "-details") == 0) {
+            ++show_details;
+        } else if (matches(opt, "-resolve") == 0) {
+            ++resolve_hosts;
+        } else if (matches(opt, "-oneline") == 0) {
+            ++oneline;
+        } else if (matches(opt, "-timestamp") == 0) {
+            ++timestamp;
+        } else if (matches(opt, "-tshort") == 0) {
+            ++timestamp;
+            ++timestamp_short;
+        } else if (matches(opt, "-force") == 0) {
+            ++force;
+        } else if (matches(opt, "-brief") == 0) {
+            ++brief;
+        } else if (matches(opt, "-json") == 0) {
+            ++json;
+        } else if (matches(opt, "-netns") == 0) {
+            NEXT_ARG();
+            if (netns_switch(argv[1]))
+                exit(-1);
+        } else if (matches(opt, "-Numeric") == 0) {
+            ++numeric;
+        } else if (matches(opt, "-all") == 0) {
+            do_all = true;
+        } else if (strcmp(opt, "-echo") == 0) {
+            ++echo_request;
+        } else {
+            fprintf(stderr, "Option \"%s\" is unknown, try \"ip -help\".\n", opt);
+            exit(-1);
+        }
+        argc--;
+        argv++;
+    }
+    char *argv0 = argv[1];
+    int arg_skip = 2;
+    if ((strlen(basename) > 2) && !strcmp(argv[0], "ip")) {
+        argv0 = basename + 2;
+        arg_skip = 3;
+    }
 
     for (c = cmds; c->cmd; ++c) {
-        if (matches(argv[1], c->cmd) == 0)
-            return -(c->func(argc - 2, argv + 2));
+        if (matches(argv0, c->cmd) == 0)
+            return -(c->func(argc - arg_skip, argv + arg_skip));
     }
 
     fprintf(stderr,
             "Unknown argument \"%s\".\n"
             "\nPossible execution options:\n"
-            "1- Run with no arguments to start iproute2-sysrepo.\n"
+            "1- Run with no argumentss to start iproute2-sysrepo.\n"
             "2- Run with individual iproute2 commands arguments.\n",
             argv[1]);
 

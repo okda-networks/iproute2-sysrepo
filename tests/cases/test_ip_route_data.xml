@@ -48,13 +48,18 @@
         <table>254</table>
         <metric>0</metric>
         <tos>CS1</tos>
-        <mpls-encap>
-            <label>11/20</label>
-        </mpls-encap>
         <advmss>1300</advmss>
         <nexthop>
             <dev>if_route3</dev>
+            <mpls-encap>
+                <label>11/20</label>
+            </mpls-encap>
             <weight>10</weight>
         </nexthop>
     </route>
+<!--    <mpls-route>-->
+<!--        <label>10100</label>-->
+<!--        <swap>10111</swap>-->
+<!--        <dev>if_route2</dev>-->
+<!--    </mpls-route>-->
 </routes>

@@ -37,7 +37,7 @@ module iproute2-ip-route {
             ipr2cgen:cmd-delete "ip route del";
             ipr2cgen:cmd-start;
             ipr2cgen:include-all-on-update;
-            ipr2cgen:oper-cmd "ip route list table all";
+            ipr2cgen:oper-cmd "ip -4 route list table all";
             // TODO IPv6 support: oper needs to also apply "ip -6 route show"
             description
                 "ip route details";
@@ -96,7 +96,7 @@ module iproute2-ip-route {
                 type inet:ip-address;
                 description
                     "the source address to prefer when sending to the
-                     destinations covered by the route prefix.";
+                    destinations covered by the route prefix.";
             }
             leaf protocol {
                 type enumeration {
@@ -132,50 +132,7 @@ module iproute2-ip-route {
                 }
             }
             // INFO_SPEC
-            choice encap {
-                container mpls-encap {
-                    leaf label {
-                        ipr2cgen:arg-name "encap mpls";
-                        ipr2cgen:oper-arg-name "not_supported";
-                        type string{
-                            pattern '[0-9]+(/[0-9]+)*';
-                        }
-                        description
-                            "MPLSLABEL - mpls label stack with labels separated by /";
-                    }
-                }
-                container ip-encap {
-                    ipr2cgen:add-static-arg "encap ip";
-                    leaf id {
-                        type uint32;
-                        ipr2cgen:oper-arg-name "not_supported";
-                        description
-                            "tunnel id";
-                    }
-                    leaf dst {
-                        type inet:ip-prefix;
-                        ipr2cgen:oper-arg-name "not_supported";
-                        description
-                            "remote ip";
-                    }
-                    leaf tos {
-                        type ipr2net:tos;
-                        ipr2cgen:oper-arg-name "not_supported";
-                        description
-                            "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
-                            understood as: First, compare the TOS of the route and of the packet. If they are not equal,
-                            then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
-                            number or an identifier from /etc/iproute2/rt_dsfield.";
-                    }
-                    leaf ttl {
-                        type ipr2net:ttl;
-                        ipr2cgen:oper-arg-name "not_supported";
-                        description
-                            "TTL - specifies the TTL value to use in outgoing packets.";
-                        default 0;
-                    }
-                }
-            }
+
             /// OPTIONS
             leaf mtu {
                 type ipr2net:mtu;
@@ -203,6 +160,50 @@ module iproute2-ip-route {
             list nexthop {
                 ipr2cgen:add-static-arg "nexthop";
                 ipr2cgen:oper-arg-name "nexthops";
+                choice encap {
+                    container mpls-encap {
+                        leaf label {
+                            ipr2cgen:arg-name "encap mpls";
+                            ipr2cgen:oper-arg-name "not_supported";
+                            type string{
+                                pattern '[0-9]+(/[0-9]+)*';
+                            }
+                            description
+                                "MPLSLABEL - mpls label stack with labels separated by /";
+                        }
+                    }
+                    container ip-encap {
+                        ipr2cgen:add-static-arg "encap ip";
+                        leaf id {
+                            type uint32;
+                            ipr2cgen:oper-arg-name "not_supported";
+                            description
+                                "tunnel id";
+                        }
+                        leaf dst {
+                            type inet:ip-prefix;
+                            ipr2cgen:oper-arg-name "not_supported";
+                            description
+                                "remote ip";
+                        }
+                        leaf tos {
+                            type ipr2net:tos;
+                            ipr2cgen:oper-arg-name "not_supported";
+                            description
+                                "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
+                                understood as: First, compare the TOS of the route and of the packet. If they are not equal,
+                                then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
+                                number or an identifier from /etc/iproute2/rt_dsfield.";
+                        }
+                        leaf ttl {
+                            type ipr2net:ttl;
+                            ipr2cgen:oper-arg-name "not_supported";
+                            description
+                                "TTL - specifies the TTL value to use in outgoing packets.";
+                            default 0;
+                        }
+                    }
+                }
                 key "dev";
                 leaf dev {
                 // workaround until issue #2211 in libyang is fixed
@@ -215,6 +216,7 @@ module iproute2-ip-route {
                     description
                         "nexthop link";
                 }
+
                 container via {
                     ipr2cgen:add-static-arg "via";
                     leaf family {
@@ -246,11 +248,13 @@ module iproute2-ip-route {
                     description
                         "NUMBER - is a weight for this element of a multipath route
                         reflecting its relative bandwidth or quality.";
+                    default 1;
                 }
+
             }
             // Operational data
             container state {
-            config false;
+                config false;
                 leaf type{
                     type enumeration {
                         enum "unicast";
@@ -263,6 +267,53 @@ module iproute2-ip-route {
                         enum "nat";
                     }
                 }
+            }
+        }
+        list mpls-route {
+            ipr2cgen:cmd-add "ip -M route add";
+            ipr2cgen:cmd-update "ip -M route replace";
+            ipr2cgen:cmd-delete "ip -M route del";
+            ipr2cgen:cmd-start;
+            ipr2cgen:include-all-on-update;
+            ipr2cgen:oper-cmd "ip -M route list table all";
+            key "label";
+            leaf label {
+                ipr2cgen:value-only;
+                ipr2cgen:oper-arg-name "dst";
+                type string {
+                    pattern '[0-9]+(/[0-9]+)*';
+                }
+                description "MPLSLABLE specify the mpls label";
+            }
+            leaf swap {
+                ipr2cgen:arg-name "as";
+                ipr2cgen:oper-arg-name "to";
+                type string {
+                    pattern '[0-9]+(/[0-9]+)*';
+                }
+                description "MPLSLABLE specify the mpls label";
+            }
+            leaf dev {
+                type union{
+                // workaround until issue #2211 in libyang is fixed
+                    type iplink:link-ref;
+                    type iplink:bond-ref;
+                    type iplink:vti-ref;
+                    type iplink:gre-ref;
+                    type iplink:vrf-ref;
+                    type iplink:vlan-ref;
+                }
+                description
+                    "nexthop interface";
+            }
+            leaf via {
+                ipr2cgen:value-only;
+                ipr2cgen:oper-arg-name "gateway";
+                // TODO IPv6 support: oper also uses "host" arg name when via family is set to inet6
+                // while using gateway when family is set to inet
+                type inet:ip-address;
+                description
+                    "via address";
             }
         }
     }
