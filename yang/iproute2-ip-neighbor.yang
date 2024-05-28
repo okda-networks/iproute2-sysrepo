@@ -1,0 +1,147 @@
+module iproute2-ip-neighbor {
+    yang-version 1.1;
+    namespace "urn:okda:iproute2:ip:neighbor";
+    prefix "ipneigh";
+
+    import ietf-inet-types { prefix inet; }
+    import ietf-yang-types { prefix yang;}
+    import iproute2-ip-link { prefix iplink; }
+    import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+
+    organization
+        "Okda Networks";
+
+    contact
+        "Author: Ali Aqrabawi
+        <aaqrabaw@okdanetworks.com>";
+
+    description
+        "This module contain the iproute2 'ip neighbor' configurations ,
+        this is module contains all IP-NEIGHBOUR(8) related configs,
+        refer to https://man7.org/linux/man-pages/man8/ip-neighbour.8.html";
+
+    revision "2024-02-13" {
+        description "Revision 1";
+        reference
+            "YANG model for iproute2 ip neighbor case.";
+    }
+
+    container neighbors {
+        list neighbor {
+            ipr2cgen:cmd-add "ip neigh add";
+            ipr2cgen:cmd-update "ip neigh replace";
+            ipr2cgen:cmd-delete "ip neigh del";
+            ipr2cgen:cmd-start;
+            ipr2cgen:include-all-on-update;
+            ipr2cgen:include-all-on-delete;
+            ipr2cgen:oper-cmd "ip neigh";
+            key "to_addr";
+            leaf to_addr {
+                ipr2cgen:oper-arg-name "dst";
+                ipr2cgen:value-only;
+                type inet:ip-address;
+                description
+                    "the protocol address of the neighbour. It is either
+                    an IPv4 or IPv6 address.";
+            }
+            leaf dev {
+            // workaround until issue #2211 in libyang is fixed
+                type union{
+                    type iplink:link-ref;
+                    type iplink:bond-ref;
+                    type iplink:vti-ref;
+                    type iplink:gre-ref;
+                    type iplink:bridge-ref;
+                    type iplink:vrf-ref;
+                    type iplink:vlan-ref;
+                }
+                description
+                    "the interface to which this neighbour is attached.";
+            }
+            leaf proxy {
+                type inet:ip-address;
+                description
+                    "indicates whether we are proxying for this
+                    neighbour entry";
+            }
+            leaf router {
+                ipr2cgen:oper-ck-argname-presence "true";
+                ipr2cgen:flag;
+                type boolean;
+                default "false";
+                description
+                    "indicates whether neighbour is a router";
+            }
+            leaf use {
+                ipr2cgen:oper-ck-argname-presence "true";
+                ipr2cgen:flag;
+                type boolean;
+                default "false";
+                description
+                    "this neigh entry is in \"use\". This option can be
+                    used to indicate to the kernel that a controller is
+                    using this dynamic entry. If the entry does not
+                    exist, the kernel will resolve it. If it exists, an
+                    attempt to refresh the neighbor entry will be
+                    triggered.";
+            }
+            leaf managed {
+                ipr2cgen:oper-ck-argname-presence "true";
+                ipr2cgen:flag;
+                type boolean;
+                default "false";
+                description
+                    "this neigh entry is \"managed\". This option can be
+                    used to indicate to the kernel that a controller is
+                    using this dynamic entry. In contrast to \"use\", if
+                    the entry does not exist, the kernel will resolve
+                    it and periodically attempt to auto-refresh the
+                    neighbor entry such that it remains in resolved
+                    state when possible.";
+            }
+            leaf extern_learn {
+                ipr2cgen:oper-ck-argname-presence "true";
+
+                ipr2cgen:flag;
+                default "false";
+                type boolean;
+                description
+                    " this neigh entry was learned externally. This
+                    option can be used to indicate to the kernel that
+                    this is a controller learnt dynamic entry.  Kernel
+                    will not gc such an entry.";
+            }
+            leaf lladdr {
+                type union {
+                    type yang:mac-address;
+                    type enumeration {
+                        enum "null";
+                    }
+                }
+                description
+                    "the link layer address of the neighbour.  LLADDRESS
+                    can also be null.";
+            }
+            leaf nud {
+                ipr2cgen:oper-arg-name "state";
+                // TODO: temp workaround.
+                    ipr2cgen:oper-value-map "[ \"PERMANENT\" ]:permanent;[ \"NOARP\" ]:noarp;[ \"REACHABLE\" ]:reachable;[ \"STALE\" ]:stale;[ \"NONE\" ]:none;[ \"INCOMPLETE\" ]:incomplete;[ \"DELAY\" ]:delay;[ \"FAILED\" ]:failed;";
+                type enumeration{
+                    enum "permanent";
+                    enum "noarp";
+                    enum "reachable";
+                    enum "stale";
+                    enum "none";
+                    enum "incomplete";
+                    enum "delay";
+                    enum "probe";
+                    enum "failed";
+                }
+                description
+                    "'Neighbour Unreachability Detection': the state of the neighbour entry.";
+            }
+
+        }
+    }
+
+}
