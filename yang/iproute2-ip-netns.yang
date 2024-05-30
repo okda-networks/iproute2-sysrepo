@@ -41,6 +41,7 @@ module iproute2-ip-netns {
             ipr2cgen:cmd-add "ip netns add";
             ipr2cgen:cmd-delete "ip netns del";
             ipr2cgen:cmd-update ""; // netsn has no update operation, but cmd-update is required.
+            ipr2cgen:oper-cmd "ip netns";
             key "name";
             description
                 "netns configuraton";
