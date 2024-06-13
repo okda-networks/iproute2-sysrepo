@@ -17,6 +17,7 @@
 
 extern sr_session_ctx_t *sr_session;
 static int processed = 1;
+const char *network_namespace = NULL;
 /**
  * @brief data struct to store cmd operation.
  *
@@ -138,6 +139,36 @@ void free_cmds_info(struct cmd_info **cmds_info)
     }
     // Free the cmds array itself
     free(cmds_info);
+}
+
+void insert_netns(char *cmd, const char *netns)
+{
+    char to_insert[100]; // Buffer to hold the "-n name" string
+
+    // Create the insertion string
+    snprintf(to_insert, sizeof(to_insert), " -n %s", netns);
+
+    // Find the position of the first space
+    char *pos = strchr(cmd, ' ');
+
+    if (pos != NULL) {
+        // Calculate the index of the first space
+        int index = pos - cmd;
+
+        // Calculate the lengths of the strings
+        int len_cmd = strlen(cmd);
+        int len_insert = strlen(to_insert);
+
+        // Shift the part of the string after the first space to the right
+        memmove(cmd + index + len_insert, cmd + index,
+                len_cmd - index + 1); // +1 to include the null terminator
+
+        // Insert the new string at the right position
+        memcpy(cmd + index, to_insert, len_insert);
+    } else {
+        // If there is no space, just concatenate the insert string to the end
+        strcat(cmd, to_insert);
+    }
 }
 
 /**
@@ -385,6 +416,33 @@ int add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_
  */
 int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_name)
 {
+    // get the network namespace of the startcmd, and add the "ip netns exec <netns>" to the
+    // beginning of the cmd.
+
+    if (!strcmp(dnode->schema->name, "netns")) {
+        oper_t dnode_oper = get_operation(dnode);
+        if (dnode_oper == UPDATE_OPR) {
+            struct lyd_meta *dnode_meta = NULL;
+            dnode_meta = lyd_find_meta(dnode->meta, NULL, "yang:orig-value");
+            if (dnode_meta == NULL) {
+                fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n",
+                        __func__);
+                return EXIT_FAILURE;
+            }
+            network_namespace = lyd_get_meta_value(dnode_meta);
+            if (network_namespace == NULL) {
+                fprintf(stderr,
+                        "%s: failed to get the value of yang:original-value for netns node\n",
+                        __func__);
+                network_namespace = "1";
+                return EXIT_FAILURE;
+            }
+        } else {
+            network_namespace = lyd_get_value(dnode);
+        }
+        if (!strcmp(network_namespace, "1"))
+            network_namespace = NULL;
+    }
     // if operation delete generate args only if:
     // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
     int is_include_all_on_delete = 0;
@@ -940,6 +998,12 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     }
     strlcat(cmd_line, cmd_args, sizeof(cmd_line));
     free(cmd_args);
+    // check if netns found, then inset it in cmd "ip -netns red ..."
+    if (network_namespace != NULL) {
+        insert_netns(cmd_line, network_namespace);
+        network_namespace = NULL;
+    }
+
     return strdup(cmd_line);
 }
 

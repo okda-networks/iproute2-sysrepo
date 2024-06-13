@@ -432,6 +432,9 @@ static int do_cmd(int argc, char **argv)
         argv0 = basename + 2;
         arg_skip = 3;
     }
+    // we need to rtnl_open() for every command in order to have netns_switch() to work.
+    if (rtnl_open(&rth, 0) < 0)
+        return EXIT_FAILURE;
 
     for (c = cmds; c->cmd; ++c) {
         if (matches(argv0, c->cmd) == 0)
@@ -444,6 +447,7 @@ static int do_cmd(int argc, char **argv)
             "1- Run with no argumentss to start iproute2-sysrepo.\n"
             "2- Run with individual iproute2 commands arguments.\n",
             argv[1]);
+    rtnl_close(&rth);
 
     return EXIT_FAILURE;
 }
@@ -738,8 +742,8 @@ int main(int argc, char **argv)
 {
     int ret;
 
-    if (rtnl_open(&rth, 0) < 0)
-        return EXIT_FAILURE;
+    //    if (rtnl_open(&rth, 0) < 0)
+    //        return EXIT_FAILURE;
 
     if (argc == 1) {
         atexit(exit_cb);
@@ -747,6 +751,6 @@ int main(int argc, char **argv)
     } else
         ret = do_cmd(argc - 1, argv + 1);
 
-    rtnl_close(&rth);
+    //    rtnl_close(&rth);
     return ret;
 }
