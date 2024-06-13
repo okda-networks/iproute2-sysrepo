@@ -307,33 +307,16 @@ module iproute2-ip-link {
             description "specifies the desired index of the new virtual device.
             The link creation fails, if the index is busy.";
         }
-        choice netns {
-            description "create the device in the network namespace associated with process
-            PID or the name NETNSNAME or the file NETNSFILE.";
-            case process-id {
-                description "create the device in the network namespace associated with process";
-                leaf pid {
-                    ipr2cgen:arg-name "netns";
-                    type uint64;
-                    description "process id";
+        leaf netns {
+            ipr2cgen:arg-name "netns";
+            type union {
+                type ipnetns:netns-ref;
+                type enumeration {
+                    enum "1";
                 }
             }
-            case name {
-                description "create the device in the network namespace associated with name NETNSNAME";
-                leaf netnsname {
-                    ipr2cgen:arg-name "netns";
-                    type ipnetns:netns-ref;
-                    description "network namespace name";
-                }
-            }
-            case file {
-                description "create the device in the network namespace associated with file NETNSFILE";
-                leaf netnsfile {
-                    ipr2cgen:arg-name "netns";
-                    type string;
-                    description "network namespace file";
-                }
-            }
+            default "1";
+            description "network namespace name";
         }
         leaf group {
             description "specify group id that this link belong to,
