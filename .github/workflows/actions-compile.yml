@@ -62,15 +62,15 @@ jobs:
             fi
           fi
       - name: basic test "ip link"
-        run : bin/iproute2-sysrepo ip link
+        run : sudo bin/iproute2-sysrepo ip link
       - name: basic test "bridge vlan add"
         run : sudo bin/iproute2-sysrepo bridge vlan add vid 10 dev br-slave
       - name: basic test "bridge link"
-        run : bin/iproute2-sysrepo bridge link
+        run : sudo bin/iproute2-sysrepo bridge link
       - name: basic test "tc qdisc add"
         run : sudo bin/iproute2-sysrepo tc qdisc add dev br-slave root netem delay 200ms
       - name: basic test "tc qdisc"
-        run : bin/iproute2-sysrepo tc qdisc
+        run : sudo bin/iproute2-sysrepo tc qdisc
       - name: basic test "bad argv0"
         run : |
           sudo bin/iproute2-sysrepo bad-arg || exit_code=$?
