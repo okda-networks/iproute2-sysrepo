@@ -303,6 +303,22 @@ noexist:
 static int do_cmd(int argc, char **argv)
 {
     preferred_family = AF_UNSPEC;
+
+    // switch to default network namespace, as prev commands might changed the netns.
+    int fd = open("/proc/1/ns/net", O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+    // Switch to the default network namespace
+    if (setns(fd, CLONE_NEWNET) == -1) {
+        perror("setns");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+    // Close the file descriptor
+    close(fd);
+
     const char *libbpf_version;
     char *batch_file = NULL;
     char *basename;

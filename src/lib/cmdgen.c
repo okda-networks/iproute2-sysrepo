@@ -17,7 +17,15 @@
 
 extern sr_session_ctx_t *sr_session;
 static int processed = 1;
-const char *network_namespace = NULL;
+
+/**
+ * @brief data struct to store start_cmd meta data.
+ *
+ */
+struct startcmd_info {
+    int processed;
+};
+
 /**
  * @brief data struct to store cmd operation.
  *
@@ -153,11 +161,11 @@ void insert_netns(char *cmd, const char *netns)
 
     if (pos != NULL) {
         // Calculate the index of the first space
-        int index = pos - cmd;
+        long index = pos - cmd;
 
         // Calculate the lengths of the strings
-        int len_cmd = strlen(cmd);
-        int len_insert = strlen(to_insert);
+        int len_cmd = (int)strlen(cmd);
+        int len_insert = (int)strlen(to_insert);
 
         // Shift the part of the string after the first space to the right
         memmove(cmd + index + len_insert, cmd + index,
@@ -302,6 +310,23 @@ int get_extension(extension_t ex_t, const struct lyd_node *dnode, char **value)
 }
 
 /**
+ * get the startcmd_info.
+ * @param startcmd
+ * @return startcmd_info
+ */
+struct startcmd_info *get_startcmd_info(struct lyd_node *startcmd)
+{
+    return (struct startcmd_info *)(startcmd->priv);
+}
+
+void initialize_startcmdinfo(struct lyd_node *startcmd)
+{
+    struct startcmd_info *sdnode_info = malloc(sizeof(struct startcmd_info));
+    sdnode_info->processed = 0;
+    startcmd->priv = sdnode_info;
+}
+
+/**
  * check if this node is cmd-start node.
  * example in yang the list nexthop is where the cmd-start ext added.
  * @param [in] dnode lyd_node
@@ -323,6 +348,46 @@ struct lyd_node *get_parent_startcmd(struct lyd_node *dnode)
         startcmd = lyd_parent(startcmd);
     }
     return startcmd;
+}
+
+int get_netns(struct lyd_node *startcmd, char **netns)
+{
+    char *xpath = "iproute2-ip-link:netns";
+    struct lyd_node *link_startcmd = startcmd;
+    int is_inner = 0;
+    // if the startcmd is not link, check if this is inner startcmd of link startcmd. example "ip"
+    if (strcmp(startcmd->schema->name, "link") != 0) {
+        link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
+        is_inner = 1;
+        if (!link_startcmd)
+            return EXIT_SUCCESS;
+    }
+    struct lyd_node *netns_dnode;
+    int ret = lyd_find_path(link_startcmd, xpath, 0, &netns_dnode);
+    if (ret != LY_SUCCESS)
+        return EXIT_SUCCESS;
+
+    const char *network_namespace = NULL;
+    oper_t dnode_oper = get_operation(netns_dnode);
+    if (dnode_oper == UPDATE_OPR && !is_inner) {
+        struct lyd_meta *dnode_meta = NULL;
+        dnode_meta = lyd_find_meta(netns_dnode->meta, NULL, "yang:orig-value");
+        if (dnode_meta == NULL) {
+            fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n", __func__);
+            return EXIT_FAILURE;
+        }
+        network_namespace = lyd_get_meta_value(dnode_meta);
+        if (network_namespace == NULL) {
+            fprintf(stderr, "%s: failed to get the value of yang:original-value for netns node\n",
+                    __func__);
+            return EXIT_FAILURE;
+        }
+    } else {
+        network_namespace = lyd_get_value(netns_dnode);
+    }
+    *netns = strdup(network_namespace);
+
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -416,33 +481,6 @@ int add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_
  */
 int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_name)
 {
-    // get the network namespace of the startcmd, and add the "ip netns exec <netns>" to the
-    // beginning of the cmd.
-
-    if (!strcmp(dnode->schema->name, "netns")) {
-        oper_t dnode_oper = get_operation(dnode);
-        if (dnode_oper == UPDATE_OPR) {
-            struct lyd_meta *dnode_meta = NULL;
-            dnode_meta = lyd_find_meta(dnode->meta, NULL, "yang:orig-value");
-            if (dnode_meta == NULL) {
-                fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n",
-                        __func__);
-                return EXIT_FAILURE;
-            }
-            network_namespace = lyd_get_meta_value(dnode_meta);
-            if (network_namespace == NULL) {
-                fprintf(stderr,
-                        "%s: failed to get the value of yang:original-value for netns node\n",
-                        __func__);
-                network_namespace = "1";
-                return EXIT_FAILURE;
-            }
-        } else {
-            network_namespace = lyd_get_value(dnode);
-        }
-        if (!strcmp(network_namespace, "1"))
-            network_namespace = NULL;
-    }
     // if operation delete generate args only if:
     // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
     int is_include_all_on_delete = 0;
@@ -930,7 +968,7 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 {
     oper_t op_val;
     char cmd_line[CMD_LINE_SIZE] = { 0 };
-
+    struct startcmd_info *sdnode_info = get_startcmd_info(startcmd_node);
     // prepare for new command
     op_val = get_operation(startcmd_node);
 
@@ -998,10 +1036,16 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     }
     strlcat(cmd_line, cmd_args, sizeof(cmd_line));
     free(cmd_args);
-    // check if netns found, then inset it in cmd "ip -netns red ..."
-    if (network_namespace != NULL) {
-        insert_netns(cmd_line, network_namespace);
-        network_namespace = NULL;
+    // check if netns found, then inset it in cmd "ip -netns red ..." , "1" is the global netns.
+    char *netns = "1";
+    int ret = get_netns(startcmd_node, &netns);
+    if (ret != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: failed to get netns for node \"%s\" \n", __func__,
+                startcmd_node->schema->name);
+        return NULL;
+    }
+    if (strcmp(netns, "1") != 0) {
+        insert_netns(cmd_line, netns);
     }
 
     return strdup(cmd_line);
@@ -1203,6 +1247,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
             goto cleanup;
         }
         char *del_cmd_line = NULL;
+        initialize_startcmdinfo(del_startcmd_node);
         del_cmd_line = lyd2cmd_line(del_startcmd_node, oper2cmd_prefix);
         if (del_cmd_line == NULL) {
             fprintf(stderr, "%s: failed to generate cmd for del_startcmd node \"%s\" \n", __func__,
@@ -1248,6 +1293,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         ret = EXIT_FAILURE;
         goto cleanup;
     }
+    initialize_startcmdinfo(rollback_dnode);
 
     rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
     if (rollback_cmd_line == NULL) {
@@ -1332,7 +1378,8 @@ int add_node_dependencies(const struct lyd_node *all_change_nodes, struct lyd_no
                           struct ly_set *sorted_dependecies)
 {
     int ret = EXIT_SUCCESS;
-    if (startcmd_node->priv == &processed)
+    struct startcmd_info *sdnode_info = get_startcmd_info(startcmd_node);
+    if (sdnode_info->processed)
         return ret;
 
     struct ly_set *node_leafrefs = NULL;
@@ -1388,7 +1435,7 @@ int add_node_dependencies(const struct lyd_node *all_change_nodes, struct lyd_no
     // finally, add the current startcmd_node to the sorted set. if you try to add an existing node,
     // no problem.
     ly_set_add(sorted_dependecies, startcmd_node, 0, NULL);
-    startcmd_node->priv = &processed;
+    sdnode_info->processed = 1;
 
     return ret;
 }
@@ -1436,36 +1483,29 @@ struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes)
     struct lyd_node *next = NULL;
     struct ly_set *start_cmds_set;
     ly_set_new(&start_cmds_set);
-    // initialize ->priv to NULL.
+    // collect start cmds from the change tree.
     LY_LIST_FOR(all_change_nodes, change_node)
     {
+        lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
+        fprintf(stdout, "(+) change request received:\n%s", node_print_text);
+        free(node_print_text);
         LYD_TREE_DFS_BEGIN(change_node, next)
         {
             if (is_startcmd_node(next)) {
                 // if this startcmd is inner and its parent start cmd is delete,
                 // then we don't want to generate cmd for it. as it will create error since
                 // the parent item is deleted from iproute2 already.
-                struct lyd_node *parent_scmd = lyd_parent(next);
-                while (parent_scmd) {
-                    if (is_startcmd_node(parent_scmd)) {
-                        if (get_operation(parent_scmd) == DELETE_OPR)
-                            goto next_iter;
-                    }
-                    parent_scmd = lyd_parent(parent_scmd);
+                struct lyd_node *parent_scmd = get_parent_startcmd(lyd_parent(next));
+                if (parent_scmd) {
+                    if (get_operation(parent_scmd) == DELETE_OPR)
+                        goto next_iter;
                 }
+                initialize_startcmdinfo(next);
                 ly_set_add(start_cmds_set, next, 0, 0);
             }
 next_iter:
             LYD_TREE_DFS_END(change_node, next)
         }
-        lyd_print_mem(&node_print_text, change_node, LYD_XML, 0);
-        fprintf(stdout, "(+) change request received:\n%s", node_print_text);
-        free(node_print_text);
-    }
-
-    // initialize the ->priv
-    for (int i = 0; i < start_cmds_set->count; i++) {
-        start_cmds_set->dnodes[i]->priv = NULL;
     }
 
     // first sort the dependencies.
