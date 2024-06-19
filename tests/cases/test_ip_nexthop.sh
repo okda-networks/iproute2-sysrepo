@@ -14,6 +14,14 @@
 # 2. Test updating nexthop
 # 3. Test deleting nexthop
 #####################################################################
+clean_up(){
+  ip nexthop del id 1001
+  ip nexthop del id 2001
+  ip nexthop del id 3001
+  ip nexthop del id 4001
+  ip nexthop del id 12001
+}
+
 
 ret=0
 ####################################################################
@@ -36,6 +44,7 @@ if ip nexthop show id 1001 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 1001 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 1001 (FAIL)"
+    clean_up
     exit 1
 fi
 
@@ -44,6 +53,7 @@ if ip nexthop show id 2001 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 2001 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 2001 (FAIL)"
+    clean_up
     exit 1
 fi
 
@@ -52,6 +62,7 @@ if ip nexthop show id 3001 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 3001 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 3001 (FAIL)"
+    clean_up
     exit 1
 fi
 
@@ -60,6 +71,7 @@ if ip nexthop show id 4001 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 4001 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 4001 (FAIL)"
+    clean_up
     exit 1
 fi
 
@@ -68,6 +80,7 @@ if ip nexthop show id 12001 >/dev/null 2>&1; then
     echo "TEST-INFO: IP nexthop id 12 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP nexthop 2 (FAIL)"
+    clean_up
     exit 1
 fi
 
@@ -117,6 +130,7 @@ sysrepocfg -C startup -d running || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     echo "TEST-ERROR: failed to delete IP nexthops from sysrepo"
+    clean_up
     exit "$ret"
 fi
 
@@ -127,6 +141,7 @@ if ! ip nexthop show id 1001 >/dev/null 2>&1 && ! ip nexthop show id 2001 >/dev/
     echo "TEST-INFO: IP nexthops 1001, 2001, 3001 and 12 are deleted successfully (OK)"
 else
     echo "TEST-ERROR: Failed to delete IP nexthops 2001, 1001, 3001,4001 or 12001 (FAIL)"
+    clean_up
     exit 1
 fi
 

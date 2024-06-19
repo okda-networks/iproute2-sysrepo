@@ -16,7 +16,6 @@
 #include "cmdgen.h"
 
 extern sr_session_ctx_t *sr_session;
-static int processed = 1;
 
 /**
  * @brief data struct to store start_cmd meta data.
@@ -339,6 +338,39 @@ int is_startcmd_node(struct lyd_node *dnode)
     return 0;
 }
 
+/**
+ * get the target node from sysrepo running ds,
+ * @param  [in] startcmd_node start cmd_node,
+ * @param  [in] node_name node name to be fetched from sr.
+ * @return [out] lyd_node found.
+ */
+struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *node_name)
+{
+    char xpath[1024] = { 0 };
+    int ret;
+    lyd_path(startcmd_node, LYD_PATH_STD, xpath, 1024);
+    if (node_name) {
+        strlcat(xpath, "/", sizeof(xpath));
+        strlcat(xpath, node_name, sizeof(xpath));
+    }
+    sr_data_t *sr_data;
+
+    // get the dnode from sr
+    if (node_name)
+        ret = sr_get_node(sr_session, xpath, 0, &sr_data);
+    else
+        ret = sr_get_data(sr_session, xpath, 0, 0, 0, &sr_data);
+    //        ret = sr_get_subtree(sr_session, xpath, 0, &sr_data);
+    if (ret != SR_ERR_OK) {
+        fprintf(stderr,
+                "%s: failed to get node data from sysrepo ds."
+                " xpath = \"%s\": %s\n",
+                __func__, xpath, sr_strerror(ret));
+        return NULL;
+    }
+    return sr_data->tree;
+}
+
 struct lyd_node *get_parent_startcmd(struct lyd_node *dnode)
 {
     struct lyd_node *startcmd = dnode;
@@ -350,43 +382,62 @@ struct lyd_node *get_parent_startcmd(struct lyd_node *dnode)
     return startcmd;
 }
 
-int get_netns(struct lyd_node *startcmd, char **netns)
+/**
+ * find the network namespace of the node, this has special handling for links as netns is part of the link config.
+ * other features (route,nexthop..etc) have different handling of obtaining the netns
+ * @param startcmd lyd_node
+ * @param netns [out] the founded netns
+ * @return EXIST_SUCCESS,EXIT_FAILURE
+ */
+int find_netns(struct lyd_node *startcmd, char **netns)
 {
     char *xpath = "iproute2-ip-link:netns";
+    const char *network_namespace = NULL;
     struct lyd_node *link_startcmd = startcmd;
     int is_inner = 0;
-    // if the startcmd is not link, check if this is inner startcmd of link startcmd. example "ip"
-    if (strcmp(startcmd->schema->name, "link") != 0) {
+    // if the parent is not links, check if this is inner startcmd of link startcmd. example "ip"
+    struct lyd_node *parent_node = lyd_parent(link_startcmd);
+    if (parent_node == NULL) {
+        // parent node is null, we can confirm it's not one of links startcmd.
+        return EXIT_SUCCESS;
+    }
+    if (strcmp(parent_node->schema->name, "links") != 0) {
         link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
         is_inner = 1;
         if (!link_startcmd)
             return EXIT_SUCCESS;
     }
-    struct lyd_node *netns_dnode;
-    int ret = lyd_find_path(link_startcmd, xpath, 0, &netns_dnode);
-    if (ret != LY_SUCCESS)
-        return EXIT_SUCCESS;
-
-    const char *network_namespace = NULL;
-    oper_t dnode_oper = get_operation(netns_dnode);
-    if (dnode_oper == UPDATE_OPR && !is_inner) {
-        struct lyd_meta *dnode_meta = NULL;
-        dnode_meta = lyd_find_meta(netns_dnode->meta, NULL, "yang:orig-value");
-        if (dnode_meta == NULL) {
-            fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n", __func__);
-            return EXIT_FAILURE;
-        }
-        network_namespace = lyd_get_meta_value(dnode_meta);
-        if (network_namespace == NULL) {
-            fprintf(stderr, "%s: failed to get the value of yang:original-value for netns node\n",
-                    __func__);
-            return EXIT_FAILURE;
-        }
-    } else {
+    struct lyd_node *netns_dnode = get_node_from_sr(link_startcmd, "netns");
+    // if the netns_dnode does not exist in sysrepo, then this is create, we get the netns from
+    // the startcmd
+    if (netns_dnode != NULL)
         network_namespace = lyd_get_value(netns_dnode);
+    else {
+        int ret = lyd_find_path(link_startcmd, xpath, 0, &netns_dnode);
+        // if no netns in the link_startcmd then exit with success,
+        if (ret != LY_SUCCESS)
+            return EXIT_SUCCESS;
+        oper_t dnode_oper = get_operation(netns_dnode);
+        if (dnode_oper == UPDATE_OPR && !is_inner) {
+            struct lyd_meta *dnode_meta = NULL;
+            dnode_meta = lyd_find_meta(netns_dnode->meta, NULL, "yang:orig-value");
+            if (dnode_meta == NULL) {
+                fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n",
+                        __func__);
+                return EXIT_FAILURE;
+            }
+            network_namespace = lyd_get_meta_value(dnode_meta);
+            if (network_namespace == NULL) {
+                fprintf(stderr,
+                        "%s: failed to get the value of yang:original-value for netns node\n",
+                        __func__);
+                return EXIT_FAILURE;
+            }
+        } else {
+            network_namespace = lyd_get_value(netns_dnode);
+        }
     }
     *netns = strdup(network_namespace);
-
     return EXIT_SUCCESS;
 }
 
@@ -643,39 +694,6 @@ int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **
 }
 
 /**
- * get the target node from sysrepo running ds,
- * @param  [in] startcmd_node start cmd_node,
- * @param  [in] node_name node name to be fetched from sr.
- * @return [out] lyd_node found.
- */
-struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *node_name)
-{
-    char xpath[1024] = { 0 };
-    int ret;
-    lyd_path(startcmd_node, LYD_PATH_STD, xpath, 1024);
-    if (node_name) {
-        strlcat(xpath, "/", sizeof(xpath));
-        strlcat(xpath, node_name, sizeof(xpath));
-    }
-    sr_data_t *sr_data;
-
-    // get the dnode from sr
-    if (node_name)
-        ret = sr_get_node(sr_session, xpath, 0, &sr_data);
-    else
-        ret = sr_get_data(sr_session, xpath, 0, 0, 0, &sr_data);
-    //        ret = sr_get_subtree(sr_session, xpath, 0, &sr_data);
-    if (ret != SR_ERR_OK) {
-        fprintf(stderr,
-                "%s: failed to get node data from sysrepo ds."
-                " xpath = \"%s\": %s\n",
-                __func__, xpath, sr_strerror(ret));
-        return NULL;
-    }
-    return sr_data->tree;
-}
-
-/**
  * create iproute2 arguments out of lyd2 node, this will take the op_val into consideration,
  * @param startcmd_node lyd_node to generate arg for, example link, nexthop, filter ... etc
  * @param op_val operation value
@@ -688,7 +706,7 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
 
     int ret;
     struct lyd_node *next;
-    LYD_TREE_DFS_BEGIN(lyd_child(startcmd_node), next) // skip the starcmd node itself
+    LYD_TREE_DFS_BEGIN(startcmd_node, next)
     {
         char *on_update_include = NULL, *add_static_arg = NULL;
         char *group_list_separator = NULL;
@@ -697,8 +715,8 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
 start:
         switch (next->schema->nodetype) {
         case LYS_LIST:
-            // if the list node is startcmd or it's parent has del operation then skip it.
-            if (is_startcmd_node(next) || op_val == DELETE_OPR) {
+            // if the list (is inner startcmd) or (inner list with delete) skip it.
+            if ((is_startcmd_node(next) || op_val == DELETE_OPR) && startcmd_node != next) {
                 // if the parent startcmd is delete, we don't want to execute this cmd, just skip.
                 if (next->next) { // move to next sibling and start from beginning,
                     next = next->next;
@@ -753,35 +771,28 @@ start:
                 while (token != NULL) {
                     arg_name = NULL;
                     arg_value = NULL;
-
+                    // get the node from sysrepo
                     struct lyd_node *include_node = get_node_from_sr(startcmd_node, token);
                     if (include_node == NULL)
                         return NULL;
-
-                    ret = create_cmd_arg_name(include_node, op_val, &arg_name);
-                    if (ret != EXIT_SUCCESS) {
-                        fprintf(stderr,
-                                "%s: failed to create create_cmd_arg_name for node \"%s\".\n",
-                                __func__, next->schema->name);
+                    // add the "create" meta, needed for rollback creation function lyd_diff_reverse_all()
+                    ret =
+                        lyd_new_meta(NULL, include_node, NULL, "yang:operation", "create", 0, NULL);
+                    if (ret != LY_SUCCESS) {
+                        fprintf(
+                            stderr,
+                            "%s: failed to add \"create\" meta to include_node \"%s\" in parent start_cmd node \"%s\".\n",
+                            __func__, include_node->schema->name, startcmd_node->schema->name);
                         return NULL;
                     }
-                    ret = create_cmd_arg_value(include_node, op_val, &arg_value);
-                    if (ret != EXIT_SUCCESS) {
-                        fprintf(stderr,
-                                "%s: failed to create create_cmd_arg_value for node \"%s\".\n",
-                                __func__, next->schema->name);
+                    // insert the node as child to the next node where the include ext is defined.
+                    ret = lyd_insert_child((struct lyd_node *)next, include_node);
+                    if (ret != LY_SUCCESS) {
+                        fprintf(
+                            stderr,
+                            "%s: failed to insert on_update_include node \"%s\" in parent start_cmd node \"%s\".\n",
+                            __func__, include_node->schema->name, startcmd_node->schema->name);
                         return NULL;
-                    }
-
-                    if (arg_name != NULL) {
-                        strlcat(cmd_line, " ", sizeof(cmd_line));
-                        strlcat(cmd_line, arg_name, sizeof(cmd_line));
-                        free(arg_name);
-                    }
-                    if (arg_value != NULL) {
-                        strlcat(cmd_line, " ", sizeof(cmd_line));
-                        strlcat(cmd_line, arg_value, sizeof(cmd_line));
-                        free(arg_value);
                     }
                     // get next token.
                     token = strtok(NULL, ",");
@@ -1038,7 +1049,7 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     free(cmd_args);
     // check if netns found, then inset it in cmd "ip -netns red ..." , "1" is the global netns.
     char *netns = "1";
-    int ret = get_netns(startcmd_node, &netns);
+    int ret = find_netns(startcmd_node, &netns);
     if (ret != EXIT_SUCCESS) {
         fprintf(stderr, "%s: failed to get netns for node \"%s\" \n", __func__,
                 startcmd_node->schema->name);

@@ -345,6 +345,9 @@ module iproute2-ip-link {
             or (/links/vrf[name=current()/../master])" {
                 error-message "The master type must be 'bond' 'bridge', or 'vrf'.";
             }
+            must "(../netns = /links/bond[name=current()/../master]/netns) or (../netns = /links/bridge[name=current()/../master]/netns)
+            or (../netns = /links/vrf[name=current()/../master]/netns) " {
+                error-message "netns mismatch: the specified 'master' netns must be the same as currnt link netns"; }
         }
         container advance {
             leaf protodown {
@@ -569,6 +572,9 @@ module iproute2-ip-link {
             }
             must "(../mtu <= /links/link[name=current()/../device]/mtu) or (../mtu <= /links/bridge[name=current()/../device]/mtu)" {
                 error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
+            }
+            must "(../netns = /links/link[name=current()/../device]/netns) or (../netns = /links/bridge[name=current()/../device]/netns)" {
+                error-message "netns mismatch: the specified 'device' netns must be the same as currnt link netns";
             }
             ipr2cgen:arg-name "link";
             ipr2cgen:oper-arg-name "link";
