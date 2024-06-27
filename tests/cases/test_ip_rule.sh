@@ -17,6 +17,8 @@
 clean_up(){
   ip rule del pref 200 from 1.1.1.1/32 2>/dev/null
   ip rule del pref 201 to 1.1.1.1/32 2>/dev/null
+  ip -n rule_red rule del pref 20101 to 2.2.2.2/32 2>/dev/null
+  ip netns del rule_red
 }
 
 ret=0
@@ -31,16 +33,16 @@ echo "---------------------"
 sysrepocfg -d running --edit  tests/cases/test_ip_rule_data.xml || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
-    echo "TEST-ERROR: failed to create rules in sysrepo datastore"
+    echo "TEST-ERROR:RULE: failed to create rules in sysrepo datastore"
     clean_up
     exit "$ret"
 fi
 
 # Step 2: Check if first rule is created
 if ip rule show pref 200 from 1.1.1.1/32 | grep -q 'from 1.1.1.1'; then
-    echo "TEST-INFO: rule from 1.1.1.1/32 created successfully (OK)"
+    echo "TEST-INFO:RULE: rule from 1.1.1.1/32 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create rule from 1.1.1.1/32 (FAIL)"
+    echo "TEST-ERROR:RULE: Failed to create rule from 1.1.1.1/32 (FAIL)"
     clean_up
     exit 1
 fi
@@ -48,9 +50,19 @@ fi
 
 # Step 3: Check if second rule is created
 if ip rule show pref 201 to 1.1.1.1/32  | grep -q 'to 1.1.1.1'; then
-    echo "TEST-INFO: rule to 1.1.1.1/32 created successfully (OK)"
+    echo "TEST-INFO:RULE: rule to 1.1.1.1/32 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create rule to 1.1.1.1/32 (FAIL)"
+    echo "TEST-ERROR:RULE: Failed to create rule to 1.1.1.1/32 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+
+# Step 4: Check if netns rule is created
+if ip -n rule_red rule show pref 20101 to 2.2.2.2/32  | grep -q 'to 2.2.2.2'; then
+    echo "TEST-INFO:RULE: netns rule to 2.2.2.2/32 created successfully (OK)"
+else
+    echo "TEST-ERROR:RULE: Failed to create netns rule to 2.2.2.2/32 (FAIL)"
     clean_up
     exit 1
 fi
@@ -63,22 +75,22 @@ echo "[1] Test rule UPDATE"
 echo "---------------------"
 ip rule show 11.11.11.11/32
 # Step 1: change table
-sysrepocfg -S '/iproute2-ip-rule:rules/rule[pref="201"][from="0.0.0.0/0"][to="1.1.1.1/32"][tos="default"][fwmark="0x00"]/action/table' --value  100
+sysrepocfg -S '/iproute2-ip-rule:rules/rule[pref="201"][from="0.0.0.0/0"][to="1.1.1.1/32"][tos="default"][fwmark="0x00"][netns="1"]/action/table' --value  100
 
 # Step 3: Capture table id for the rule
 table_id=$(ip rule show pref 201 to 1.1.1.1/32 | grep -oP '(?<=lookup )\d+' | head -n 1)
 
 # Step 4: Check if the rule table was updated to 100
 if [ -z "$table_id" ]; then
-    echo "TEST-ERROR: Failed to retrieve table_id for rule to 1.1.1.1/32"
+    echo "TEST-ERROR:RULE: Failed to retrieve table_id for rule to 1.1.1.1/32"
     clean_up
     exit 1
 fi
 
 if [ "$table_id" -eq 100 ]; then
-    echo "TEST-INFO: table_id for rule to 1.1.1.1/32 updated successfully (OK)"
+    echo "TEST-INFO:RULE: table_id for rule to 1.1.1.1/32 updated successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to update table_id for rule to 1.1.1.1/32, table_id = $table_id (FAIL)"
+    echo "TEST-ERROR:RULE: Failed to update table_id for rule to 1.1.1.1/32, table_id = $table_id (FAIL)"
     clean_up
     exit 1
 fi
@@ -98,9 +110,9 @@ ip rule del pref 200 from 1.1.1.1/32 2>/dev/null
 
 # if cmd exist failed (no such process) then the rule deleted successfully.
 if [ $? -ne 0 ]; then
-    echo "Rule from 1.1.1.1/32 deleted successfully (OK)"
+    echo "TEST-INFO:RULE: Rule from 1.1.1.1/32 deleted successfully (OK)"
 else
-    echo "Failed to delete rule from 1.1.1.1/32  (FAIL)"
+    echo "TEST-ERROR:RULE: Failed to delete rule from 1.1.1.1/32  (FAIL)"
     clean_up
     exit 1
 fi
@@ -110,11 +122,25 @@ ip rule del pref 201 to 1.1.1.1/32 2>/dev/null
 
 # if cmd exist failed (no such process) then the rule deleted successfully.
 if [ $? -ne 0 ]; then
-    echo "Rule to 1.1.1.1/32  deleted successfully (OK)"
+    echo "TEST-INFO:RULE: Rule to 1.1.1.1/32  deleted successfully (OK)"
 else
-    echo "Failed to delete rule to 1.1.1.1/32  (FAIL)"
+    echo "TEST-ERROR:RULE: Failed to delete rule to 1.1.1.1/32  (FAIL)"
     clean_up
     exit 1
 fi
+
+
+# Attempt to delete the netns rule
+ip -n rule_red rule del pref 20101 to 2.2.2.2/32 2>/dev/null
+
+# if cmd exist failed (no such process) then the rule deleted successfully.
+if [ $? -ne 0 ]; then
+    echo "TEST-INFO:RULE: Netns Rule to 2.2.2.2/32  deleted successfully (OK)"
+else
+    echo "TEST-ERROR:RULE: Failed to delete Netns rule to 2.2.2.2/32  (FAIL)"
+    clean_up
+    exit 1
+fi
+
 
 exit $ret

@@ -1,3 +1,8 @@
+<netnses xmlns="urn:okda:iproute2:ip:netns">
+    <netns>
+        <name>rule_red</name>
+    </netns>
+</netnses>
 <rules xmlns="urn:okda:iproute2:ip:rule">
     <rule>
         <pref>200</pref>
@@ -5,6 +10,7 @@
         <to>0.0.0.0/0</to>
         <tos>default</tos>
         <fwmark>0x00</fwmark>
+        <netns>1</netns>
         <action>
             <table>10</table>
         </action>
@@ -15,6 +21,18 @@
         <to>1.1.1.1/32</to>
         <tos>default</tos>
         <fwmark>0x00</fwmark>
+        <netns>1</netns>
+        <action>
+            <table>20</table>
+        </action>
+    </rule>
+    <rule>
+        <pref>20101</pref>
+        <from>0.0.0.0/0</from>
+        <to>2.2.2.2/32</to>
+        <tos>default</tos>
+        <fwmark>0x00</fwmark>
+        <netns>rule_red</netns>
         <action>
             <table>20</table>
         </action>
