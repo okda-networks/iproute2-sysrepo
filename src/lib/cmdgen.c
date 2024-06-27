@@ -401,10 +401,10 @@ int find_netns(struct lyd_node *startcmd, char **netns)
     if (!strcmp(startcmd->schema->module->name, "iproute2-ip-link")) {
         // if the parent is not links, check if this is inner startcmd of link startcmd. example "ip"
         struct lyd_node *parent_node = lyd_parent(link_startcmd);
-        if (strcmp(parent_node->schema->name, "links") != 0) {
+        if (strcmp(parent_node->schema->name, "link") == 0) {
             link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
             if (!link_startcmd)
-                return EXIT_SUCCESS;
+                return EXIT_FAILURE;
         }
     }
     struct lyd_node *netns_dnode = get_node_from_sr(link_startcmd, "netns");

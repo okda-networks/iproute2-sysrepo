@@ -8,6 +8,7 @@ module iproute2-ip-rule {
     import iproute2-net-types { prefix ipr2net; }
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-link { prefix iplink; }
+    import iproute2-ip-netns { prefix ipnetns; }
 
     organization
         "Okda Networks";
@@ -35,7 +36,7 @@ module iproute2-ip-rule {
             ipr2cgen:cmd-update "ip rule add";
             ipr2cgen:cmd-delete "ip rule del";
             ipr2cgen:oper-cmd "ip rule show";
-            key "pref from to tos fwmark";
+            key "pref from to tos fwmark netns";
             leaf pref {
                 ipr2cgen:oper-arg-name "priority";
                 type uint32;
@@ -88,6 +89,19 @@ module iproute2-ip-rule {
                 }
                 default "0x00";
                 description "specify the fwmark value (0x0..0xffffffff)";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
             }
             leaf oif {
                 type iplink:all-links-ref;
