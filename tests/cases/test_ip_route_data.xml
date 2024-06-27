@@ -1,3 +1,8 @@
+<netnses xmlns="urn:okda:iproute2:ip:netns">
+    <netns>
+        <name>route_red</name>
+    </netns>
+</netnses>
 <links xmlns="urn:okda:iproute2:ip:link">
     <link>
         <name>if_route1</name>
@@ -23,6 +28,15 @@
             <address>3.3.3.3/24</address>
         </ip>
     </link>
+    <link>
+        <name>if_netns_route1</name>
+        <type>dummy</type>
+        <netns>route_red</netns>
+        <admin-status>up</admin-status>
+        <ip>
+            <address>4.4.4.4/24</address>
+        </ip>
+    </link>
 </links>
 <routes xmlns="urn:okda:iproute2:ip:route">
     <route>
@@ -30,6 +44,7 @@
         <table>254</table>
         <metric>0</metric>
         <tos>default</tos>
+        <netns>1</netns>
         <nexthop>
             <dev>if_route1</dev>
             <via>
@@ -48,6 +63,7 @@
         <table>254</table>
         <metric>0</metric>
         <tos>CS1</tos>
+        <netns>1</netns>
         <advmss>1300</advmss>
         <nexthop>
             <dev>if_route3</dev>
@@ -55,6 +71,19 @@
                 <label>11/20</label>
             </mpls-encap>
             <weight>10</weight>
+        </nexthop>
+    </route>
+    <route>
+        <prefix>13.13.13.13/32</prefix>
+        <table>254</table>
+        <metric>0</metric>
+        <tos>default</tos>
+        <netns>route_red</netns>
+        <nexthop>
+            <dev>if_netns_route1</dev>
+            <via>
+                <address>4.4.4.10</address>
+            </via>
         </nexthop>
     </route>
 <!--    <mpls-route>-->

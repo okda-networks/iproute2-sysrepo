@@ -34,25 +34,34 @@ echo "---------------------"
 sysrepocfg -d running --edit  tests/cases/test_ip_route_data.xml || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
-    echo "TEST-ERROR: failed to create routes in sysrepo datastore"
+    echo "TEST-ERROR:ROUTE: failed to create routes in sysrepo datastore"
     clean_up
     exit "$ret"
 fi
 
 # Step 2: Check if first route is created
 if ip route show 11.11.11.11/32 >/dev/null 2>&1; then
-    echo "TEST-INFO: route 11.11.11.11/32 created successfully (OK)"
+    echo "TEST-INFO:ROUTE: route 11.11.11.11/32 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create route 11.11.11.11/32 (FAIL)"
+    echo "TEST-ERROR:ROUTE: Failed to create route 11.11.11.11/32 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Step 3: Check if second route is created
 if ip route show 22.22.22.22/32 >/dev/null 2>&1; then
-    echo "TEST-INFO: route 22.22.22.22/32 created successfully (OK)"
+    echo "TEST-INFO:ROUTE: route 22.22.22.22/32 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create route 22.22.22.22/32 (FAIL)"
+    echo "TEST-ERROR:ROUTE: Failed to create route 22.22.22.22/32 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Step 4: Check if netns route is created
+if ip -n route_red route show 13.13.13.13/32 >/dev/null 2>&1; then
+    echo "TEST-INFO:ROUTE: netns route 13.13.13.13/32 created successfully (OK)"
+else
+    echo "TEST-ERROR:ROUTE: Failed to create netns route 13.13.13.13/32 (FAIL)"
     clean_up
     exit 1
 fi
@@ -76,7 +85,8 @@ fi
 echo "--------------------"
 echo "[1] Test route UPDATE"
 echo "---------------------"
-ip route show 11.11.11.11/32
+
+
 # Step 1: delete nexthop opal1 from 11.11.11.11/32
 sysrepocfg -d running --edit tests/cases/test_ip_route_data2.xml -m iproute2-ip-route
 
@@ -85,9 +95,9 @@ next_hops=($(ip route show 11.11.11.11/32 | awk '/via / {print $3}' | head -n 3)
 
 # Step 4: Check if the route has all three next hops
 if [[ "${next_hops[@]}" == "3.3.3.10 1.1.1.10 2.2.2.10" ]]; then
-    echo "TEST-INFO: Route 11.11.11.11/32 has all three next hops (OK)"
+    echo "TEST-INFO:ROUTE: Route 11.11.11.11/32 has all three next hops (OK)"
 else
-    echo "TEST-ERROR: Route 11.11.11.11/32 does not have all three next hops (FAIL)"
+    echo "TEST-ERROR:ROUTE: Route 11.11.11.11/32 does not have all three next hops (FAIL)"
     clean_up
     exit 1
 fi
@@ -107,9 +117,9 @@ ip route del 11.11.11.11/32 2>/dev/null
 
 # if cmd exist failed (no such process) then the route deleted successfully.
 if [ $? -ne 0 ]; then
-    echo "Route 11.11.11.11/32 deleted successfully (OK)"
+    echo "TEST-INFO:ROUTE: Route 11.11.11.11/32 deleted successfully (OK)"
 else
-    echo "Failed to delete route 11.11.11.11/32 (FAIL)"
+    echo "TEST-ERROR:ROUTE: Failed to delete route 11.11.11.11/32 (FAIL)"
     clean_up
     exit 1
 fi
@@ -119,9 +129,21 @@ ip route del 22.22.22.22/32 2>/dev/null
 
 # if cmd exist failed (no such process) then the route deleted successfully.
 if [ $? -ne 0 ]; then
-    echo "Route 22.22.22.22/32 deleted successfully (OK)"
+    echo "TEST-INFO:ROUTE: Route 22.22.22.22/32 deleted successfully (OK)"
 else
-    echo "Failed to delete route 22.22.22.22/32 (FAIL)"
+    echo "TEST-ERROR:ROUTE: Failed to delete route 22.22.22.22/32 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Attempt to delete the netns route
+ip -n route_red route del 13.13.13.13/32 2>/dev/null
+
+# if cmd exist failed (no such process) then the route deleted successfully.
+if [ $? -ne 0 ]; then
+    echo "TEST-INFO:ROUTE: Netns Route 13.13.13.13/32 deleted successfully (OK)"
+else
+    echo "TEST-ERROR:ROUTE: Failed to delete netns route 13.13.13.13/32 (FAIL)"
     clean_up
     exit 1
 fi
