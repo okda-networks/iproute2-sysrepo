@@ -189,4 +189,8 @@ module iproute2-cmdgen-extensions {
         description
             "this is used when the leafref is not actually a dependency, so it will not be considered in dep sorting";
     }
+    extension not-cmd-arg {
+        description
+            "this idicate that the leaf is not an cmd_line argument, typically used for netns in modules other than links";
+    }
 }

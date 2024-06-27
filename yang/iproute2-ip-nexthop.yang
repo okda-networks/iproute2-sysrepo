@@ -5,7 +5,9 @@ module iproute2-ip-nexthop {
 
     import ietf-inet-types { prefix inet; }
     import iproute2-ip-link { prefix iplink; }
+    import okda-onmcli-extensions{ prefix onmcli; }
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+    import iproute2-ip-netns { prefix ipnetns; }
 
     organization
         "Okda Networks";
@@ -35,7 +37,7 @@ module iproute2-ip-nexthop {
             ipr2cgen:cmd-update "ip nexthop replace";
             ipr2cgen:cmd-delete "ip nexthop del";
             ipr2cgen:include-all-on-update;
-            key "id";
+            key "id netns";
             description
                 "nexthop configuraton";
             leaf id{
@@ -43,7 +45,20 @@ module iproute2-ip-nexthop {
                 description "nexthop id";
                 type uint32;
             }
-            leaf dev{
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
+            }
+            leaf dev {
                 description "Specifies the network interface associated with the nexthop.";
                 type iplink:l3-links-ref;
             }
@@ -109,6 +124,7 @@ module iproute2-ip-nexthop {
                     leaf id{
                         type leafref {
                             path "/ipnh:nexthops/nexthop/id";
+
                         }
                         must ". != ../../../id" {
                             error-message "Cannot reference the current nexthop ID, you can use other nexthops ids";
