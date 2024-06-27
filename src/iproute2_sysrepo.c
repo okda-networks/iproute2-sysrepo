@@ -216,6 +216,28 @@ static int parse_nofopt(struct filter_util *qu, char *fhandle, int argc, char **
     return 0;
 }
 
+int netns_switch2(char *name)
+{
+    char net_path[PATH_MAX];
+    int netns;
+    unsigned long mountflags = 0;
+
+    snprintf(net_path, sizeof(net_path), "%s/%s", NETNS_RUN_DIR, name);
+    netns = open(net_path, O_RDONLY | O_CLOEXEC);
+    if (netns < 0) {
+        fprintf(stderr, "Cannot open network namespace \"%s\": %s\n", name, strerror(errno));
+        return -1;
+    }
+
+    if (setns(netns, CLONE_NEWNET) < 0) {
+        fprintf(stderr, "setting the network namespace \"%s\" failed: %s\n", name, strerror(errno));
+        close(netns);
+        return -1;
+    }
+    close(netns);
+    return 0;
+}
+
 struct qdisc_util *get_qdisc_kind(const char *str)
 {
     void *dlh;
@@ -303,7 +325,12 @@ noexist:
 static int do_cmd(int argc, char **argv)
 {
     preferred_family = AF_UNSPEC;
+    const char *libbpf_version;
+    char *batch_file = NULL;
+    char *basename;
+    int ret = 0;
 
+    int netns_fd = 0;
     // switch to default network namespace, as prev commands might changed the netns.
     int fd = open("/proc/1/ns/net", O_RDONLY);
     if (fd == -1) {
@@ -318,10 +345,6 @@ static int do_cmd(int argc, char **argv)
     }
     // Close the file descriptor
     close(fd);
-
-    const char *libbpf_version;
-    char *batch_file = NULL;
-    char *basename;
 
     /* to run vrf exec without root, capabilities might be set, drop them
 	 * if not needed as the first thing.
@@ -427,8 +450,9 @@ static int do_cmd(int argc, char **argv)
             ++json;
         } else if (matches(opt, "-netns") == 0) {
             NEXT_ARG();
-            if (netns_switch(argv[1]))
+            if (netns_switch2(argv[1]))
                 exit(-1);
+            netns_fd = netns_get_fd(argv[1]);
         } else if (matches(opt, "-Numeric") == 0) {
             ++numeric;
         } else if (matches(opt, "-all") == 0) {
@@ -453,18 +477,23 @@ static int do_cmd(int argc, char **argv)
         return EXIT_FAILURE;
 
     for (c = cmds; c->cmd; ++c) {
-        if (matches(argv0, c->cmd) == 0)
-            return -(c->func(argc - arg_skip, argv + arg_skip));
+        if (matches(argv0, c->cmd) == 0) {
+            ret = -(c->func(argc - arg_skip, argv + arg_skip));
+            rtnl_close(&rth);
+            if (netns_fd) {
+                close(netns_fd);
+            }
+            return ret;
+        }
     }
-
     fprintf(stderr,
             "Unknown argument \"%s\".\n"
             "\nPossible execution options:\n"
             "1- Run with no argumentss to start iproute2-sysrepo.\n"
             "2- Run with individual iproute2 commands arguments.\n",
             argv[1]);
-    rtnl_close(&rth);
 
+    rtnl_close(&rth);
     return EXIT_FAILURE;
 }
 

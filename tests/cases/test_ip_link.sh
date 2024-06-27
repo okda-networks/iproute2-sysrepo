@@ -215,6 +215,7 @@ sysrepocfg -C startup -d running -m iproute2-ip-link || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
     echo "TEST-ERROR: failed to delete IP links from sysrepo"
+    if_clean_up
     exit "$ret"
 fi
 
@@ -223,6 +224,7 @@ if ! ip link show testIf0 >/dev/null 2>&1 && ! ip link show testIf1 >/dev/null 2
     echo "TEST-INFO: IP links testIf0 and testIf1 are deleted successfully (OK)"
 else
     echo "TEST-ERROR: Failed to delete IP links testIf0 and testIf1 (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -231,6 +233,7 @@ if ! ip link show vti_if1 >/dev/null 2>&1 ; then
     echo "TEST-INFO: IP links testIf0 and vti_if1 are deleted successfully (OK)"
 else
     echo "TEST-ERROR: Failed to delete IP links testIf0 and vti_if1 (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -252,6 +255,7 @@ master_value=$(ip link show dev testvrf 2>/dev/null | grep -oP '(?<=master )\w+'
 
 if [ -z "$master_value" ]; then
     echo "TEST-ERROR: Failed to retrieve master_value for IP link testvrf (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -260,6 +264,7 @@ if [[ "$master_value" =~ "vpn10" ]]; then
     echo "TEST-INFO: vrf vpn10 set successfully for link  testvrf (OK)"
 else
     echo "TEST-ERROR: failed to set vrf vpn10 value for link  testvrf (FAIL)"
+    if_clean_up
     exit 1
 fi
 
@@ -286,6 +291,7 @@ if ip link show eth_b0 >/dev/null 2>&1 && ip link show eth_b1 >/dev/null 2>&1 ; 
     echo "TEST-INFO: IP link eth_b0 and eth_b1 created successfully (OK)"
 else
     echo "TEST-ERROR: Failed to create IP link eth_b0 and eth_b1"
+    if_clean_up
     exit 1
 fi
 
@@ -294,6 +300,7 @@ master_value=$(ip link show dev eth_b0 2>/dev/null | grep -oP '(?<=master )\w+' 
 
 if [ -z "$master_value" ]; then
     echo "TEST-ERROR: Failed to retrieve master_value for IP link eth_b0 (FAIL)"
+    if_clean_up
     exit 1
 fi
 
