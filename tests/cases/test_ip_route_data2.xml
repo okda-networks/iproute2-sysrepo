@@ -4,6 +4,7 @@
         <table>254</table>
         <metric>0</metric>
         <tos>default</tos>
+        <netns>1</netns>
         <nexthop>
             <dev>if_route1</dev>
             <via>
@@ -28,6 +29,7 @@
         <table>254</table>
         <metric>0</metric>
         <tos>CS1</tos>
+        <netns>1</netns>
         <advmss>1300</advmss>
         <nexthop>
             <dev>if_route3</dev>

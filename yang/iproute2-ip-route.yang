@@ -8,6 +8,7 @@ module iproute2-ip-route {
     import iproute2-net-types { prefix ipr2net; }
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-link { prefix iplink; }
+    import iproute2-ip-netns { prefix ipnetns; }
 
     organization
         "Okda Networks";
@@ -41,7 +42,7 @@ module iproute2-ip-route {
             // TODO IPv6 support: oper needs to also apply "ip -6 route show"
             description
                 "ip route details";
-            key "prefix table metric tos";
+            key "prefix table metric tos netns";
             // NODE_SPEC
             leaf prefix{
                 type union{
@@ -61,10 +62,10 @@ module iproute2-ip-route {
                 ipr2cgen:oper-default-val "254";
                 type union {
                     type enumeration {
-                        enum "default" {value 253;}
-                        enum "local" {value 255;}
-                        enum "main" {value 254;}
-                        enum "unspec" {value 0;}
+                        enum "default" { value 253;}
+                        enum "local" { value 255;}
+                        enum "main" { value 254;}
+                        enum "unspec" { value 0;}
                     }
                     type uint16;
                 }
@@ -90,6 +91,19 @@ module iproute2-ip-route {
                     understood as: First, compare the TOS of the route and of the packet. If they are not equal,
                     then the packet may still match a route with a zero TOS. TOS is either an 8 bit hexadecimal
                     number or an identifier from /etc/iproute2/rt_dsfield.";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
             }
             leaf src {
                 ipr2cgen:oper-arg-name "prefsrc";
@@ -276,7 +290,7 @@ module iproute2-ip-route {
             ipr2cgen:cmd-start;
             ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "ip -M route list table all";
-            key "label";
+            key "label netns";
             leaf label {
                 ipr2cgen:value-only;
                 ipr2cgen:oper-arg-name "dst";
@@ -284,6 +298,19 @@ module iproute2-ip-route {
                     pattern '[0-9]+(/[0-9]+)*';
                 }
                 description "MPLSLABLE specify the mpls label";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
             }
             leaf swap {
                 ipr2cgen:arg-name "as";

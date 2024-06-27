@@ -707,7 +707,9 @@ start:
         switch (next->schema->nodetype) {
         case LYS_LIST:
             // if the list (is inner startcmd) or (inner list with delete) skip it.
-            if ((is_startcmd_node(next) || op_val == DELETE_OPR) && startcmd_node != next) {
+            if ((is_startcmd_node(next) || op_val == DELETE_OPR ||
+                 get_operation(next) == DELETE_OPR) &&
+                startcmd_node != next) {
                 // if the parent startcmd is delete, we don't want to execute this cmd, just skip.
                 if (next->next) { // move to next sibling and start from beginning,
                     next = next->next;
@@ -963,6 +965,7 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
         LYD_TREE_DFS_END(original_dnode, dnext)
     }
     lyd_free_all(original_dnode);
+
     return EXIT_SUCCESS;
 }
 
