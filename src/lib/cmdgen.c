@@ -59,6 +59,7 @@ typedef enum {
     VALUE_ONLY_ON_UPDATE_EXT,
     ADD_LEAF_AT_END,
     NOT_DEPENDENCY_EXT,
+    NOT_CMD_ARG_EXT,
 
     AFTER_NODE_ADD_STATIC_ARG_EXT,
     ON_NODE_DELETE_EXT,
@@ -88,6 +89,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [AFTER_NODE_ADD_STATIC_ARG_EXT] = "after-node-add-static-arg",
                          [ON_NODE_DELETE_EXT] = "on-node-delete",
                          [ADD_LEAF_AT_END] = "add_leaf_at_end",
+                         [NOT_CMD_ARG_EXT] = "not-cmd-arg",
 
                          // other
                          [ON_UPDATE_INCLUDE_EXT] = "on-update-include",
@@ -392,52 +394,34 @@ int find_netns(struct lyd_node *startcmd, char **netns)
 {
     // first check if the startcmd exist in sysrepo, and get the netns from there.
     // if not then get the netns from the startcmd tree.
-    char *xpath = "iproute2-ip-link:netns";
+
     const char *network_namespace = NULL;
     struct lyd_node *link_startcmd = startcmd;
-    int is_inner = 0;
-    // if the parent is not links, check if this is inner startcmd of link startcmd. example "ip"
-    struct lyd_node *parent_node = lyd_parent(link_startcmd);
-    if (parent_node == NULL) {
-        // parent node is null, we can confirm it's not one of links startcmd.
-        return EXIT_SUCCESS;
-    }
-    if (strcmp(parent_node->schema->name, "links") != 0) {
-        link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
-        is_inner = 1;
-        if (!link_startcmd)
-            return EXIT_SUCCESS;
+    // check if this is link module as it has special handling for netns.
+    if (!strcmp(startcmd->schema->module->name, "iproute2-ip-link")) {
+        // if the parent is not links, check if this is inner startcmd of link startcmd. example "ip"
+        struct lyd_node *parent_node = lyd_parent(link_startcmd);
+        if (strcmp(parent_node->schema->name, "links") != 0) {
+            link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
+            if (!link_startcmd)
+                return EXIT_SUCCESS;
+        }
     }
     struct lyd_node *netns_dnode = get_node_from_sr(link_startcmd, "netns");
     // if the netns_dnode does not exist in sysrepo, then this is create, we get the netns from
     // the startcmd
-    if (netns_dnode != NULL)
-        network_namespace = lyd_get_value(netns_dnode);
-    else {
+    if (netns_dnode == NULL) {
+        char xpath[1024] = { 0 };
+        strlcat(xpath, link_startcmd->schema->module->name, sizeof(xpath));
+        strlcat(xpath, ":", sizeof(xpath));
+        strlcat(xpath, "netns", sizeof(xpath));
         int ret = lyd_find_path(link_startcmd, xpath, 0, &netns_dnode);
         // if no netns in the link_startcmd then exit with success,
         if (ret != LY_SUCCESS)
             return EXIT_SUCCESS;
-        oper_t dnode_oper = get_operation(netns_dnode);
-        if (dnode_oper == UPDATE_OPR && !is_inner) {
-            struct lyd_meta *dnode_meta = NULL;
-            dnode_meta = lyd_find_meta(netns_dnode->meta, NULL, "yang:orig-value");
-            if (dnode_meta == NULL) {
-                fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n",
-                        __func__);
-                return EXIT_FAILURE;
-            }
-            network_namespace = lyd_get_meta_value(dnode_meta);
-            if (network_namespace == NULL) {
-                fprintf(stderr,
-                        "%s: failed to get the value of yang:original-value for netns node\n",
-                        __func__);
-                return EXIT_FAILURE;
-            }
-        } else {
-            network_namespace = lyd_get_value(netns_dnode);
-        }
     }
+
+    network_namespace = lyd_get_value(netns_dnode);
     *netns = strdup(network_namespace);
     return EXIT_SUCCESS;
 }
@@ -533,6 +517,9 @@ int add_command(struct cmd_info **cmds, int *cmd_idx, char *cmd_line, char *cmd_
  */
 int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_name)
 {
+    // if the node is not_cmd_arg, skip it
+    if (get_extension(NOT_CMD_ARG_EXT, dnode, NULL) == EXIT_SUCCESS)
+        return EXIT_SUCCESS;
     // if operation delete generate args only if:
     // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
     int is_include_all_on_delete = 0;
@@ -591,6 +578,9 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
  */
 int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **arg_value)
 {
+    // if the node is not_cmd_arg, skip it
+    if (get_extension(NOT_CMD_ARG_EXT, dnode, NULL) == EXIT_SUCCESS)
+        return EXIT_SUCCESS;
     // if operation delete generate args only if:
     // - node is key  or startcmd has INCLUDE_ALL_ON_DELETE extention.
     int is_include_all_on_delete = 0;
@@ -608,7 +598,7 @@ int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **
     if (leaf_op_val == DELETE_OPR && !is_include_all_on_delete)
         return EXIT_SUCCESS;
 
-    // if FLAG extension, add schema name to the cmd and go to next iter.
+    // if FLAG extension, skip the arg value,
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
         return EXIT_SUCCESS;
     }

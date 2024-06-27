@@ -1,8 +1,19 @@
+<netnses xmlns="urn:okda:iproute2:ip:netns">
+    <netns>
+        <name>nh_red</name>
+    </netns>
+</netnses>
 <links xmlns="urn:okda:iproute2:ip:link">
     <link>
         <name>nh_if1</name>
         <type>dummy</type>
         <master>nh_br1</master>
+        <admin-status>up</admin-status>
+    </link>
+    <link>
+        <name>nh_red_if1</name>
+        <netns>nh_red</netns>
+        <type>dummy</type>
         <admin-status>up</admin-status>
     </link>
 <!--    adding br to test the nested dependency with delete oper in inter-module dependency scenario.-->
@@ -13,11 +24,13 @@
 <nexthops xmlns="urn:okda:iproute2:ip:nexthop">
     <nexthop>
         <id>1001</id>
+        <netns>1</netns>
         <blackhole>true</blackhole>
         <fdb>false</fdb>
     </nexthop>
     <nexthop>
         <id>2001</id>
+        <netns>1</netns>
         <ipv4>
             <address>192.168.1.1</address>
         </ipv4>
@@ -25,6 +38,7 @@
     </nexthop>
     <nexthop>
         <id>3001</id>
+        <netns>1</netns>
         <ipv4>
             <address>3.3.3.3</address>
         </ipv4>
@@ -32,10 +46,17 @@
     </nexthop>
     <nexthop>
         <id>4001</id>
+        <netns>1</netns>
         <dev>nh_if1</dev>
     </nexthop>
     <nexthop>
+        <id>400100</id>
+        <netns>nh_red</netns>
+        <dev>nh_red_if1</dev>
+    </nexthop>
+    <nexthop>
         <id>12001</id>
+        <netns>1</netns>
         <group>
             <nh>
                 <id>2001</id>

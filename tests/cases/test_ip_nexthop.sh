@@ -19,7 +19,9 @@ clean_up(){
   ip nexthop del id 2001
   ip nexthop del id 3001
   ip nexthop del id 4001
+  ip -n nh_red nexthop del id 4001
   ip nexthop del id 12001
+  ip netns del nh_red
 }
 
 
@@ -35,51 +37,60 @@ echo "---------------------"
 sysrepocfg -d running --edit  tests/cases/test_ip_nexthop_data.xml || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
-    echo "TEST-ERROR: failed to create nexthops in sysrepo datastore"
+    echo "TEST-ERROR:NEXTHOP: failed to create nexthops in sysrepo datastore"
     exit "$ret"
 fi
 
 # Step 2: Check if nh id 1001 is created
 if ip nexthop show id 1001 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 1001 created successfully (OK)"
+    echo "TEST-INFO:NEXTHOP: IP nexthop id 1001 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 1001 (FAIL)"
+    echo "TEST-ERROR:NEXTHOP: Failed to create IP nexthop 1001 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Step 3: Check if nh id 2001 is created
 if ip nexthop show id 2001 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 2001 created successfully (OK)"
+    echo "TEST-INFO:NEXTHOP: IP nexthop id 2001 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 2001 (FAIL)"
+    echo "TEST-ERROR:NEXTHOP: Failed to create IP nexthop 2001 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Step 4: Check if nh id 3001 is created
 if ip nexthop show id 3001 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 3001 created successfully (OK)"
+    echo "TEST-INFO:NEXTHOP: IP nexthop id 3001 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 3001 (FAIL)"
+    echo "TEST-ERROR:NEXTHOP: Failed to create IP nexthop 3001 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Step 5: Check if nh id 4001 is created
 if ip nexthop show id 4001 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 4001 created successfully (OK)"
+    echo "TEST-INFO:NEXTHOP: IP nexthop id 4001 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 4001 (FAIL)"
+    echo "TEST-ERROR:NEXTHOP: Failed to create IP nexthop 4001 (FAIL)"
     clean_up
     exit 1
 fi
 
 # Step 6: Check if nh id 12 is created
 if ip nexthop show id 12001 >/dev/null 2>&1; then
-    echo "TEST-INFO: IP nexthop id 12 created successfully (OK)"
+    echo "TEST-INFO:NEXTHOP: IP nexthop id 12 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create IP nexthop 2 (FAIL)"
+    echo "TEST-ERROR:NEXTHOP: Failed to create IP nexthop 2 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+# Step 7: Check if nh id 4001 in netns red is created
+if ip -n nh_red nexthop show id 400100 >/dev/null 2>&1; then
+    echo "TEST-INFO:NEXTHOP: IP nexthop id 400100 in netns nh_red created successfully (OK)"
+else
+    echo "TEST-ERROR:NEXTHOP: Failed to create IP nexthop 400100 in netns nh_red (FAIL)"
     clean_up
     exit 1
 fi
@@ -102,14 +113,14 @@ sleep 0.2
 #current_via=$(ip nexthop show id 2 2>/dev/null | grep -oP '(?<=via )\d+.\d+.\d+.\d+' | head -n 1)
 #
 #if [ -z "$current_via" ]; then
-#    echo "TEST-ERROR: Failed to retrieve via for IP nexthop 2"
+#    echo "TEST-ERROR:NEXTHOP: Failed to retrieve via for IP nexthop 2"
 #    exit 1
 #fi
 #
 #if [ "$current_via" = "192.168.2.2" ]; then
-#    echo "TEST-INFO: via for IP nexthop 2 updated successfully (OK)"
+#    echo "TEST-INFO:NEXTHOP: via for IP nexthop 2 updated successfully (OK)"
 #else
-#    echo "TEST-ERROR: Failed to update via for IP nexthop 2 (FAIL)"
+#    echo "TEST-ERROR:NEXTHOP: Failed to update via for IP nexthop 2 (FAIL)"
 #    exit 1
 #fi
 
@@ -129,7 +140,7 @@ echo "---------------------"
 sysrepocfg -C startup -d running || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
-    echo "TEST-ERROR: failed to delete IP nexthops from sysrepo"
+    echo "TEST-ERROR:NEXTHOP: failed to delete IP nexthops from sysrepo"
     clean_up
     exit "$ret"
 fi
@@ -138,9 +149,9 @@ fi
 if ! ip nexthop show id 1001 >/dev/null 2>&1 && ! ip nexthop show id 2001 >/dev/null 2>&1 \
   && ! ip nexthop show id 3001 >/dev/null 2>&1  && ! ip nexthop show id 12001 >/dev/null 2>&1\
    && ! ip nexthop show id 4001 >/dev/null 2>&1 ; then
-    echo "TEST-INFO: IP nexthops 1001, 2001, 3001 and 12 are deleted successfully (OK)"
+    echo "TEST-INFO:NEXTHOP: IP nexthops 1001, 2001, 3001 and 12 are deleted successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to delete IP nexthops 2001, 1001, 3001,4001 or 12001 (FAIL)"
+    echo "TEST-ERROR:NEXTHOP: Failed to delete IP nexthops 2001, 1001, 3001,4001 or 12001 (FAIL)"
     clean_up
     exit 1
 fi
