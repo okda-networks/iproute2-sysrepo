@@ -6,7 +6,9 @@ module iproute2-ip-neighbor {
     import ietf-inet-types { prefix inet; }
     import ietf-yang-types { prefix yang;}
     import iproute2-ip-link { prefix iplink; }
+    import iproute2-ip-netns { prefix ipnetns; }
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+    import okda-onmcli-extensions{ prefix onmcli; }
 
     organization
         "Okda Networks";
@@ -35,7 +37,7 @@ module iproute2-ip-neighbor {
             ipr2cgen:include-all-on-update;
             ipr2cgen:include-all-on-delete;
             ipr2cgen:oper-cmd "ip neigh";
-            key "to_addr";
+            key "to_addr netns";
             leaf to_addr {
                 ipr2cgen:oper-arg-name "dst";
                 ipr2cgen:value-only;
@@ -43,6 +45,19 @@ module iproute2-ip-neighbor {
                 description
                     "the protocol address of the neighbour. It is either
                     an IPv4 or IPv6 address.";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
             }
             leaf dev {
             // workaround until issue #2211 in libyang is fixed
