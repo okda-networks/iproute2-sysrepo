@@ -360,7 +360,6 @@ struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *no
         ret = sr_get_node(sr_session, xpath, 0, &sr_data);
     else
         ret = sr_get_data(sr_session, xpath, 0, 0, 0, &sr_data);
-    //        ret = sr_get_subtree(sr_session, xpath, 0, &sr_data);
     if (ret != SR_ERR_OK) {
         fprintf(stderr,
                 "%s: failed to get node data from sysrepo ds."
@@ -391,6 +390,8 @@ struct lyd_node *get_parent_startcmd(struct lyd_node *dnode)
  */
 int find_netns(struct lyd_node *startcmd, char **netns)
 {
+    // first check if the startcmd exist in sysrepo, and get the netns from there.
+    // if not then get the netns from the startcmd tree.
     char *xpath = "iproute2-ip-link:netns";
     const char *network_namespace = NULL;
     struct lyd_node *link_startcmd = startcmd;
@@ -742,7 +743,7 @@ start:
                             __func__, next->schema->name);
                     return NULL;
                 }
-                // check if the container has child nodes, when container has extention, libyang
+                // check if the container has child nodes, when container has extension, libyang
                 // create an empty node container. if the container has children then add the
                 // static arg
                 if (lyd_child(next)) {
@@ -979,7 +980,6 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 {
     oper_t op_val;
     char cmd_line[CMD_LINE_SIZE] = { 0 };
-    struct startcmd_info *sdnode_info = get_startcmd_info(startcmd_node);
     // prepare for new command
     op_val = get_operation(startcmd_node);
 
@@ -994,7 +994,6 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
                 break;
             parent_with_oper_val = lyd_parent(parent_with_oper_val);
         }
-        //        if (parent_with_oper_val) {
         int ret;
         switch (parent_op_val) {
         case ADD_OPR:
@@ -1017,12 +1016,6 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
                     __func__, startcmd_node->schema->name);
             return NULL;
         }
-
-        //        } else {
-        //            fprintf(stderr, "%s: unknown operation for startcmd node \"%s\" \n", __func__,
-        //                    startcmd_node->schema->name);
-        //            return NULL;
-        //        }
     }
 
     if (op_val == UPDATE_OPR &&
@@ -1294,7 +1287,8 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     // the rollback_node into the duplicated parent.
     // this is needed when fetching data from sr, otherwise the fetch will fail.
     struct lyd_node *rollback_dnode_parent = NULL;
-    lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_PARENTS | LYD_DUP_WITH_FLAGS,
+    lyd_dup_single(lyd_parent(startcmd_node), NULL,
+                   LYD_DUP_RECURSIVE | LYD_DUP_WITH_PARENTS | LYD_DUP_WITH_FLAGS,
                    &rollback_dnode_parent);
     ret = lyd_insert_child(rollback_dnode_parent, rollback_dnode);
     if (ret != LY_SUCCESS) {
