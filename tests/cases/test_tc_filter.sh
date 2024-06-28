@@ -19,6 +19,8 @@ clean_up(){
   ip link del if_tc_f2 2>/dev/null
   ip link del if_tc_f3 2>/dev/null
   ip link del if_tc_f4 2>/dev/null
+  ip -n tc_filter_red link delete name if_tc_f5_red
+  ip netns del tc_filter_red
 }
 
 ret=0
@@ -33,7 +35,7 @@ echo "---------------------"
 sysrepocfg -d running --edit  tests/cases/test_tc_filter_data.xml || ret=$?
 # Check if sysrepocfg command failed
 if [ -n "$ret" ] && [ "$ret" -ne 0 ]; then
-    echo "TEST-ERROR: failed to create filter in sysrepo datastore"
+    echo "TEST-ERROR:TC-FILTER: failed to create filter in sysrepo datastore"
     clean_up
     exit "$ret"
 fi
@@ -41,9 +43,9 @@ fi
 output=$(tc filter show dev if_tc_f4 ingress)
 # Step 2: Check if dev-filter created
 if echo "$output" | grep -q "filter protocol ip pref 10 flower chain 0"; then
-    echo "TEST-INFO: dev-filter for if_tc_f4 created successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: dev-filter for if_tc_f4 created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create dev-filter for if_tc_f4 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to create dev-filter for if_tc_f4 (FAIL)"
     clean_up
     exit 1
 fi
@@ -51,9 +53,9 @@ fi
 output2=$(tc filter show block 10)
 # Step 3: Check if share-block-filter is created
 if echo "$output2" | grep -q "filter protocol ip pref 10 flower chain 0"; then
-    echo "TEST-INFO: share-block-filter for if_tc_f3  created successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: share-block-filter for if_tc_f3  created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create share-block-filter for if_tc_f3 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to create share-block-filter for if_tc_f3 (FAIL)"
     clean_up
     exit 1
 fi
@@ -62,9 +64,9 @@ output3=$(tc filter show dev if_tc_f2)
 
 # Step 3: Check if qdisc-filter u32 is created
 if echo "$output3" | grep -q "filter parent 8002: protocol ip pref 20 u32 chain 0"; then
-    echo "TEST-INFO: qdisc-filter (u32) for if_tc_f1  created successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: qdisc-filter (u32) for if_tc_f1  created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create qdisc-filter (u32) for if_tc_f1 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to create qdisc-filter (u32) for if_tc_f1 (FAIL)"
     clean_up
     exit 1
 fi
@@ -73,9 +75,20 @@ fi
 output4=$(tc filter show dev if_tc_f1)
 # Step 3: Check if qdisc-filter flower is created
 if echo "$output4" | grep -q "filter parent 8001: protocol ip pref 20 flower chain 0"; then
-    echo "TEST-INFO: qdisc-filter (flower) for if_tc_f1  created successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: qdisc-filter (flower) for if_tc_f1  created successfully (OK)"
 else
-    echo "TEST-ERROR: Failed to create qdisc-filter (flower) for if_tc_f1 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to create qdisc-filter (flower) for if_tc_f1 (FAIL)"
+    clean_up
+    exit 1
+fi
+
+
+output=$(tc -n tc_filter_red filter show dev if_tc_f5_red ingress)
+# Step 4: Check if netns dev-filter created
+if echo "$output" | grep -q "filter protocol ip pref 101 flower chain 0"; then
+    echo "TEST-INFO:TC-FILTER: netns dev-filter for if_tc_f5_red created successfully (OK)"
+else
+    echo "TEST-ERROR:TC-FILTER: Failed to create netns dev-filter for if_tc_f5_red (FAIL)"
     clean_up
     exit 1
 fi
@@ -99,32 +112,32 @@ sysrepocfg -C startup -d running || ret=$?
 output=$(tc filter show dev if_tc_f4 ingress 2>/dev/null)
 # Step 2: Check if dev-filter is still there
 if echo "$output" | grep -q "filter protocol ip pref 10 flower chain 0"; then
-    echo "TEST-ERROR: Failed to delete dev-filter for if_tc_f4 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to delete dev-filter for if_tc_f4 (FAIL)"
     clean_up
     exit 1
 else
-    echo "TEST-INFO: dev-filter for if_tc_f4 deleted successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: dev-filter for if_tc_f4 deleted successfully (OK)"
 fi
 
 output2=$(tc filter show block 10 2>/dev/null)
 # Step 3: Check if share-block-filter is still there
 if echo "$output2" | grep -q "filter protocol ip pref 10 flower chain 0"; then
-    echo "TEST-ERROR: Failed to delete share-block-filter for if_tc_f3 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to delete share-block-filter for if_tc_f3 (FAIL)"
     clean_up
     exit 1
 else
-    echo "TEST-INFO: share-block-filter for if_tc_f1  deleted successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: share-block-filter for if_tc_f1  deleted successfully (OK)"
 fi
 
 output3=$(tc filter show dev if_tc_f2 2>/dev/null)
 
 # Step 3: Check if qdisc-filter u32 is deleted
 if echo "$output3" | grep -q "filter parent 8002: protocol ip pref 20 u32 chain 0"; then
-   echo "TEST-ERROR: Failed to create qdisc-filter (u32) for if_tc_f1 (FAIL)"
+   echo "TEST-ERROR:TC-FILTER: Failed to create qdisc-filter (u32) for if_tc_f1 (FAIL)"
    clean_up
    exit 1
 else
-  echo "TEST-INFO: qdisc-filter (u32) for if_tc_f1  created successfully (OK)"
+  echo "TEST-INFO:TC-FILTER: qdisc-filter (u32) for if_tc_f1  created successfully (OK)"
 
 fi
 
@@ -132,12 +145,22 @@ fi
 output4=$(tc filter show dev if_tc_f1 2>/dev/null)
 # Step 3: Check if qdisc-filter flower is created
 if echo "$output4" | grep -q "filter parent 8001: protocol ip pref 20 flower chain 0"; then
-    echo "TEST-ERROR: Failed to create qdisc-filter (flower) for if_tc_f1 (FAIL)"
+    echo "TEST-ERROR:TC-FILTER: Failed to create qdisc-filter (flower) for if_tc_f1 (FAIL)"
     clean_up
     exit 1
 else
-    echo "TEST-INFO: qdisc-filter (flower) for if_tc_f1  created successfully (OK)"
+    echo "TEST-INFO:TC-FILTER: qdisc-filter (flower) for if_tc_f1  created successfully (OK)"
 
+fi
+
+output=$(tc -n tc_filter_red filter show dev if_tc_f5_red ingress 2>/dev/null)
+# Step 2: Check if dev-filter is still there
+if echo "$output" | grep -q "filter protocol ip pref 101 flower chain 0"; then
+    echo "TEST-ERROR:TC-FILTER: Failed to delete netns dev-filter for if_tc_f5_red (FAIL)"
+    clean_up
+    exit 1
+else
+    echo "TEST-INFO:TC-FILTER: netns dev-filter for if_tc_f5_red deleted successfully (OK)"
 fi
 
 # delete the Qdiscs and links

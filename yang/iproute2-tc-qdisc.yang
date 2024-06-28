@@ -3,16 +3,17 @@ module iproute2-tc-qdisc {
     namespace "urn:okda:iproute2:tc:qdisc";
     prefix "qdisc";
 
-    import iproute2-ip-link {prefix iplink;}
     import okda-onmcli-extensions{ prefix onmcli; }
+    import iproute2-ip-link {prefix iplink;}
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
+    import iproute2-ip-netns { prefix ipnetns; }
 
     organization "Okda Networks";
 
     contact
         "Authors: Amjad Daraiseh <adaraiseh@okdanetworks.com>
-                  Ali Aqrabawi <aaqrabaw@okdanetworks.com>";
-        
+        Ali Aqrabawi <aaqrabaw@okdanetworks.com>";
+
 
     description
         "This module contain the iproute2 'tc qdisc' configurations.
@@ -35,11 +36,11 @@ module iproute2-tc-qdisc {
                 }
             }
             type string {
-                // Temporary to allow referencing a qdisc
+            // Temporary to allow referencing a qdisc
                 pattern '\d+:\d+';
             }
             type string {
-                // Temporary to allow referencing a qdisc
+            // Temporary to allow referencing a qdisc
                 pattern ':\d+';
             }
         }
@@ -256,7 +257,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:oper-cmd "tc qdisc list";
             ipr2cgen:oper-stop-if "{\"kind\": [\"ingress\", \"clsact\", \"noqueue\", \"mq\"]}";
             ipr2cgen:include-all-on-update;
-            key "dev parent";
+            key "dev parent netns";
             description "List of qdisc configurations.";
 
             leaf dev {
@@ -267,6 +268,19 @@ module iproute2-tc-qdisc {
                 ipr2cgen:oper-default-val "root";
                 type parent-id;
                 description "[parent_id 'e.g 8001:1' | root ] Location of the qdisc in the traffic control hierarchy. ";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
             }
             leaf handle {
                 type string {
@@ -311,7 +325,7 @@ module iproute2-tc-qdisc {
                 description "The kind of qdisc to apply.";
             }
             container fifo-options {
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\", 
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\",
                 \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo-fast\", \"multiq\", \"netem\",
                 \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\", \"qfq\"]}";
                 ipr2cgen:oper-sub-jobj "options";
@@ -426,8 +440,8 @@ module iproute2-tc-qdisc {
                 uses codel-stats;
             }
             container tbf-options {
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"htb\", 
-                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"htb\",
+                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\",
                 \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
                 ipr2cgen:oper-sub-jobj "options";
                 when "../qdisc-kind = 'tbf'";
@@ -553,8 +567,8 @@ module iproute2-tc-qdisc {
 
             }
             container htb-options {
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\", 
-                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
+                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\",
+                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\",
                 \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
                 ipr2cgen:oper-sub-jobj "options";
                 when "../qdisc-kind = 'htb'";
@@ -598,10 +612,10 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "tc qdisc list";
-            ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"tbf\", 
-            \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", 
+            ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"tbf\",
+            \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\",
             \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\", \"noqueue\", \"mq\"]}";
-            key "dev qdisc-kind";
+            key "dev qdisc-kind netns";
             unique "dev";
             description "List of qdisc configurations.";
             leaf dev {
@@ -624,6 +638,19 @@ module iproute2-tc-qdisc {
                     }
                 }
             }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
+            }
             leaf ingress_block {
                 type uint32;
                 description "Ingress tc shared block ID";
@@ -633,7 +660,7 @@ module iproute2-tc-qdisc {
                 type uint32;
                 description "egress tc shared block ID";
             }
-        uses qdisc-stats;
+            uses qdisc-stats;
         }
     }
     container classes {
@@ -643,7 +670,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-delete "tc class del";
             ipr2cgen:cmd-update "tc class change";
             ipr2cgen:include-all-on-update;
-            key "dev parent classid";
+            key "dev parent classid netns";
             leaf dev {
                 type iplink:link-ref;
                 description
@@ -662,6 +689,19 @@ module iproute2-tc-qdisc {
                 }
                 description
                     "";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
             }
             choice qdisc-options {
                 mandatory true;

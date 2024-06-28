@@ -4,8 +4,10 @@ module iproute2-tc-filter {
     prefix "filter";
 
     import ietf-inet-types { prefix inet; }
+    import okda-onmcli-extensions{ prefix onmcli; }
     import iproute2-cmdgen-extensions { prefix ipr2cgen; }
     import iproute2-ip-link { prefix iplink; }
+    import iproute2-ip-netns { prefix ipnetns; }
     import iproute2-tc-qdisc { prefix qdisc; }
 
     organization "Okda Networks";
@@ -23,6 +25,19 @@ module iproute2-tc-filter {
     }
 
     grouping filter-common {
+        leaf netns {
+            ipr2cgen:not-cmd-arg;
+            onmcli:key-default-val "1";
+            ipr2cgen:oper-default-val "1";
+            type union {
+                type ipnetns:netns-ref;
+                type enumeration {
+                    enum "1";
+                }
+            }
+            default "1";
+            description "network namespace name";
+        }
         leaf protocol {
             type enumeration {
                 enum "ip";
@@ -280,13 +295,13 @@ module iproute2-tc-filter {
     container tc-filters {
         description "Container for all tc filter configurations.";
         list qdisc-filter {
-            key "dev parent";
+            key "dev parent netns";
             description "filter that is applied to qdisc";
             leaf dev {
                 type leafref {
                     path '/qdisc:qdiscs/qdisc:qdisc/qdisc:dev';
                 }
-                description "Name of device 'interface' where the qdisc is attached to.";
+                description "Name of device 'link' where the qdisc is attached to, the link must have qdisc attached to it.";
                 mandatory true;
             }
             leaf parent {
@@ -302,7 +317,7 @@ module iproute2-tc-filter {
         }
         list dev-filter {
             description "A list of filters.";
-            key "dev direction";
+            key "dev direction netns";
             leaf dev {
                 type leafref {
                     path '/qdisc:qdiscs/qdisc:special-qdisc/qdisc:dev';
@@ -317,11 +332,12 @@ module iproute2-tc-filter {
                     enum "egress";
                 }
             }
+
             uses filter-common;
             uses filter-rule;
         }
         list shared-block-filter {
-            key "block";
+            key "block netns";
             leaf block {
                 type union{
                     type leafref {
