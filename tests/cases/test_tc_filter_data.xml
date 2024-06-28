@@ -1,3 +1,8 @@
+<netnses xmlns="urn:okda:iproute2:ip:netns">
+    <netns>
+        <name>tc_filter_red</name>
+    </netns>
+</netnses>
 <!--this test filter with classes -->
 <links xmlns="urn:okda:iproute2:ip:link">
     <link>
@@ -20,12 +25,19 @@
         <type>dummy</type>
         <admin-status>up</admin-status>
     </link>
+    <link>
+        <name>if_tc_f5_red</name>
+        <type>dummy</type>
+        <admin-status>up</admin-status>
+        <netns>tc_filter_red</netns>
+    </link>
 </links>
 <tc-filters xmlns="urn:okda:iproute2:tc:filter">
     <qdisc-filter>
         <dev>if_tc_f1</dev>
         <parent>8001:</parent>
         <protocol>ip</protocol>
+        <netns>1</netns>
         <rule>
             <pref>20</pref>
             <flower>
@@ -61,6 +73,7 @@
         <dev>if_tc_f2</dev>
         <parent>8002:</parent>
         <protocol>ip</protocol>
+        <netns>1</netns>
         <rule>
             <pref>20</pref>
             <u32>
@@ -77,6 +90,7 @@
         <dev>if_tc_f4</dev>
         <direction>ingress</direction>
         <protocol>ip</protocol>
+        <netns>1</netns>
         <rule>
             <pref>10</pref>
             <flower>
@@ -94,9 +108,32 @@
             </flower>
         </rule>
     </dev-filter>
+    <dev-filter>
+        <dev>if_tc_f5_red</dev>
+        <direction>ingress</direction>
+        <protocol>ip</protocol>
+        <netns>tc_filter_red</netns>
+        <rule>
+            <pref>101</pref>
+            <flower>
+                <match>
+                    <ip_proto>icmp</ip_proto>
+                    <src_ip>11.21.11.21/32</src_ip>
+                </match>
+                <action>pass</action>
+            </flower>
+        </rule>
+        <rule>
+            <pref>201</pref>
+            <flower>
+                <action>drop</action>
+            </flower>
+        </rule>
+    </dev-filter>
     <shared-block-filter xmlns="urn:okda:iproute2:tc:filter">
         <block>10</block>
         <protocol>ip</protocol>
+        <netns>1</netns>
         <rule>
             <pref>10</pref>
             <flower>
@@ -111,6 +148,7 @@
         <dev>if_tc_f1</dev>
         <parent>8001:</parent>
         <classid>8001:20</classid>
+        <netns>1</netns>
         <htb>
             <rate>20mbit</rate>
         </htb>
@@ -119,6 +157,7 @@
         <dev>if_tc_f1</dev>
         <parent>8001:</parent>
         <classid>8001:30</classid>
+        <netns>1</netns>
         <htb>
             <rate>30mbit</rate>
         </htb>
@@ -127,6 +166,7 @@
         <dev>if_tc_f1</dev>
         <parent>8001:</parent>
         <classid>8001:40</classid>
+        <netns>1</netns>
         <htb>
             <rate>40mbit</rate>
         </htb>
@@ -135,6 +175,7 @@
         <dev>if_tc_f2</dev>
         <parent>8002:</parent>
         <classid>8002:20</classid>
+        <netns>1</netns>
         <htb>
             <rate>20mbit</rate>
         </htb>
@@ -145,12 +186,14 @@
     <qdisc>
         <dev>if_tc_f1</dev>
         <parent>root</parent>
+        <netns>1</netns>
         <handle>8001:</handle>
         <qdisc-kind>htb</qdisc-kind>
     </qdisc>
     <qdisc>
         <dev>if_tc_f1</dev>
         <parent>8001:20</parent>
+        <netns>1</netns>
         <qdisc-kind>pfifo</qdisc-kind>
         <fifo-options>
             <limit>1002</limit>
@@ -159,6 +202,7 @@
     <qdisc>
         <dev>if_tc_f1</dev>
         <parent>8001:30</parent>
+        <netns>1</netns>
         <qdisc-kind>pfifo</qdisc-kind>
         <fifo-options>
             <limit>1003</limit>
@@ -167,6 +211,7 @@
     <qdisc>
         <dev>if_tc_f1</dev>
         <parent>8001:40</parent>
+        <netns>1</netns>
         <qdisc-kind>pfifo</qdisc-kind>
         <fifo-options>
             <limit>1004</limit>
@@ -175,16 +220,24 @@
     <qdisc>
         <dev>if_tc_f2</dev>
         <parent>root</parent>
+        <netns>1</netns>
         <handle>8002:</handle>
         <qdisc-kind>htb</qdisc-kind>
     </qdisc>
     <special-qdisc>
         <dev>if_tc_f3</dev>
         <qdisc-kind>clsact</qdisc-kind>
+        <netns>1</netns>
         <ingress_block>10</ingress_block>
     </special-qdisc>
     <special-qdisc>
         <dev>if_tc_f4</dev>
         <qdisc-kind>ingress</qdisc-kind>
+        <netns>1</netns>
+    </special-qdisc>
+    <special-qdisc>
+        <dev>if_tc_f5_red</dev>
+        <qdisc-kind>ingress</qdisc-kind>
+        <netns>tc_filter_red</netns>
     </special-qdisc>
 </qdiscs>

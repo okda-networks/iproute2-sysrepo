@@ -29,6 +29,7 @@
     <qdisc>
         <dev>if_tc3</dev>
         <parent>root</parent>
+        <netns>1</netns>
         <qdisc-kind>pfifo</qdisc-kind>
         <fifo-options>
             <limit>999</limit>
@@ -37,6 +38,7 @@
     <qdisc>
         <dev>if_tc4</dev>
         <parent>root</parent>
+        <netns>1</netns>
         <qdisc-kind>fq_codel</qdisc-kind>
         <codel-options>
             <limit>1001</limit>
@@ -47,6 +49,7 @@
     <qdisc>
         <dev>if_tc5</dev>
         <parent>root</parent>
+        <netns>1</netns>
         <qdisc-kind>tbf</qdisc-kind>
         <tbf-options>
             <rate>3200bps</rate>
@@ -57,12 +60,14 @@
     <special-qdisc>
         <dev>if_tc1</dev>
         <qdisc-kind>clsact</qdisc-kind>
+        <netns>1</netns>
         <ingress_block>10</ingress_block>
         <egress_block>30</egress_block>
     </special-qdisc>
     <special-qdisc>
         <dev>if_tc2</dev>
         <qdisc-kind>ingress</qdisc-kind>
+        <netns>1</netns>
         <ingress_block>10</ingress_block>
     </special-qdisc>
 </qdiscs>

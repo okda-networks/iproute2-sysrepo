@@ -363,10 +363,12 @@ struct lyd_node *get_node_from_sr(const struct lyd_node *startcmd_node, char *no
     else
         ret = sr_get_data(sr_session, xpath, 0, 0, 0, &sr_data);
     if (ret != SR_ERR_OK) {
-        fprintf(stderr,
-                "%s: failed to get node data from sysrepo ds."
-                " xpath = \"%s\": %s\n",
-                __func__, xpath, sr_strerror(ret));
+        if (ret != SR_ERR_NOT_FOUND) {
+            fprintf(stderr,
+                    "%s: failed to get node data from sysrepo ds."
+                    " xpath = \"%s\": %s\n",
+                    __func__, xpath, sr_strerror(ret));
+        }
         return NULL;
     }
     return sr_data->tree;
@@ -407,6 +409,8 @@ int find_netns(struct lyd_node *startcmd, char **netns)
                 return EXIT_FAILURE;
         }
     }
+    if (!strcmp(link_startcmd->schema->module->name, "iproute2-tc-filter"))
+        link_startcmd = lyd_parent(link_startcmd);
     struct lyd_node *netns_dnode = get_node_from_sr(link_startcmd, "netns");
     // if the netns_dnode does not exist in sysrepo, then this is create, we get the netns from
     // the startcmd
