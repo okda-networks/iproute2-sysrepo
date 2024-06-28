@@ -18,6 +18,8 @@
 #include "oper_data.h"
 #include "cmdgen.h"
 
+char *net_namespace;
+
 /* to be merged with cmdgen */
 typedef enum {
     // leaf extensions
@@ -394,7 +396,12 @@ int get_list_keys2(const struct lysc_node_list *list, json_object *json_array_ob
                 free(value);
             } else {
                 // key value not found in json data.
-                if (default_val != NULL) {
+                if (!strcmp(child->name, "netns")) {
+                    json_object_object_add(keys_jobj, child->name,
+                                           json_object_new_string(net_namespace));
+                    if (default_val)
+                        free(default_val);
+                } else if (default_val != NULL) {
                     json_object_object_add(keys_jobj, child->name,
                                            json_object_new_string(default_val));
                     free(default_val);
@@ -601,6 +608,13 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                    struct lyd_node **parent_data_node, const struct lysc_node *s_node)
 {
     char *vmap_str = NULL, *fmap_str = NULL, *combine_ext_str = NULL, *static_value = NULL;
+    if (!strcmp(s_node->name, "netns")) {
+        if (LY_SUCCESS !=
+            lyd_new_term(*parent_data_node, NULL, s_node->name, net_namespace, 0, NULL)) {
+            fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+            return;
+        }
+    }
     if (get_lys_extension(OPER_FLAG_MAP_EXT, s_node, &fmap_str) == EXIT_SUCCESS) {
         if (fmap_str == NULL) {
             fprintf(stderr,
@@ -831,7 +845,6 @@ void single_jobj_to_list2(struct json_object *json_obj, struct lyd_node **parent
 {
     const struct lysc_node_list *list = (const struct lysc_node_list *)s_node;
     char *keys = NULL;
-    int keys_count;
     if (get_list_keys2(list, json_obj, &keys) == EXIT_SUCCESS) {
         add_missing_parents(s_node, parent_data_node);
         struct lyd_node *new_data_node = NULL;
@@ -1022,8 +1035,7 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
 int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
                    struct lyd_node **parent_data_node)
 {
-    char *show_cmd = NULL;
-    const struct lysc_node *new_cmd_child;
+    char *show_cmd = "NULL";
     struct json_object *cmd_output = NULL;
     /* Create top-level lyd_node */
     if (*parent_data_node == NULL) { // Top-level node
@@ -1037,6 +1049,19 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
                     "get the command value for node \"%s\"\n",
                     __func__, s_node->name);
             return EXIT_FAILURE;
+        }
+        if (strcmp(net_namespace, "1") != 0) {
+            // Calculate the new size needed for show_cmd
+            size_t new_size = strlen(show_cmd) + strlen(" -n ") + strlen(net_namespace) +
+                              1; // +1 for the null terminator
+
+            // Reallocate memory for show_cmd
+            show_cmd = realloc(show_cmd, new_size);
+            if (show_cmd == NULL) {
+                perror("realloc");
+                exit(EXIT_FAILURE);
+            }
+            insert_netns(show_cmd, net_namespace);
         }
         if (apply_ipr2_cmd(show_cmd) != EXIT_SUCCESS) {
             fprintf(stderr, "%s: command execution failed\n", __func__);
@@ -1083,12 +1108,13 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
  * @return Returns an integer status code (SR_ERR_OK on success or an error code on failure).
  */
 int load_module_data(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
-                     struct lyd_node **parent)
+                     struct lyd_node **parent, char *nsname)
 {
     int ret = SR_ERR_OK;
     const struct ly_ctx *ly_ctx;
     const struct lys_module *module = NULL;
     struct lyd_node *data_tree = NULL;
+    net_namespace = nsname;
 
     ly_ctx = sr_acquire_context(sr_session_get_connection(session));
     module = ly_ctx_get_module_implemented(ly_ctx, module_name);

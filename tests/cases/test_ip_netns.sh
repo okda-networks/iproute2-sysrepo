@@ -87,11 +87,11 @@ fi
 sysrepocfg -S '/iproute2-ip-link:links/link[name="netns_if"]/mtu' --value  1400
 
 # Step 2: Check if the MTU for IP netns_if is updated by iproute2-sysrepo
-current_mtu=$(ip link show dev netns_if 2>/dev/null | grep -oP '(?<=mtu )\d+' | head -n 1)
+current_mtu=$(ip -n vpn10 link show dev netns_if 2>/dev/null | grep -oP '(?<=mtu )\d+' | head -n 1)
 
 if [ -z "$current_mtu" ]; then
     echo "TEST-ERROR:netns: Failed to retrieve MTU for IP link netns_if "
-    if_clean_up
+    clean_up
     exit 1
 fi
 
@@ -99,7 +99,7 @@ if [ "$current_mtu" -eq 1400 ]; then
     echo "TEST-INFO:netns: MTU for IP link netns_if updated successfully (OK)"
 else
     echo "TEST-ERROR:netns: Failed to update MTU for IP link netns_if, current_mtu = $current_mtu (FAIL)"
-    if_clean_up
+    clean_up
     exit 1
 fi
 
