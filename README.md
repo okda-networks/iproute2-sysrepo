@@ -2,20 +2,33 @@
 IPRoute2-Sysrepo is module wrapped around IPRout2 to allow yang based configuration and operational data pulling.  
 The module integrates iproute2 with sysrepo as a plugin and uses sysrepo data store for configuring iproute2 submodules.  
 
-With this enhacment IPRoute2-Sysrepo adds the following features to IPRoute2:  
-- Configuration persistance using sysrepo data stores.
+With this enactment IPRoute2-Sysrepo adds the following features to IPRoute2:  
+- Configuration persistence using sysrepo data stores.
 - Transactional configuration via NETCONF (Netopeer2) and ONM-CLI and other yang compliant configuration tools.
 - Operational data load and streaming.
 
 IPRoute2-sysrepo code is designed as a wrapper around the original IPRoute2 code, with very minimal changes, ensuring compatibility with all versions of IPRoute2. It is committed to staying current with the newest releases of IPRoute2.  
   
-More details about its architechture can be found in the [documentation page](https://okdanetworks.com/IPRoute2-Sysrepo/overview).  
+More details about its architecture can be found in the [documentation page](https://okdanetworks.com/IPRoute2-Sysrepo/overview).  
+
+# Supported Features:
+- ip link
+- ip netns
+- ip address
+- ip nexthop
+- ip route
+- ip rule
+- ip neighbor
+- tc qdisc
+- tc filter
+- tc class
+
 
 # Building
 
-## Requirments:
+## Requirements:
 
-**- Required packagaes installation:**
+**- Required packages installation:**
 ```
 sudo apt update
 sudo apt install libelf-dev libbpf-dev libbsd-dev libcap-dev libmnl-dev libselinux-dev libjson-c-dev bison flex git cmake build-essential libpcre2-dev
@@ -69,9 +82,10 @@ sudo make install
 After successful installation, you will need to load IPRoute2-Sysrepo yang modules to sysrepo:
 ```
 cd yang/
+sysrepoctl -i iproute2-cmdgen-extensions.yang
+sysrepoctl -i okda-onmcli-extensions.yang
 sysrepoctl -i ietf-inet-types.yang
 sysrepoctl -i ietf-yang-types.yang
-sysrepoctl -i iproute2-cmdgen-extensions.yang
 sysrepoctl -i iproute2-ip-netns.yang
 sysrepoctl -i iproute2-ip-link.yang
 sysrepoctl -i iproute2-ip-nexthop.yang
@@ -79,6 +93,8 @@ sysrepoctl -i iproute2-net-types.yang
 sysrepoctl -i iproute2-ip-route.yang
 sysrepoctl -i iproute2-tc-qdisc.yang
 sysrepoctl -i iproute2-tc-filter.yang
+sysrepoctl -i iproute2-ip-rule.yang
+sysrepoctl -i iproute2-ip-neighbor.yang
 ```
 
 # Starting IPRoute2-Sysrepo
@@ -146,7 +162,7 @@ $ sudo iproute2-sysrepo
 sysrepocfg --edit test_links.xml -d running
 ```
 
-4- Interfaces should be created automaticlly on your linux  
+4- Interfaces should be created automatically on your linux  
 You can use legacy iproute2 commands to view config:
 ```
 ip link show
