@@ -662,17 +662,34 @@ int ipr2_oper_get_items_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
                            const char *xpath, const char *request_xpath, uint32_t request_id,
                            struct lyd_node **parent, void *private_data)
 {
-    return load_module_data(session, module_name, LYS_CONFIG_R | LYS_CONFIG_W, parent);
+    return load_module_data(session, module_name, LYS_CONFIG_R | LYS_CONFIG_W, parent, "1");
+}
+
+struct load_linux_runcfg_arg {
+    const char *module_name;
+    struct lyd_node **root_node;
+};
+
+int load_linux_runcfg_ns_cb(char *nsname, void *arg)
+{
+    struct load_linux_runcfg_arg *runcfg_arg = (struct load_linux_runcfg_arg *)arg;
+    load_module_data(sr_session, runcfg_arg->module_name, LYS_CONFIG_W, runcfg_arg->root_node,
+                     nsname);
+    return 0;
 }
 
 int load_linux_running_config()
 {
-    int ret = 0;
+    int ret;
     struct lyd_node *root_node = NULL;
     fprintf(stdout, "%s: Started loading iproute2 running configuration.\n", __func__);
     for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
         fprintf(stdout, "%s: Loading module: %s data.\n", __func__, ipr2_ip_modules[i].module);
-        load_module_data(sr_session, ipr2_ip_modules[i].module, LYS_CONFIG_W, &root_node);
+        // load data from default netns
+        load_module_data(sr_session, ipr2_ip_modules[i].module, LYS_CONFIG_W, &root_node, "1");
+        // load data from all netns
+        struct load_linux_runcfg_arg runcfg_arg = { ipr2_ip_modules[i].module, &root_node };
+        netns_foreach(load_linux_runcfg_ns_cb, &runcfg_arg);
     }
 
     fprintf(stdout, "%s: Storing loaded data to sysrepo running datastore.\n", __func__);

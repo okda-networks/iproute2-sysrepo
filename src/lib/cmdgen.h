@@ -26,6 +26,22 @@ struct cmd_info {
 void free_cmds_info(struct cmd_info **cmds_info);
 
 /**
+ * parse the command line and convert it to argc, argv
+ * @param [in]  command command line string "ip link add ..."
+ * @param [out] argc parsed argv count
+ * @param [out] argv parsed argv
+ */
+void parse_command(const char *command, int *argc, char ***argv);
+
+/**
+ * this func insert the netns name in the cmd, for example if cmd = ip link, and netns = "red"
+ * the cmd will become "ip -n red link",
+ * @param cmd
+ * @param netns
+ */
+void insert_netns(char *cmd, const char *netns);
+
+/**
  * @brief generate list of commands info from the lyd_node (diff).
  *
  *
@@ -33,13 +49,5 @@ void free_cmds_info(struct cmd_info **cmds_info);
  * @return cmd_info array.
  */
 struct cmd_info **lyd2cmds(const struct lyd_node *all_change_nodes);
-
-/**
- * parse the command line and convert it to argc, argv
- * @param [in]  command command line string "ip link add ..."
- * @param [out] argc parsed argv count
- * @param [out] argv parsed argv
- */
-void parse_command(const char *command, int *argc, char ***argv);
 
 #endif // IPROUTE2_SYSREPO_CMDGEN_H

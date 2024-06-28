@@ -21,6 +21,6 @@ extern char json_buffer[1024 * 1024]; /* holds iproute2 show commands json outpu
  * @return Returns an integer status code (SR_ERR_OK on success or an error code on failure).
  */
 int load_module_data(sr_session_ctx_t *session, const char *module_name, uint16_t lys_flags,
-                     struct lyd_node **parent);
+                     struct lyd_node **parent, char *nsname);
 
 #endif // IPROUTE2_SYSREPO_OPER_DATA_H
