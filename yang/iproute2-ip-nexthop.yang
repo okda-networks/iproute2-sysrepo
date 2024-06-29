@@ -37,6 +37,7 @@ module iproute2-ip-nexthop {
             ipr2cgen:cmd-update "ip nexthop replace";
             ipr2cgen:cmd-delete "ip nexthop del";
             ipr2cgen:include-all-on-update;
+            ipr2cgen:oper-cmd "ip nexthop show";
             key "id netns";
             description
                 "nexthop configuraton";

@@ -608,7 +608,7 @@ int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **
     }
     if (arg_value == NULL)
         arg_value = malloc(sizeof(char *));
-    // if list and grouping group the values.
+    // if list and grouping extension, collect the values and group them according to separator.
     if (dnode->schema->nodetype == LYS_LIST) {
         char *group_list_separator = NULL;
         char *group_leafs_values_separator = NULL;
@@ -626,19 +626,22 @@ int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **
             // loop through the list.
             LY_LIST_FOR(list_first_entry, list_next)
             {
-                struct lyd_node *list_first_leaf = lyd_child(list_next);
-                struct lyd_node *leaf_next = NULL;
-                // loop through the list entries and add them to cmd_line with the specified separator
-                LY_LIST_FOR(list_first_leaf, leaf_next)
-                {
-                    strlcat(temp_value, lyd_get_value(leaf_next), sizeof(temp_value));
-                    if (leaf_next->next != NULL)
-                        strlcat(temp_value, group_leafs_values_separator, sizeof(temp_value));
+                // if the list oper is not delete, then proceed.
+                if (get_operation(list_next) != DELETE_OPR) {
+                    struct lyd_node *list_first_leaf = lyd_child(list_next);
+                    struct lyd_node *leaf_next = NULL;
+                    // loop through the list entries and add them to cmd_line with the specified separator
+                    LY_LIST_FOR(list_first_leaf, leaf_next)
+                    {
+                        strlcat(temp_value, lyd_get_value(leaf_next), sizeof(temp_value));
+                        if (leaf_next->next != NULL)
+                            strlcat(temp_value, group_leafs_values_separator, sizeof(temp_value));
+                    }
+                    // add the list separator.
+                    if (list_next->next != NULL &&
+                        !strcmp(list_next->next->schema->name, list_next->schema->name))
+                        strlcat(temp_value, group_list_separator, sizeof(temp_value));
                 }
-                // add the list separator.
-                if (list_next->next != NULL &&
-                    !strcmp(list_next->next->schema->name, list_next->schema->name))
-                    strlcat(temp_value, group_list_separator, sizeof(temp_value));
             }
             *arg_value = strdup(temp_value);
         }
