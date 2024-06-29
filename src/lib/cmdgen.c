@@ -949,6 +949,13 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
     }
 
     struct lyd_node *dnode_top_level = lyd_parent(*dnode);
+    char *node_print_text2;
+    lyd_print_mem(&node_print_text2, original_dnode, LYD_XML, 0);
+    fprintf(stdout, "-------- original node ------------:\n%s", node_print_text2);
+
+    char *node_print_text3;
+    lyd_print_mem(&node_print_text3, *dnode, LYD_XML, 0);
+    fprintf(stdout, "-------- startcmd node ------------:\n%s", node_print_text3);
 
     struct lyd_node *dnext;
     LYD_TREE_DFS_BEGIN(original_dnode, dnext)
@@ -960,18 +967,28 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
         ret = lyd_find_path(dnode_top_level, dxpath, 0, NULL);
         if (ret != LY_SUCCESS) {
             struct lyd_node *new_dnode;
-            lyd_new_path(dnode_top_level, NULL, dxpath, lyd_get_value(dnext), 0, &new_dnode);
+            ret = lyd_new_path(dnode_top_level, NULL, dxpath, lyd_get_value(dnext), 0, &new_dnode);
+            if (ret != LY_SUCCESS) {
+                fprintf(stderr, "%s: failed to add missing node = \"%s\" to the tree. \n", __func__,
+                        dnext->schema->name);
+                lyd_free_all(original_dnode);
+                return EXIT_FAILURE;
+            }
             ret = lyd_new_meta(NULL, new_dnode, NULL, "yang:operation", "create", 0, NULL);
             if (ret != LY_SUCCESS) {
                 fprintf(stderr,
                         "%s: failed to set meta data 'yang:operation=create' for node. \"%s\" \n",
                         __func__, (*dnode)->schema->name);
                 lyd_free_all(original_dnode);
+                return EXIT_FAILURE;
             }
         }
         LYD_TREE_DFS_END(original_dnode, dnext)
     }
     lyd_free_all(original_dnode);
+    char *node_print_text;
+    lyd_print_mem(&node_print_text, *dnode, LYD_XML, 0);
+    fprintf(stdout, "-------- final node ------------:\n%s", node_print_text);
 
     return EXIT_SUCCESS;
 }
@@ -982,41 +999,6 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
     char cmd_line[CMD_LINE_SIZE] = { 0 };
     // prepare for new command
     op_val = get_operation(startcmd_node);
-
-    // special case: for inner start_cmd, where the operation need to be taken from parent node.
-    if (op_val == UNKNOWN_OPR) {
-        struct lyd_node *parent_with_oper_val = lyd_parent(startcmd_node);
-        oper_t parent_op_val = UNKNOWN_OPR;
-        // find first parent node with oper_val
-        while (parent_with_oper_val) {
-            parent_op_val = get_operation(parent_with_oper_val);
-            if (parent_op_val != UNKNOWN_OPR)
-                break;
-            parent_with_oper_val = lyd_parent(parent_with_oper_val);
-        }
-        int ret;
-        switch (parent_op_val) {
-        case ADD_OPR:
-            ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "create", 0, NULL);
-            op_val = ADD_OPR;
-            break;
-        case DELETE_OPR:
-            ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
-            op_val = DELETE_OPR;
-            break;
-        case UPDATE_OPR: // if parent is update, we can't confirm if the child is add,delete or update.
-        case UNKNOWN_OPR:
-            fprintf(stderr, "%s: unknown or update operation for parent startcmd node = \"%s\"\n",
-                    __func__, startcmd_node->schema->name);
-            return NULL;
-        }
-        if (ret != LY_SUCCESS) {
-            fprintf(stderr,
-                    "%s: failed to set meta data operation for inner startcmd for node. \"%s\" \n",
-                    __func__, startcmd_node->schema->name);
-            return NULL;
-        }
-    }
 
     if (op_val == UPDATE_OPR &&
         (get_extension(INCLUDE_ALL_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS)) {
@@ -1262,13 +1244,43 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         add_command(cmds, cmd_idx, del_cmd_line, del_cmd_line);
     }
 
-    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
-    if (cmd_line == NULL) {
-        fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
-                startcmd_node->schema->name);
-        ret = EXIT_FAILURE;
-        goto cleanup;
+    // special case: for inner start_cmd, where the operation need to be taken from parent node.
+    oper_t op_val = get_operation(startcmd_node);
+    if (op_val == UNKNOWN_OPR) {
+        struct lyd_node *parent_with_oper_val = lyd_parent(startcmd_node);
+        oper_t parent_op_val = UNKNOWN_OPR;
+        // find first parent node with oper_val
+        while (parent_with_oper_val) {
+            parent_op_val = get_operation(parent_with_oper_val);
+            if (parent_op_val != UNKNOWN_OPR)
+                break;
+            parent_with_oper_val = lyd_parent(parent_with_oper_val);
+        }
+        switch (parent_op_val) {
+        case ADD_OPR:
+            ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "create", 0, NULL);
+            op_val = ADD_OPR;
+            break;
+        case DELETE_OPR:
+            ret = lyd_new_meta(NULL, startcmd_node, NULL, "yang:operation", "delete", 0, NULL);
+            op_val = DELETE_OPR;
+            break;
+        case UPDATE_OPR: // if parent is update, we can't confirm if the child is add,delete or update.
+        case UNKNOWN_OPR:
+            fprintf(stderr, "%s: unknown or update operation for parent startcmd node = \"%s\"\n",
+                    __func__, startcmd_node->schema->name);
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        if (ret != LY_SUCCESS) {
+            fprintf(stderr,
+                    "%s: failed to set meta data operation for inner startcmd for node. \"%s\" \n",
+                    __func__, startcmd_node->schema->name);
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
     }
+
     // before calling diff_reserve we need to do dup_single, otherwise all sibling startcmds,
     // will be reversed
     struct lyd_node *tmp_startcmd;
@@ -1287,8 +1299,7 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     // the rollback_node into the duplicated parent.
     // this is needed when fetching data from sr, otherwise the fetch will fail.
     struct lyd_node *rollback_dnode_parent = NULL;
-    lyd_dup_single(lyd_parent(startcmd_node), NULL,
-                   LYD_DUP_RECURSIVE | LYD_DUP_WITH_PARENTS | LYD_DUP_WITH_FLAGS,
+    lyd_dup_single(lyd_parent(startcmd_node), NULL, LYD_DUP_WITH_PARENTS | LYD_DUP_WITH_FLAGS,
                    &rollback_dnode_parent);
     ret = lyd_insert_child(rollback_dnode_parent, rollback_dnode);
     if (ret != LY_SUCCESS) {
@@ -1300,6 +1311,15 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
     }
     initialize_startcmdinfo(rollback_dnode);
 
+    // generate the iproute2 command
+    cmd_line = lyd2cmd_line(startcmd_node, oper2cmd_prefix);
+    if (cmd_line == NULL) {
+        fprintf(stderr, "%s: failed to generate ipr2 cmd for node \"%s\" \n", __func__,
+                startcmd_node->schema->name);
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+    // generate the iproute2 rollback command
     rollback_cmd_line = lyd2cmd_line(rollback_dnode, oper2cmd_prefix);
     if (rollback_cmd_line == NULL) {
         fprintf(stderr, "%s: failed to generate ipr2 rollback cmd for node \"%s\" \n", __func__,
