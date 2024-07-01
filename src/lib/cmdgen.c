@@ -398,35 +398,61 @@ int find_netns(struct lyd_node *startcmd, char **netns)
     // if not then get the netns from the startcmd tree.
 
     const char *network_namespace = NULL;
+    struct lyd_node *netns_dnode;
     struct lyd_node *link_startcmd = startcmd;
+    int is_inner = 0;
+
     // check if this is link module as it has special handling for netns.
     if (!strcmp(startcmd->schema->module->name, "iproute2-ip-link")) {
         // if the parent is not links, check if this is inner startcmd of link startcmd. example "ip"
         struct lyd_node *parent_node = lyd_parent(link_startcmd);
         if (strcmp(parent_node->schema->name, "link") == 0) {
             link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
+            is_inner = 1;
+            // for inner link we need to check the link
             if (!link_startcmd)
                 return EXIT_FAILURE;
         }
     }
     if (!strcmp(link_startcmd->schema->module->name, "iproute2-tc-filter"))
         link_startcmd = lyd_parent(link_startcmd);
-    struct lyd_node *netns_dnode = get_node_from_sr(link_startcmd, "netns");
-    // if the netns_dnode does not exist in sysrepo, then this is create, we get the netns from
-    // the startcmd
-    if (netns_dnode == NULL) {
-        char xpath[1024] = { 0 };
-        strlcat(xpath, link_startcmd->schema->module->name, sizeof(xpath));
-        strlcat(xpath, ":", sizeof(xpath));
-        strlcat(xpath, "netns", sizeof(xpath));
-        int ret = lyd_find_path(link_startcmd, xpath, 0, &netns_dnode);
-        // if no netns in the link_startcmd then exit with success,
-        if (ret != LY_SUCCESS)
+
+    // The procedure to find the netns is as follows:
+    // 1. First, check if the netns node exists in the startcmd:
+    //    a. If the netns node is being updated, retrieve the netns value from "yang:orig-value".
+    //    b. If the netns node is being created, obtain the value directly from the node using lyd_get_value.
+    char xpath[1024] = { 0 };
+    strlcat(xpath, link_startcmd->schema->module->name, sizeof(xpath));
+    strlcat(xpath, ":", sizeof(xpath));
+    strlcat(xpath, "netns", sizeof(xpath));
+    int ret = lyd_find_path(link_startcmd, xpath, 0, &netns_dnode);
+    if (ret == LY_SUCCESS) {
+        oper_t dnode_oper = get_operation(netns_dnode);
+        if (dnode_oper == UPDATE_OPR && !is_inner) {
+            struct lyd_meta *dnode_meta = NULL;
+            dnode_meta = lyd_find_meta(netns_dnode->meta, NULL, "yang:orig-value");
+            if (dnode_meta == NULL) {
+                fprintf(stderr, "%s: failed to get yang:orig-value meta for netns node\n",
+                        __func__);
+                return EXIT_FAILURE;
+            }
+            network_namespace = lyd_get_meta_value(dnode_meta);
+            if (network_namespace == NULL) {
+                fprintf(stderr,
+                        "%s: failed to get the value of yang:original-value for netns node\n",
+                        __func__);
+                return EXIT_FAILURE;
+            }
+            *netns = strdup(network_namespace);
             return EXIT_SUCCESS;
+        }
+    } else {
+        netns_dnode = get_node_from_sr(link_startcmd, "netns");
     }
 
     network_namespace = lyd_get_value(netns_dnode);
-    *netns = strdup(network_namespace);
+    if (network_namespace)
+        *netns = strdup(network_namespace);
     return EXIT_SUCCESS;
 }
 
