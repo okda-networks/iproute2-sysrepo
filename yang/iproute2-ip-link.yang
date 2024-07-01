@@ -129,6 +129,7 @@ module iproute2-ip-link {
             type vti-ref;
             type gre-ref;
             type vlan-ref;
+            type bridge-ref;
         }
     }
     typedef all-links-ref {
