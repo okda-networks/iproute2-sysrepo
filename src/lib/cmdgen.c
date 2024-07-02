@@ -444,15 +444,20 @@ int find_netns(struct lyd_node *startcmd, char **netns)
                 return EXIT_FAILURE;
             }
             *netns = strdup(network_namespace);
-            return EXIT_SUCCESS;
+        } else {
+            network_namespace = lyd_get_value(netns_dnode);
+            if (network_namespace)
+                *netns = strdup(network_namespace);
         }
+
     } else {
         netns_dnode = get_node_from_sr(link_startcmd, "netns");
+        if (netns_dnode) {
+            network_namespace = lyd_get_value(netns_dnode);
+            *netns = strdup(network_namespace);
+            lyd_free_all(netns_dnode);
+        }
     }
-
-    network_namespace = lyd_get_value(netns_dnode);
-    if (network_namespace)
-        *netns = strdup(network_namespace);
     return EXIT_SUCCESS;
 }
 
@@ -975,13 +980,6 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
     }
 
     struct lyd_node *dnode_top_level = lyd_parent(*dnode);
-    char *node_print_text2;
-    lyd_print_mem(&node_print_text2, original_dnode, LYD_XML, 0);
-    fprintf(stdout, "-------- original node ------------:\n%s", node_print_text2);
-
-    char *node_print_text3;
-    lyd_print_mem(&node_print_text3, *dnode, LYD_XML, 0);
-    fprintf(stdout, "-------- startcmd node ------------:\n%s", node_print_text3);
 
     struct lyd_node *dnext;
     LYD_TREE_DFS_BEGIN(original_dnode, dnext)
@@ -1012,9 +1010,6 @@ int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
         LYD_TREE_DFS_END(original_dnode, dnext)
     }
     lyd_free_all(original_dnode);
-    char *node_print_text;
-    lyd_print_mem(&node_print_text, *dnode, LYD_XML, 0);
-    fprintf(stdout, "-------- final node ------------:\n%s", node_print_text);
 
     return EXIT_SUCCESS;
 }

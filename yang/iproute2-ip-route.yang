@@ -39,6 +39,7 @@ module iproute2-ip-route {
             ipr2cgen:cmd-start;
             ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "ip -4 route list table all";
+            ipr2cgen:oper-stop-if "{\"table\": [\"local\"]}";
             // TODO IPv6 support: oper needs to also apply "ip -6 route show"
             description
                 "ip route details";
@@ -58,8 +59,8 @@ module iproute2-ip-route {
                     "ipv4 prefix";
             }
             leaf table {
-                onmcli:key-default-val "254";
-                ipr2cgen:oper-default-val "254";
+                onmcli:key-default-val "main";
+                ipr2cgen:oper-default-val "main";
                 type union {
                     type enumeration {
                         enum "default" { value 253;}
