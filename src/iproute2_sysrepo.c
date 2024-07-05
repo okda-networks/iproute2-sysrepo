@@ -13,7 +13,7 @@
  * Copyright (C) 2024 Vincent Jardin, <vjardin@free.fr>
  *               2024 Okda Networks, <contact@okdanetworks.com>
  */
-
+#include "uapi/linux/rtnetlink.h"
 /* system includes */
 #include <unistd.h>
 #include <pthread.h>
@@ -83,6 +83,19 @@ struct rtnl_handle rth = { .fd = -1 };
 sr_session_ctx_t *sr_session;
 static sr_conn_ctx_t *sr_connection;
 static sr_subscription_ctx_t *sr_sub_ctx;
+int linux_monitor_suspended = 0;
+
+static void usage(void)
+{
+    fprintf(
+        stderr,
+        "Usage: iproute2-sysrepo [ --no-monitor ]\n"
+        "   --no-monitor: run iproute2-sysrepo without monitoring and syncing linux config changes to sysrepo,\n"
+        "                 PS: the linux config will be loaded to sysrepo at startup if if \"--no-monitor\" option enabled.\n"
+        "                 by default the monitoring enabled.\"\n");
+    exit(-1);
+}
+
 /**
  * Struct tp store yang modules names and their operational data subscription path.
  */
@@ -365,13 +378,6 @@ static int do_cmd(int argc, char **argv)
     max_flush_loops = 10;
     const struct cmd *cmds;
     const struct cmd *c;
-    if (argc < 2) {
-        fprintf(stderr, "Missing arguments, 2 or more are needed.\n"
-                        "\nPossible execution options:\n"
-                        "1- Run with no arguments to start iproute2-sysrepo.\n"
-                        "2- Run with individual iproute2 commands arguments.\n");
-        return EXIT_FAILURE;
-    }
 
     if (!strcmp(argv[0], "ip"))
         cmds = ip_cmds;
@@ -575,16 +581,21 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
                            const char *xpath, sr_event_t sr_ev, uint32_t request_id,
                            void *private_data)
 {
+    // if the change is comming from our session then ignore the change, might be the moniotr.
+    if (!strcmp(sr_session_get_orig_name(session), "ipr2-sr"))
+        return SR_ERR_OK;
+
     sr_change_iter_t *it;
     int ret;
     struct lyd_node *root_dnode;
     const struct lyd_node *dnode;
+    linux_monitor_suspended = 1;
     sr_change_oper_t sr_op;
-
+    sr_acquire_context(sr_connection);
     ret = sr_get_changes_iter(session, "//*", &it);
     if (ret != SR_ERR_OK) {
         fprintf(stderr, "%s: sr_get_changes_iter() failed for \"%s\"", __func__, module_name);
-        return ret;
+        goto done;
     }
 
     // we don't iterate through all changes, we just get the first changed node, then find it's root.
@@ -593,7 +604,9 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
     ret = sr_get_change_tree_next(session, it, &sr_op, &dnode, NULL, NULL, NULL);
     if (ret != SR_ERR_OK) {
         fprintf(stderr, "%s: failed to get next change node: %s\n", __func__, sr_strerror(ret));
-        return SR_ERR_INTERNAL;
+
+        ret = SR_ERR_INTERNAL;
+        goto done;
     }
 
     root_dnode = (struct lyd_node *)dnode;
@@ -620,12 +633,15 @@ int ip_sr_config_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const cha
     case SR_EV_RPC:
         // TODO: rpc support for iproute2 commands.
     case SR_EV_UPDATE:
-        return SR_ERR_OK;
+        ret = SR_ERR_OK;
+        break;
     default:
         fprintf(stderr, "%s: unexpected sysrepo event: %u\n", __func__, sr_ev);
-        return SR_ERR_INTERNAL;
+        ret = SR_ERR_INTERNAL;
     }
-
+done:
+    sr_release_context(sr_connection);
+    linux_monitor_suspended = 0;
     return ret;
 }
 
@@ -643,7 +659,6 @@ int apply_ipr2_cmd(char *ipr2_show_cmd)
         ret = SR_ERR_CALLBACK_FAILED;
         goto exit_check_done;
     }
-    fprintf(stdout, "%s: executing command: %s\n", __func__, ipr2_show_cmd);
     ret = do_cmd(argc, argv);
 exit_check_done:
     if (ret != EXIT_SUCCESS) {
@@ -678,18 +693,26 @@ int load_linux_runcfg_ns_cb(char *nsname, void *arg)
     return 0;
 }
 
+int load_linux_config_for_all_netns(const char *module_name, struct lyd_node **root_node)
+{
+    fprintf(stdout, "%s: Loading module: %s data for all NETNS.\n", __func__, module_name);
+    // load data from default netns
+    load_module_data(sr_session, module_name, LYS_CONFIG_W, root_node, "1");
+    // load data from all netns
+    struct load_linux_runcfg_arg runcfg_arg = { module_name, root_node };
+    netns_foreach(load_linux_runcfg_ns_cb, &runcfg_arg);
+    return EXIT_SUCCESS;
+}
+
 int load_linux_running_config()
 {
     int ret;
     struct lyd_node *root_node = NULL;
+    sr_acquire_context(sr_connection);
+
     fprintf(stdout, "%s: Started loading iproute2 running configuration.\n", __func__);
     for (size_t i = 0; i < sizeof(ipr2_ip_modules) / sizeof(ipr2_ip_modules[0]); i++) {
-        fprintf(stdout, "%s: Loading module: %s data.\n", __func__, ipr2_ip_modules[i].module);
-        // load data from default netns
-        load_module_data(sr_session, ipr2_ip_modules[i].module, LYS_CONFIG_W, &root_node, "1");
-        // load data from all netns
-        struct load_linux_runcfg_arg runcfg_arg = { ipr2_ip_modules[i].module, &root_node };
-        netns_foreach(load_linux_runcfg_ns_cb, &runcfg_arg);
+        load_linux_config_for_all_netns(ipr2_ip_modules[i].module, &root_node);
     }
 
     fprintf(stdout, "%s: Storing loaded data to sysrepo running datastore.\n", __func__);
@@ -698,8 +721,6 @@ int load_linux_running_config()
         fprintf(stderr, "%s: Error by sr_edit_batch: %s.\n", __func__, sr_strerror(ret));
         goto cleanup;
     }
-
-    // Commit changes
     ret = sr_apply_changes(sr_session, 0);
     if (SR_ERR_OK != ret) {
         fprintf(stderr, "%s: Error by sr_apply_changes: %s.\n", __func__, sr_strerror(ret));
@@ -709,6 +730,8 @@ int load_linux_running_config()
 cleanup:
     lyd_free_all(root_node);
     sr_discard_changes(sr_session);
+    sr_release_context(sr_connection);
+
     root_node = NULL;
     return ret;
 }
@@ -723,6 +746,7 @@ static void sr_subscribe_config()
         ret = sr_module_change_subscribe(sr_session, ipr2_ip_modules[i].module, NULL,
                                          ip_sr_config_change_cb, NULL, 0, SR_SUBSCR_DEFAULT,
                                          &sr_sub_ctx);
+
         if (ret != SR_ERR_OK)
             fprintf(stderr, "%s: Failed to subscribe to module (%s) config changes: %s\n", __func__,
                     ipr2_ip_modules[i].module, sr_strerror(ret));
@@ -730,9 +754,6 @@ static void sr_subscribe_config()
             fprintf(stdout, "%s: Successfully subscribed to module (%s) config changes\n", __func__,
                     ipr2_ip_modules[i].module);
     }
-
-    /* TODO subscribe to bridge modules */
-    /* TODO subscribe to TC modules */
 }
 
 static void sr_subscribe_operational_pull()
@@ -754,12 +775,146 @@ static void sr_subscribe_operational_pull()
                     "%s: Successfully subscribed to module (%s) operational data pull requests\n",
                     __func__, ipr2_ip_modules[i].module);
     }
-
-    /* TODO subscribe to bridge modules */
-    /* TODO subscribe to TC modules */
 }
 
-int sysrepo_start()
+static int accept_msg2(struct rtnl_ctrl_data *ctrl, struct nlmsghdr *n, void *arg)
+{
+    int ret;
+    struct lyd_node *root_node = NULL;
+
+    sr_session_ctx_t *sr_session2;
+    sr_acquire_context(sr_connection);
+
+    char *module_name;
+    switch (n->nlmsg_type) {
+    case RTM_NEWLINK:
+    case RTM_DELLINK:
+        module_name = "iproute2-ip-link";
+        break;
+
+    case RTM_NEWNEIGH:
+    case RTM_DELNEIGH:
+        module_name = "iproute2-ip-neighbor";
+        break;
+
+    case RTM_NEWMDB:
+    case RTM_DELMDB:
+        module_name = "iproute2-ip-link";
+        break;
+
+    case RTM_NEWVLAN:
+    case RTM_DELVLAN:
+        module_name = "iproute2-ip-link";
+        break;
+    case RTM_NEWROUTE:
+    case RTM_DELROUTE:
+        module_name = "iproute2-ip-route";
+        break;
+
+    case RTM_NEWRULE:
+    case RTM_DELRULE:
+        module_name = "iproute2-ip-rule";
+        break;
+
+    case RTM_NEWQDISC:
+    case RTM_DELQDISC:
+        module_name = "iproute2-tc-qdisc";
+        break;
+
+    case RTM_NEWTUNNEL:
+    case RTM_DELTUNNEL:
+        module_name = "iproute2-ip-link";
+        break;
+    default:
+        module_name = "iproute2-ip-link";
+    }
+    if (linux_monitor_suspended)
+        return EXIT_SUCCESS;
+
+    fprintf(
+        stdout,
+        "%s: new change detected on linux config for module = %s, loading config to sysrepo...\n",
+        __func__, module_name);
+
+    load_linux_config_for_all_netns(module_name, &root_node);
+    ret = sr_edit_batch(sr_session, root_node, "replace");
+    if (SR_ERR_OK != ret) {
+        fprintf(stderr, "%s: Error by sr_edit_batch: %s.\n", __func__, sr_strerror(ret));
+        goto cleanup;
+    }
+
+    // Commit changes
+    ret = sr_apply_changes(sr_session, 0);
+    if (SR_ERR_OK != ret) {
+        fprintf(stderr, "%s: Error by sr_apply_changes: %s.\n", __func__, sr_strerror(ret));
+        goto cleanup;
+    }
+cleanup:
+    lyd_free_all(root_node);
+    sr_discard_changes(sr_session);
+    root_node = NULL;
+    sr_release_context(sr_connection);
+
+    return 0;
+}
+
+void *do_monitor2_thd(void *args)
+{
+    char *netns_name = args; // Avoid unused parameter warning
+    unsigned int groups = ~RTMGRP_TC;
+    struct rtnl_handle rth_mon = { .fd = -2 };
+    preferred_family = AF_UNSPEC;
+
+    if (netns_name == NULL) {
+        // switch back to default netns first.,
+        int fd = open("/proc/1/ns/net", O_RDONLY);
+        if (fd == -1) {
+            perror("open");
+            exit(EXIT_FAILURE);
+        }
+        // Switch to the default network namespace
+        if (setns(fd, CLONE_NEWNET) == -1) {
+            perror("setns");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+        // Close the file descriptor
+        close(fd);
+    } else {
+        netns_switch2(netns_name);
+    }
+
+    rtnl_close(&rth_mon);
+    if (rtnl_open(&rth_mon, groups) < 0)
+        exit(1);
+
+    ll_init_map(&rth_mon);
+    if (rtnl_listen(&rth_mon, accept_msg2, args) < 0)
+        exit(2);
+    return 0;
+}
+
+int load_linux_confg_monitor_ns_cb(char *nsname, void *arg)
+{
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, do_monitor2_thd, nsname) != 0) {
+        fprintf(stderr, "Error creating thread\n");
+    }
+
+    return 0;
+}
+
+void start_linux_config_monitor_thds()
+{
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, do_monitor2_thd, NULL) != 0) {
+        fprintf(stderr, "Error creating thread\n");
+    }
+    // start monitoring thread for the rest of netns.
+    netns_foreach(load_linux_confg_monitor_ns_cb, NULL);
+}
+
+int sysrepo_start(int do_monitor)
 {
     int ret;
 
@@ -768,6 +923,7 @@ int sysrepo_start()
     ++show_stats; /* set iproute2 to include stats in its print outputs */
 
     ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
+
     if (ret != SR_ERR_OK) {
         fprintf(stderr, "%s: sr_connect(): %s\n", __func__, sr_strerror(ret));
         goto cleanup;
@@ -775,13 +931,17 @@ int sysrepo_start()
 
     /* Start session. */
     ret = sr_session_start(sr_connection, SR_DS_RUNNING, &sr_session);
+    sr_session_set_orig_name(sr_session, "ipr2-sr");
     if (ret != SR_ERR_OK) {
         fprintf(stderr, "%s: sr_session_start(): %s\n", __func__, sr_strerror(ret));
         goto cleanup;
     }
+
     load_linux_running_config();
     sr_subscribe_config();
     sr_subscribe_operational_pull();
+    if (do_monitor)
+        start_linux_config_monitor_thds();
 
     /* loop until ctrl-c is pressed / SIGINT is received */
     signal(SIGINT, sigint_handler);
@@ -803,16 +963,22 @@ cleanup:
 int main(int argc, char **argv)
 {
     int ret;
-
-    //    if (rtnl_open(&rth, 0) < 0)
-    //        return EXIT_FAILURE;
-
-    if (argc == 1) {
+    int monitor = 1;
+    if (argc <= 2) {
+        if (argc == 2) {
+            if (!strcmp(argv[1], "--no-monitor")) {
+                monitor = 0;
+            } else if (!strcmp(argv[1], "help")) {
+                usage();
+            } else {
+                fprintf(stderr, "Unknown argument \"%s\"\n", argv[1]);
+                return EXIT_FAILURE;
+            }
+        }
         atexit(exit_cb);
-        return sysrepo_start();
+        return sysrepo_start(monitor);
     } else
         ret = do_cmd(argc - 1, argv + 1);
 
-    //    rtnl_close(&rth);
     return ret;
 }

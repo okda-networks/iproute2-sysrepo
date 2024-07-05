@@ -180,7 +180,7 @@ tc qdisc add dev $qdisc_if8 ingress_block 11 egress_block 12 clsact
 
 # Run iproute2-sysrepo and store its PID
 echo -e "\nSTARTING IPROUTE2-SYSREPO"
-./bin/iproute2-sysrepo 2>&1 &
+./bin/iproute2-sysrepo --no-monitor 2>&1 &
 sysrepo_pid=$!
 sleep 0.5
 

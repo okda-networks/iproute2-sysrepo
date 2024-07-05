@@ -285,8 +285,8 @@ module iproute2-ip-link {
     grouping link-essentials{
 
         leaf mtu {
-            type uint16{
-                range "64..9000";
+            type uint32{
+                range "64..65536";
             }
             default 1500;
             description "specifies the mtu size for the device";

@@ -4,7 +4,7 @@
 ret=0
 
 # Start iproute2-sysrepo
-./bin/iproute2-sysrepo 2>&1 &
+./bin/iproute2-sysrepo --no-monitor 2>&1 &
 sysrepo_pid=$!
 sleep 0.5
 
