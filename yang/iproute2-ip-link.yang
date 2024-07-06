@@ -1381,11 +1381,12 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
+            ipr2cgen:oper-cmd "ip address show type gre";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
                 type string;
-                description "vti tunnel interface name";
+                description "gre tunnel interface name";
             }
             uses link-essentials;
             uses link-advance;
@@ -1409,6 +1410,7 @@ module iproute2-ip-link {
                         enum "on";
                     }
                     ipr2cgen:on-node-delete "noiseq";
+                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "serialize packets. The iseq flag requires that all input packets are serialized.";
@@ -1418,6 +1420,7 @@ module iproute2-ip-link {
                         enum "on";
                     }
                     ipr2cgen:on-node-delete "nooseq";
+                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "serialize packets. The oseq flag enables sequencing of outgoing packets.";
@@ -1427,6 +1430,7 @@ module iproute2-ip-link {
                         enum "on";
                     }
                     ipr2cgen:on-node-delete "noicsum";
+                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "generate/require checksums for tunneled packets.The icsum flag requires that all
@@ -1437,6 +1441,7 @@ module iproute2-ip-link {
                         enum "on";
                     }
                     ipr2cgen:on-node-delete "noocsum";
+                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "generate/require checksums for tunneled packets.
@@ -1463,6 +1468,7 @@ module iproute2-ip-link {
                         enum "on";
                     }
                     ipr2cgen:on-node-delete "nopmtudisc";
+                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "enables Path MTU Discovery on this tunnel.
@@ -1474,6 +1480,7 @@ module iproute2-ip-link {
                         enum "on";
                     }
                     ipr2cgen:on-node-delete "noignore-df";
+                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "enables IPv4 DF suppression on this tunnel.
