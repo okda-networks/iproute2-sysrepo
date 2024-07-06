@@ -69,6 +69,7 @@ module iproute2-ip-neighbor {
                     type iplink:bridge-ref;
                     type iplink:vrf-ref;
                     type iplink:vlan-ref;
+                    type iplink:vxlan-ref;
                 }
                 description
                     "the interface to which this neighbour is attached.";

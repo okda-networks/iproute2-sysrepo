@@ -227,6 +227,10 @@ module iproute2-ip-route {
                         type iplink:vti-ref;
                         type iplink:gre-ref;
                         type iplink:bridge-ref;
+                        type iplink:vlan-ref;
+                        type iplink:vxlan-ref;
+                        type iplink:bond-ref;
+                        type iplink:vrf-ref;
                     }
                     description
                         "nexthop link";
@@ -330,6 +334,7 @@ module iproute2-ip-route {
                     type iplink:gre-ref;
                     type iplink:vrf-ref;
                     type iplink:vlan-ref;
+                    type iplink:vxlan-ref;
                 }
                 description
                     "nexthop interface";
