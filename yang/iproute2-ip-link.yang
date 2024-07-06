@@ -98,6 +98,14 @@ module iproute2-ip-link {
             "This type is used by data models that need to reference vlan
             interfaces.";
     }
+    typedef vxlan-ref {
+        type leafref {
+            path "/iplink:links/iplink:vxlan/iplink:name";
+        }
+        description
+            "This type is used by data models that need to reference vlan
+            interfaces.";
+    }
     typedef bridge-ref {
         type leafref {
             path "/iplink:links/iplink:bridge/iplink:name";
@@ -129,6 +137,7 @@ module iproute2-ip-link {
             type vti-ref;
             type gre-ref;
             type vlan-ref;
+            type vxlan-ref;
             type bridge-ref;
         }
     }
@@ -141,6 +150,7 @@ module iproute2-ip-link {
             type bridge-ref;
             type vrf-ref;
             type vlan-ref;
+            type vxlan-ref;
         }
     }
 
