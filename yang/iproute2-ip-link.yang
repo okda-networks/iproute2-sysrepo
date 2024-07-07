@@ -1035,6 +1035,7 @@ module iproute2-ip-link {
             uses link-advance;
             uses link-device;
             uses link-layer2;
+            uses link-bridge;
             container vxlan-info {
                 ipr2cgen:add-static-arg "type vxlan";
                 ipr2cgen:oper-sub-jobj "info_data";
