@@ -365,7 +365,7 @@ check_vxlan() {
     fi
 
     echo "Checking l3miss field"
-    if ! echo "$output" | grep -qP "<l3miss>on</l3miss>"; then
+    if ! echo "$output" | grep -qP "<l3miss>true</l3miss>"; then
         echo "Error: VXLAN l3miss flag not found for VXLAN interface $1 (FAIL)."
         delete_interfaces
         exit 1

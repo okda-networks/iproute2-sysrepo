@@ -171,7 +171,7 @@ module iproute2-cmdgen-extensions {
             "instruct iproute2 to add a static argument, to be used inside containers";
         argument "static-arg";
     }
-    extension on-node-delete{
+    extension on-node-delete-or-val-false{
         description
             "when the node is deleted the provided 'arg' will be added to cmd,
             example is nomaster with removig vrf from link";

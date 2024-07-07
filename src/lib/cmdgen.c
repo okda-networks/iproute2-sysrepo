@@ -87,7 +87,7 @@ char *yang_ext_map[] = { [CMD_START_EXT] = "cmd-start",
                          [VALUE_ONLY_EXT] = "value-only",
                          [VALUE_ONLY_ON_UPDATE_EXT] = "value-only-on-update",
                          [AFTER_NODE_ADD_STATIC_ARG_EXT] = "after-node-add-static-arg",
-                         [ON_NODE_DELETE_EXT] = "on-node-delete",
+                         [ON_NODE_DELETE_EXT] = "on-node-delete-or-val-false",
                          [ADD_LEAF_AT_END] = "add_leaf_at_end",
                          [NOT_CMD_ARG_EXT] = "not-cmd-arg",
 
@@ -587,6 +587,19 @@ int create_cmd_arg_name(struct lyd_node *dnode, oper_t startcmd_op_val, char **a
     if (get_extension(FLAG_EXT, dnode, NULL) == EXIT_SUCCESS) {
         if (!strcmp("true", lyd_get_value(dnode)))
             *arg_name = strdup(dnode->schema->name);
+        else if (!strcmp("false", lyd_get_value(dnode))) {
+            char *on_node_delete = NULL;
+            if (get_extension(ON_NODE_DELETE_EXT, dnode, &on_node_delete) == EXIT_SUCCESS) {
+                if (on_node_delete == NULL) {
+                    fprintf(stderr,
+                            "%s: ipr2cgen:on-leaf-delete extension found but failed to "
+                            "get its arg value form node \"%s\"\n",
+                            __func__, dnode->schema->name);
+                    return EXIT_FAILURE;
+                }
+                *arg_name = on_node_delete;
+            }
+        }
         return EXIT_SUCCESS;
     }
 

@@ -342,7 +342,7 @@ module iproute2-ip-link {
 
     grouping link-advance {
         leaf master{
-            ipr2cgen:on-node-delete "nomaster";
+            ipr2cgen:on-node-delete-or-val-false "nomaster";
             type union {
                 type bond-ref;
                 type bridge-ref;
@@ -785,7 +785,7 @@ module iproute2-ip-link {
             type enumeration{
                 enum "on";
             }
-            ipr2cgen:on-node-delete "noencap-remcsum ";
+            ipr2cgen:on-node-delete-or-val-false "noencap-remcsum ";
             ipr2cgen:flag;
             description
                 "specifies if UDP checksums are enabled in the secondary encapsulation.";
@@ -794,7 +794,7 @@ module iproute2-ip-link {
             type enumeration{
                 enum "on";
             }
-            ipr2cgen:on-node-delete "noencap-remcsum";
+            ipr2cgen:on-node-delete-or-val-false "noencap-remcsum";
             ipr2cgen:flag;
             description
                 "specifies if Remote Checksum Offload is enabled.
@@ -1124,69 +1124,53 @@ module iproute2-ip-link {
                         to communicate to the remote VXLAN tunnel endpoint. example: 7770 7779";
                 }
                 leaf learning {
-                    ipr2cgen:on-node-delete "nolearning";
+                    ipr2cgen:on-node-delete-or-val-false  "nolearning";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on;false:off";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies if unknown source link layer addresses and IP addresses are entered
                         into the VXLAN device forwarding database.";
 
                 }
                 leaf rsc {
-                    ipr2cgen:on-node-delete "norsc";
+                    ipr2cgen:on-node-delete-or-val-false "norsc";
                     ipr2cgen:flag;
                     ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies if route short circuit is turned on.";
 
                 }
                 leaf proxy {
-                    ipr2cgen:on-node-delete "noproxy";
+                    ipr2cgen:on-node-delete-or-val-false "noproxy";
                     ipr2cgen:flag;
                     ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies ARP proxy is turned on.";
 
                 }
                 leaf l2miss {
-                    ipr2cgen:on-node-delete "nol2miss";
+                    ipr2cgen:on-node-delete-or-val-false "nol2miss";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies if netlink LLADDR miss notifications are generated.";
 
                 }
                 leaf l3miss {
-                    ipr2cgen:on-node-delete "nol3miss";
+                    ipr2cgen:on-node-delete-or-val-false "nol3miss";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies if netlink IP ADDR miss notifications are generated.";
 
                 }
                 leaf udpcsum {
-                    ipr2cgen:on-node-delete "noudpcsum";
+                    ipr2cgen:on-node-delete-or-val-false "noudpcsum";
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "udp_csum";
-                    ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies if UDP checksum is calculated for transmitted packets over IPv4.";
 
@@ -1205,24 +1189,18 @@ module iproute2-ip-link {
                         "NUMBER - specifies the maximum number of FDB entries.";
                 }
                 leaf external {
-                    ipr2cgen:on-node-delete "noexternal";
+                    ipr2cgen:on-node-delete-or-val-false "noexternal";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies whether an external control plane (e.g. ip route encap)
                         or the internal FDB should be used.";
 
                 }
                 leaf vnifilter {
-                    ipr2cgen:on-node-delete "novnifilter";
+                    ipr2cgen:on-node-delete-or-val-false "novnifilter";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on";
-                    type enumeration {
-                        enum "on";
-                    }
+                    type boolean;
                     description
                         "specifies whether the vxlan device is capable of vni filtering.
                         Only works with a vxlan device with external flag set. once enabled,
@@ -1409,7 +1387,7 @@ module iproute2-ip-link {
                     type enumeration{
                         enum "on";
                     }
-                    ipr2cgen:on-node-delete "noiseq";
+                    ipr2cgen:on-node-delete-or-val-false "noiseq";
                     ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
@@ -1419,7 +1397,7 @@ module iproute2-ip-link {
                     type enumeration{
                         enum "on";
                     }
-                    ipr2cgen:on-node-delete "nooseq";
+                    ipr2cgen:on-node-delete-or-val-false "nooseq";
                     ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
@@ -1429,7 +1407,7 @@ module iproute2-ip-link {
                     type enumeration{
                         enum "on";
                     }
-                    ipr2cgen:on-node-delete "noicsum";
+                    ipr2cgen:on-node-delete-or-val-false "noicsum";
                     ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
@@ -1440,7 +1418,7 @@ module iproute2-ip-link {
                     type enumeration{
                         enum "on";
                     }
-                    ipr2cgen:on-node-delete "noocsum";
+                    ipr2cgen:on-node-delete-or-val-false "noocsum";
                     ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
@@ -1467,7 +1445,7 @@ module iproute2-ip-link {
                     type enumeration{
                         enum "on";
                     }
-                    ipr2cgen:on-node-delete "nopmtudisc";
+                    ipr2cgen:on-node-delete-or-val-false "nopmtudisc";
                     ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
@@ -1479,7 +1457,7 @@ module iproute2-ip-link {
                     type enumeration{
                         enum "on";
                     }
-                    ipr2cgen:on-node-delete "noignore-df";
+                    ipr2cgen:on-node-delete-or-val-false "noignore-df";
                     ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
