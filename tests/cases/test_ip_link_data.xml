@@ -41,6 +41,9 @@
             <id>20</id>
             <dev>testIf2</dev>
             <srcport>0 10</srcport>
+            <remote>1.1.1.4</remote>
+            <local>1.1.1.2</local>
+            <learning>true</learning>
         </vxlan-info>
     </vxlan>
     <vlan>
