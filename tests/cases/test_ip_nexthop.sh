@@ -19,6 +19,7 @@ clean_up(){
   ip nexthop del id 2001
   ip nexthop del id 3001
   ip nexthop del id 4001
+  ip nexthop del id 400100
   ip -n nh_red nexthop del id 4001
   ip nexthop del id 12001
   ip netns del nh_red
