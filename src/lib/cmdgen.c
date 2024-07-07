@@ -754,19 +754,13 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
         char *group_list_separator = NULL;
         char *group_leafs_values_separator = NULL;
         char *arg_name = NULL, *arg_value = NULL;
-start:
         switch (next->schema->nodetype) {
         case LYS_LIST:
             // if the list (is inner startcmd) or (inner list with delete) skip it.
             if ((is_startcmd_node(next) || op_val == DELETE_OPR ||
                  get_operation(next) == DELETE_OPR) &&
                 startcmd_node != next) {
-                // if the parent startcmd is delete, we don't want to execute this cmd, just skip.
-                if (next->next) { // move to next sibling and start from beginning,
-                    next = next->next;
-                    goto start;
-                } else
-                    goto done; // no more sibling, go to done.
+                LYD_TREE_DFS_continue = 1;
             }
 
         case LYS_CONTAINER:
@@ -968,7 +962,6 @@ start:
         }
         LYD_TREE_DFS_END(startcmd_node, next)
     }
-done:
     strlcat(cmd_line, tail_arg, sizeof(cmd_line)); // add the tail arg to the line.
     return strdup(cmd_line);
 }
