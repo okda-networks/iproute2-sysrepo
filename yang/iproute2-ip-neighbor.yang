@@ -141,7 +141,7 @@ module iproute2-ip-neighbor {
             leaf nud {
                 ipr2cgen:oper-arg-name "state";
                 // TODO: temp workaround.
-                    ipr2cgen:oper-value-map "[ \"PERMANENT\" ]:permanent;[ \"NOARP\" ]:noarp;[ \"REACHABLE\" ]:reachable;[ \"STALE\" ]:stale;[ \"NONE\" ]:none;[ \"INCOMPLETE\" ]:incomplete;[ \"DELAY\" ]:delay;[ \"FAILED\" ]:failed;";
+                    ipr2cgen:oper-value-map "[ \"PERMANENT\" ]:permanent;[ \"NOARP\" ]:noarp;[ \"REACHABLE\" ]:reachable;[ \"STALE\" ]:stale;[ \"NONE\" ]:none;[ \"INCOMPLETE\" ]:incomplete;[ \"DELAY\" ]:delay;[ \"FAILED\" ]:failed;[ \"PROBE\" ]:probe;";
                 type enumeration{
                     enum "permanent";
                     enum "noarp";
