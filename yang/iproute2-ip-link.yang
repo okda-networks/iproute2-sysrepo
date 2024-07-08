@@ -281,6 +281,11 @@ module iproute2-ip-link {
         description
             "ethernet device.";
     }
+    identity tun {
+        base link-type;
+        description
+            "tun device. can't be changed";
+    }
 
     identity loopback {
         base oper-link-type;
@@ -585,7 +590,7 @@ module iproute2-ip-link {
                 error-message "the specified 'device' mtu must be equal or greater than currnt link mtu";
             }
             must "(../netns = /links/link[name=current()/../device]/netns) or (../netns = /links/bridge[name=current()/../device]/netns)
-            or (../type = 'iplink:veth')" {
+            or (/links/link[name=current()/../device]/type = 'iplink:veth')" {
                 error-message "netns mismatch: the specified 'device' netns must be the same as currnt link netns";
             }
             ipr2cgen:arg-name "link";
@@ -756,44 +761,26 @@ module iproute2-ip-link {
                 "specifies type of secondary UDP encapsulation. \"fou\" indicates Foo-Over-UDP, \"gue\"
                 indicates Generic UDP Encapsulation.";
         }
-        choice encap-sport {
-            default sport-auto;
-            case sport-num{
-                leaf sport {
-                    ipr2cgen:arg-name "encap-sport";
-                    type inet:port-number;
-                    description
-                        "specifies the source port in UDP encapsulation.";
-                }
-            }
-            case sport-auto {
-                leaf auto {
-                    ipr2cgen:arg-name "encap-sport";
-                    ipr2cgen:flag;
-                    default "on";
-                    type enumeration {
-                        enum "on";
-                    }
-                    description
-                        "'auto' indicates that the port number should be chosen automatically
-                        (the kernel picks a flow based on the flow hash of the encapsulated packet)";
-                }
-            }
+        leaf encap-sport {
+            default "auto";
+            type union {
+                type enumeration { enum "auto"; }
+                type inet:port-number;
 
+            }
+            description
+                "'auto' indicates that the port number should be chosen automatically
+                (the kernel picks a flow based on the flow hash of the encapsulated packet)";
         }
         leaf encap-csum {
-            type enumeration{
-                enum "on";
-            }
+            type boolean;
             ipr2cgen:on-node-delete-or-val-false "noencap-remcsum ";
             ipr2cgen:flag;
             description
                 "specifies if UDP checksums are enabled in the secondary encapsulation.";
         }
         leaf encap-remcsum {
-            type enumeration{
-                enum "on";
-            }
+            type boolean;
             ipr2cgen:on-node-delete-or-val-false "noencap-remcsum";
             ipr2cgen:flag;
             description
@@ -834,7 +821,8 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show";
-            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bond\", \"bridge\", \"vxlan\", \"gre\", \"gretab\"]}";
+            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bond\", \"bridge\", \"vxlan\",
+            \"gre\", \"sit\"], \"link_type\": [\"tunnel6\",\"loopback\"]}";
             key "name";
             description "ip-link - network device";
             leaf name {
@@ -1385,42 +1373,30 @@ module iproute2-ip-link {
                 uses tunnel-common;
                 uses tunnel-keyed;
                 leaf iseq {
-                    type enumeration{
-                        enum "on";
-                    }
+                    type boolean;
                     ipr2cgen:on-node-delete-or-val-false "noiseq";
-                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "serialize packets. The iseq flag requires that all input packets are serialized.";
                 }
                 leaf oseq {
-                    type enumeration{
-                        enum "on";
-                    }
+                    type boolean;
                     ipr2cgen:on-node-delete-or-val-false "nooseq";
-                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "serialize packets. The oseq flag enables sequencing of outgoing packets.";
                 }
                 leaf icsum {
-                    type enumeration{
-                        enum "on";
-                    }
+                    type boolean;
                     ipr2cgen:on-node-delete-or-val-false "noicsum";
-                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "generate/require checksums for tunneled packets.The icsum flag requires that all
                         input packets have the correct checksum. ";
                 }
                 leaf ocsum {
-                    type enumeration{
-                        enum "on";
-                    }
+                    type boolean;
                     ipr2cgen:on-node-delete-or-val-false "noocsum";
-                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "generate/require checksums for tunneled packets.
@@ -1443,11 +1419,8 @@ module iproute2-ip-link {
                     default "00";
                 }
                 leaf pmtudisc {
-                    type enumeration{
-                        enum "on";
-                    }
+                    type boolean;
                     ipr2cgen:on-node-delete-or-val-false "nopmtudisc";
-                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "enables Path MTU Discovery on this tunnel.
@@ -1455,11 +1428,8 @@ module iproute2-ip-link {
                         with a fixed ttl always makes pmtu discovery.";
                 }
                 leaf ignore-df {
-                    type enumeration{
-                        enum "on";
-                    }
+                    type boolean;
                     ipr2cgen:on-node-delete-or-val-false "noignore-df";
-                    ipr2cgen:oper-value-map "true:on";
                     ipr2cgen:flag;
                     description
                         "enables IPv4 DF suppression on this tunnel.
