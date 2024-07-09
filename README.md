@@ -9,7 +9,7 @@ With this enactment IPRoute2-Sysrepo adds the following features to IPRoute2:
 
 IPRoute2-sysrepo code is designed as a wrapper around the original IPRoute2 code, with very minimal changes, ensuring compatibility with all versions of IPRoute2. It is committed to staying current with the newest releases of IPRoute2.  
   
-More details about its architecture can be found in the [documentation page](https://okdanetworks.com/IPRoute2-Sysrepo/overview).  
+More details about its architecture can be found in the [documentation page](https://docs.okdanetworks.com/onm/IPRoute2-Sysrepo/overview).  
 
 # Supported Features:
 - ip link
