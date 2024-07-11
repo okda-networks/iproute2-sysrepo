@@ -1036,7 +1036,15 @@ module iproute2-ip-link {
                 }
                 leaf dev {
                     ipr2cgen:oper-arg-name "link";
-                    type link-ref;
+                    // workaround until issue #2211 in libyang is fixed
+                    type union{
+                        type iplink:link-ref;
+                        type iplink:vti-ref;
+                        type iplink:gre-ref;
+                        type iplink:bridge-ref;
+                        type iplink:vlan-ref;
+                        type iplink:bond-ref;
+                    }
                     description
                         "PHYS_DEV - specifies the physical device to use for tunnel endpoint communication.";
                 }
