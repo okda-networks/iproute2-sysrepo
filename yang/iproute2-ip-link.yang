@@ -301,7 +301,7 @@ module iproute2-ip-link {
 
         leaf mtu {
             type uint32{
-                range "64..65536";
+                range "64..65575";
             }
             default 1500;
             description "specifies the mtu size for the device";
@@ -465,7 +465,7 @@ module iproute2-ip-link {
             }
             leaf promisc {
                 ipr2cgen:oper-arg-name "promiscuity";
-                ipr2cgen:oper-value-map "0:off;1:on";
+                ipr2cgen:oper-value-map "0:off;1:on;2:on";
                 type enumeration {
                     enum "on";
                     enum "off";
@@ -511,6 +511,7 @@ module iproute2-ip-link {
             }
         }
     }
+
     grouping link-layer3{
         list ip {
             ipr2cgen:cmd-start;
@@ -530,6 +531,7 @@ module iproute2-ip-link {
             }
         }
     }
+
     grouping link-bridge {
         container bridge-conf {
             list vlan {
@@ -537,21 +539,23 @@ module iproute2-ip-link {
                 ipr2cgen:cmd-add "bridge vlan add";
                 ipr2cgen:cmd-update "bridge vlan set";
                 ipr2cgen:cmd-delete "bridge vlan delete";
-                ipr2cgen:include-all-on-delete;
+                ipr2cgen:oper-cmd "bridge vlan show dev (../../name)"; // still need to be supported in oper_data.c
+                    ipr2cgen:include-all-on-delete;
                 must "(../../master and /links/bridge[name=current()/../../master]) or (/links/bridge[name=current()/../../name])" {
                     error-message "please set the link 'master' to a bridge, before configuring bridge vlan";
                 }
-
                 key "vid";
                 unique "pvid";
                 leaf vid {
                     ipr2cgen:after-node-add-static-arg "dev (../../../name)";
+                    ipr2cgen:oper-arg-name "vlan";
                     type uint16;
                     description
                         "specify vlan id";
                 }
                 leaf pvid {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-flag-map "PVID:true;FLAG-UNSET:false";
                     type boolean;
                     description
                         "when enabled, this vlan will be considered a PVID at ingress.
@@ -559,12 +563,14 @@ module iproute2-ip-link {
                 }
                 leaf untagged {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-flag-map "Egress Untagged:true;FLAG-UNSET:false";
                     type boolean;
                     description
                         "the vlan specified is to be treated as untagged on egress.";
                 }
                 leaf self {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-flag-map "SELF:true;FLAG-UNSET:false";
                     type boolean;
                     description
                         "the vlan is configured on the specified physical device.
@@ -572,11 +578,101 @@ module iproute2-ip-link {
                 }
                 leaf master {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-flag-map "MASTER:true;FLAG-UNSET:false";
                     type boolean;
                     description
                         "the vlan is configured on the software bridge (default).";
                 }
 
+            }
+            container link {
+                when "../../master and /links/bridge[name=current()/../../master]";
+                ipr2cgen:oper-sub-jobj "info_slave_data";
+                ipr2cgen:add-static-arg "type bridge_slave";
+                leaf state {
+                    description "Set port state.";
+                    type enumeration {
+                        enum "disabled" {value 0;}
+                        enum "listening" {value 1;}
+                        enum "learning" {value 2;}
+                        enum "forwarding" {value 3;}
+                        enum "blocking" {value 4;}
+
+                    }
+                }
+                leaf cost {
+                    type uint32;
+                    description "the STP path cost of the specified port";
+                }
+                leaf priority {
+                    type uint8;
+                    description "the STP port priority. The priority value is an unsigned
+                    8-bit quantity (number between 0 and 255). This metric is
+                    used in the designated port an droot port selection
+                    algorithms";
+                }
+                leaf guard {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "block incoming BPDU packets on this port.";
+                }
+                leaf hairpin {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "enable hairpin mode on this
+                    port. This will allow incoming packets on this
+                    port to be reflected back.";
+                }
+                leaf fastleave {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "enable multicast fast leave on this port.
+                    ";
+                }
+                leaf root_block {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "block this port from becoming the bridge's root port.";
+                }
+                leaf learning {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "allow MAC address learning on this port.";
+                }
+                leaf flood {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "open the flood gates on this
+                    port, i.e. forward all unicast frames to this port
+                    also. Requires proxy_arp to be
+                    turned off.";
+                }
+                leaf proxy_arp {
+                    ipr2cgen:oper-value-map "true:on;false:off";
+                    type enumeration {
+                        enum "on";
+                        enum "off";
+                    }
+                    description "enable proxy ARP on this port.";
+                }
             }
         }
     }
@@ -1132,7 +1228,6 @@ module iproute2-ip-link {
                 leaf rsc {
                     ipr2cgen:on-node-delete-or-val-false "norsc";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on";
                     type boolean;
                     description
                         "specifies if route short circuit is turned on.";
@@ -1141,7 +1236,6 @@ module iproute2-ip-link {
                 leaf proxy {
                     ipr2cgen:on-node-delete-or-val-false "noproxy";
                     ipr2cgen:flag;
-                    ipr2cgen:oper-value-map "true:on";
                     type boolean;
                     description
                         "specifies ARP proxy is turned on.";

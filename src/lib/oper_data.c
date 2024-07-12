@@ -534,10 +534,10 @@ bool terminate_processing(struct json_object *cmd_out_jobj, struct json_object *
 }
 
 /**
- * This function compairs schema node (s_node) parents names to lyd_node data tree node name, if the 
+ * This function compares schema node (s_node) parents names to lyd_node data tree node name, if the
  * schema node parent containers are not added to the lyd_node, this function adds them.
  * 
- * This function is to be used before processing leafs and leaf_lists to ensure their parent continers
+ * This function is to be used before processing leafs and leaf_lists to ensure their parent containers
  * are added to the lyd data tree.
  * 
  * @param [in] s_node: schema node being processed (typically the s_node of a leaf or leaf_list).
@@ -546,7 +546,11 @@ bool terminate_processing(struct json_object *cmd_out_jobj, struct json_object *
 void add_missing_parents(const struct lysc_node *s_node, struct lyd_node **parent_data_node)
 {
     struct lyd_node *new_data_node = NULL;
-    if (strcmp(s_node->parent->name, (*parent_data_node)->schema->name) != 0 &&
+    char snode_parent_xpath[1024] = { 0 };
+    char parent_data_node_xpath[1024] = { 0 };
+    lysc_path(s_node->parent, LYSC_PATH_LOG, snode_parent_xpath, 1024);
+    lysc_path((*parent_data_node)->schema, LYSC_PATH_LOG, parent_data_node_xpath, 1024);
+    if (strcmp(snode_parent_xpath, parent_data_node_xpath) != 0 &&
         s_node->parent->nodetype == LYS_CONTAINER) {
         // check grand_parents
         add_missing_parents(s_node->parent, parent_data_node);
