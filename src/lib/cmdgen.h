@@ -26,7 +26,7 @@ struct cmd_info {
 void free_cmds_info(struct cmd_info **cmds_info);
 
 /**
- * parse the command line and convert it to argc, argv
+ * FOR_OPER: parse the command line and convert it to argc, argv
  * @param [in]  command command line string "ip link add ..."
  * @param [out] argc parsed argv count
  * @param [out] argv parsed argv
@@ -34,7 +34,7 @@ void free_cmds_info(struct cmd_info **cmds_info);
 void parse_command(const char *command, int *argc, char ***argv);
 
 /**
- * this func insert the netns name in the cmd, for example if cmd = ip link, and netns = "red"
+ * FOR_OPER: this func insert the netns name in the cmd, for example if cmd = ip link, and netns = "red"
  * the cmd will become "ip -n red link",
  * @param cmd
  * @param netns

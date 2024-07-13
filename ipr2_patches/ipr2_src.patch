@@ -24,3 +24,13 @@
 +		fclose(j_stream);
  	}
  }
+
+--- /bridge/vlan.c	2024-03-01 19:01:32.645610624 -0500
++++ ipr2_patches/bridge_vlan_modified.c	2024-03-01 18:41:21.869658736 -0500
+@@ -1119,7 +1119,8 @@
+ static int vlan_show(int argc, char **argv, int subject)
+ {
+ 	char *filter_dev = NULL;
+-	int ret = 0;
++	int ret = 0;
++	vlan_rtm_cur_ifidx = -1;

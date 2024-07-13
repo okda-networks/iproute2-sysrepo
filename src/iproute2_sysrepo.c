@@ -64,7 +64,7 @@ int force;
 int max_flush_loops = 10;
 int batch_mode;
 bool do_all;
-
+int vlan_rtm_cur_ifidx = -1;
 /* bridge definitions */
 int compress_vlans;
 
@@ -650,7 +650,6 @@ int apply_ipr2_cmd(char *ipr2_show_cmd)
     int ret;
     char **argv;
     int argc;
-
     parse_command(ipr2_show_cmd, &argc, &argv);
     jump_set = 1;
     if (setjmp(jbuf)) {
@@ -921,7 +920,6 @@ int sysrepo_start(int do_monitor)
     ++json; /* set iproute2 to format its print outputs in json */
     ++show_details; /* set iproute2 to include details in its print outputs */
     ++show_stats; /* set iproute2 to include stats in its print outputs */
-
     ret = sr_connect(SR_CONN_DEFAULT, &sr_connection);
 
     if (ret != SR_ERR_OK) {

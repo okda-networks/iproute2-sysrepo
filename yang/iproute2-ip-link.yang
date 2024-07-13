@@ -537,15 +537,15 @@ module iproute2-ip-link {
             list vlan {
                 ipr2cgen:cmd-start;
                 ipr2cgen:cmd-add "bridge vlan add";
-                ipr2cgen:cmd-update "bridge vlan set";
+                ipr2cgen:cmd-update "bridge vlan add";
                 ipr2cgen:cmd-delete "bridge vlan delete";
-                ipr2cgen:oper-cmd "bridge vlan show dev (../../name)"; // still need to be supported in oper_data.c
-                    ipr2cgen:include-all-on-delete;
+                ipr2cgen:replace-on-update;
+                ipr2cgen:include-all-on-delete;
+                ipr2cgen:oper-sub-jobj "vlans";
                 must "(../../master and /links/bridge[name=current()/../../master]) or (/links/bridge[name=current()/../../name])" {
                     error-message "please set the link 'master' to a bridge, before configuring bridge vlan";
                 }
                 key "vid";
-                unique "pvid";
                 leaf vid {
                     ipr2cgen:after-node-add-static-arg "dev (../../../name)";
                     ipr2cgen:oper-arg-name "vlan";
@@ -555,6 +555,7 @@ module iproute2-ip-link {
                 }
                 leaf pvid {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
                     ipr2cgen:oper-flag-map "PVID:true;FLAG-UNSET:false";
                     type boolean;
                     description
@@ -563,6 +564,7 @@ module iproute2-ip-link {
                 }
                 leaf untagged {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
                     ipr2cgen:oper-flag-map "Egress Untagged:true;FLAG-UNSET:false";
                     type boolean;
                     description
@@ -570,6 +572,7 @@ module iproute2-ip-link {
                 }
                 leaf self {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
                     ipr2cgen:oper-flag-map "SELF:true;FLAG-UNSET:false";
                     type boolean;
                     description
@@ -578,6 +581,7 @@ module iproute2-ip-link {
                 }
                 leaf master {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
                     ipr2cgen:oper-flag-map "MASTER:true;FLAG-UNSET:false";
                     type boolean;
                     description
@@ -917,6 +921,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show";
+            ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
             ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bond\", \"bridge\", \"vxlan\",
             \"gre\", \"sit\"], \"link_type\": [\"tunnel6\",\"loopback\"]}";
             key "name";
@@ -1005,6 +1010,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show type vlan";
+            ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -1109,6 +1115,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show type vxlan";
+            ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -1310,6 +1317,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:oper-cmd "ip address show type bridge";
+            ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -1451,6 +1459,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show type gre";
+            ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
@@ -1556,6 +1565,7 @@ module iproute2-ip-link {
             ipr2cgen:cmd-update "ip link set";
             ipr2cgen:cmd-delete "ip link delete";
             ipr2cgen:oper-cmd "ip address show type bond";
+            ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
             key "name";
             leaf name {
                 ipr2cgen:oper-arg-name "ifname";
