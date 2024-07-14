@@ -1105,6 +1105,9 @@ int merge_json_by_key(struct json_object *dest_jobj, struct json_object *src_arr
 int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
                    struct lyd_node **parent_data_node)
 {
+    // before processing the schema, check if it's flags match the requested "lys_flags"
+    if (!(lys_flags & s_node->flags))
+        return EXIT_SUCCESS;
     char *show_cmd = NULL;
     char *json_buffer_cpy = NULL;
     struct json_object *cmd_output = NULL;

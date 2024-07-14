@@ -158,6 +158,166 @@ module iproute2-ip-neighbor {
             }
 
         }
+        list fdb {
+            config false;
+            ipr2cgen:oper-cmd "bridge fdb show";
+            key "lladdress dev netns";
+            leaf lladdress {
+                ipr2cgen:oper-arg-name "mac";
+                ipr2cgen:value-only;
+                type yang:mac-address;
+                description "the Ethernet MAC address entry of this fdb";
+            }
+            leaf dev {
+                ipr2cgen:oper-arg-name "ifname";
+                type union{
+                    type iplink:link-ref;
+                    type iplink:vti-ref;
+                    type iplink:gre-ref;
+                    type iplink:bridge-ref;
+                    type iplink:vlan-ref;
+                    type iplink:vxlan-ref;
+                    type iplink:bond-ref;
+                }
+                description "interface name of the bridge port where the fdb is tied to";
+            }
+            leaf netns {
+                ipr2cgen:not-cmd-arg;
+                onmcli:key-default-val "1";
+                ipr2cgen:oper-default-val "1";
+                type union {
+                    type ipnetns:netns-ref;
+                    type enumeration {
+                        enum "1";
+                    }
+                }
+                default "1";
+                description "network namespace name";
+            }
+            leaf state {
+                ipr2cgen:value-only;
+                type enumeration {
+                    enum "permanent";
+                    enum "static";
+                    enum "dynamic";
+                }
+                description
+                    "fdb states
+                    - permanent:  permanent fdb entry, which means that
+                    the bridge will not forward frames with this destination
+                    MAC address and VLAN ID, but terminate them locally.
+                    - static: is a static (no arp) fdb entry.
+                    - dynamic: is a dynamic reachable age-able fdb entry";
+            }
+            leaf master {
+                type iplink:bridge-ref;
+                description "if the specified network device is a port that
+                belongs to a master device such as a bridge, the operation
+                is fulfilled by the master device's driver, which may in
+                turn notify the port driver too of the address. If the
+                specified device is a master itself, such as a bridge,
+                this flag is invalid.";
+            }
+            container flags {
+                leaf self {
+                    ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "self:true;FLAG-UNSET:false";
+                    type boolean;
+                    description "the operation is fulfilled directly by the driver
+                    for the specified network device. If the network device
+                    belongs to a master like a bridge, then the bridge is
+                    bypassed and not notified of this operation (and if the
+                    device does notify the bridge, it is driver-specific
+                    behavior and not mandated by this flag, check the driver
+                    for more details). The \"bridge fdb add\" command can also
+                    be used on the bridge device itself, and in this case, the
+                    added fdb entries will be locally terminated (not
+                    forwarded). In the latter case, the \"self\" flag is
+                    mandatory. The flag is set by default if \"master\" is not
+                    specified.";
+                }
+                leaf router {
+                    ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "router:true;FLAG-UNSET:false";
+                    type boolean;
+                    description "the destination address is associated with a
+                    router.  Valid if the referenced device is a VXLAN type
+                    device and has route short circuit enabled.";
+                }
+                leaf use {
+                    ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "use:true;FLAG-UNSET:false";
+                    type boolean;
+                    description "the address is in use. User space can use this
+                    option to indicate to the kernel that the fdb entry is in
+                    use.";
+                }
+                leaf extern_learn {
+                    ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "use:true;FLAG-UNSET:false";
+                    type boolean;
+                    description "this entry was learned externally. This
+                    option can be used to indicate to the kernel that an entry
+                    was hardware or user-space controller learnt dynamic
+                    entry. Kernel will not age such an entry.";
+                }
+                leaf sticky {
+                    ipr2cgen:flag;
+                    ipr2cgen:oper-arg-name "flags";
+                    ipr2cgen:oper-flag-map "use:true;FLAG-UNSET:false";
+                    type boolean;
+                    description "this entry will not change its port due to
+                    learning.";
+                }
+            }
+            container vxlan-paramters {
+                leaf dst {
+                    type inet:ipv4-address;
+                    description "the IP address of the destination VXLAN tunnel endpoint
+                    where the Ethernet MAC ADDRESS resides.";
+                }
+                leaf src_vni {
+                    type uint64;
+                    description
+                        "the src VNI Network Identifier (or VXLAN Segment ID) this
+                        entry belongs to. Used only when the vxlan device is in
+                        external or collect metadata mode. If omitted the value
+                        specified at vxlan device creation will be used.";
+                }
+                leaf vni {
+                    type uint64;
+                    description
+                        "the VXLAN VNI Network Identifier (or VXLAN Segment ID) to
+                        use to connect to the remote VXLAN tunnel endpoint.  If
+                        omitted the value specified at vxlan device creation will
+                        be used.";
+                }
+                leaf port {
+                    type inet:port-number;
+                    description
+                        "the UDP destination PORT number to use to connect to the
+                        remote VXLAN tunnel endpoint.  If omitted the default
+                        value is used.";
+                }
+                leaf via {
+                    type union{
+                        type iplink:link-ref;
+                        type iplink:vti-ref;
+                        type iplink:gre-ref;
+                        type iplink:bridge-ref;
+                        type iplink:vlan-ref;
+                        type iplink:vxlan-ref;
+                        type iplink:bond-ref;
+                    }
+                    description
+                        "device name of the outgoing interface for the VXLAN device
+                        driver to reach the remote VXLAN tunnel endpoint.";
+                }
+            }
+        }
     }
-
 }
