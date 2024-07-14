@@ -24,6 +24,7 @@ char *net_namespace;
 typedef enum {
     // leaf extensions
     OPER_CMD_EXT,
+    OPER_INNER_CMD_EXT,
     OPER_ARG_NAME_EXT,
     OPER_VALUE_MAP_EXT,
     OPER_FLAG_MAP_EXT,
@@ -36,6 +37,7 @@ typedef enum {
 
 /* to be merged with cmdgen */
 char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
+                              [OPER_INNER_CMD_EXT] = "oper-inner-cmd",
                               [OPER_ARG_NAME_EXT] = "oper-arg-name",
                               [OPER_VALUE_MAP_EXT] = "oper-value-map",
                               [OPER_FLAG_MAP_EXT] = "oper-flag-map",
@@ -73,8 +75,8 @@ void free_list_params(const char ***key_values, uint32_t **values_lengths, int k
  * @param [out] found_obj: JSON object to store the found key object.
  * @return json_bool, returns 1 if key is found, 0 if not.
  */
-JSON_EXPORT json_bool find_json_value_by_key(struct json_object *jobj, const char *key,
-                                             struct json_object **found_obj)
+json_bool find_json_value_by_key(struct json_object *jobj, const char *key,
+                                 struct json_object **found_obj)
 {
     enum json_type jtype = json_object_get_type(jobj);
 
@@ -891,6 +893,15 @@ void jdata_to_list(struct json_object *json_obj, const char *arg_name,
                    const struct lysc_node *s_node, uint16_t lys_flags,
                    struct lyd_node **parent_data_node)
 {
+    // json_obj itself is an array of objects
+    if (json_object_get_type(json_obj) == json_type_array) {
+        size_t n_arrays = json_object_array_length(json_obj);
+        for (size_t i = 0; i < n_arrays; i++) {
+            struct json_object *arr_obj = json_object_array_get_idx(json_obj, i);
+            jdata_to_list(arr_obj, arg_name, s_node, lys_flags, parent_data_node);
+        }
+    }
+    // json_obj itself is single object but its content is an array
     struct json_object *lists_arrays;
     if (find_json_value_by_key(json_obj, arg_name, &lists_arrays) &&
         json_object_get_type(lists_arrays) == json_type_array) {
@@ -900,7 +911,7 @@ void jdata_to_list(struct json_object *json_obj, const char *arg_name,
             single_jobj_to_list2(list_obj, parent_data_node, s_node, lys_flags);
         }
     } else {
-        // Handle case where json_array_obj itself is the list to process
+        // json_obj itself is single object and the object content is the list leafs
         single_jobj_to_list2(json_obj, parent_data_node, s_node, lys_flags);
     }
 }
@@ -987,7 +998,24 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
         break;
     }
     case LYS_LIST: {
-        jdata_to_list(json_obj, arg_name, s_node, lys_flags, parent_data_node);
+        char *sub_jobj_name = NULL;
+        json_object *list_jobj = NULL;
+        if (get_lys_extension(OPER_SUB_JOBJ_EXT, s_node, &sub_jobj_name) == EXIT_SUCCESS) {
+            if (sub_jobj_name == NULL) {
+                fprintf(stderr,
+                        "%s: ipr2cgen:oper-sub-job extension found but failed to "
+                        "get the sub json object name value for node \"%s\"\n",
+                        __func__, s_node->name);
+                return EXIT_FAILURE;
+            }
+        }
+        if (sub_jobj_name != NULL) {
+            find_json_value_by_key(json_obj, sub_jobj_name, &list_jobj);
+        } else {
+            list_jobj = json_obj;
+        }
+        free(sub_jobj_name);
+        jdata_to_list(list_jobj, arg_name, s_node, lys_flags, parent_data_node);
         break;
     }
     case LYS_CHOICE:
@@ -1024,8 +1052,46 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
     return EXIT_SUCCESS;
 }
 
+int merge_json_by_key(struct json_object *dest_jobj, struct json_object *src_array, char *key,
+                      char *include_key)
+{
+    // Get the key value from the outer JSON object
+    const char *outter_jkey = json_object_get_string(json_object_object_get(dest_jobj, key));
+    if (!outter_jkey) {
+        return -1; // Handle the case where the key is not found
+    }
+
+    // Iterate through the inner array
+    size_t inner_array_length = json_object_array_length(src_array);
+    for (size_t i = 0; i < inner_array_length; i++) {
+        struct json_object *inner_obj = json_object_array_get_idx(src_array, i);
+        const char *inner_jkey = json_object_get_string(json_object_object_get(inner_obj, key));
+
+        // If keys match, merge the objects
+        if (strcmp(outter_jkey, inner_jkey) == 0) {
+            struct json_object *include_obj = json_object_object_get(inner_obj, include_key);
+            if (!include_obj) {
+                return -1; // Handle the case where the include_key is not found
+            }
+
+            // Deep copy the include_obj
+            struct json_object *include_obj_copy = NULL;
+            json_object_deep_copy(include_obj, &include_obj_copy, NULL);
+            if (!include_obj_copy) {
+                return -1; // Handle deep copy failure
+            }
+
+            // Add the copied object to the outer JSON object
+            json_object_object_add(dest_jobj, include_key, include_obj_copy);
+            break;
+        }
+    }
+
+    return 0;
+}
+
 /**
- * Starts the porcessing of module schema, it processes every node in the schema to lyd_node if the node name
+ * Starts the processing of module schema, it processes every node in the schema to lyd_node if the node name
  * is found in the input json_obj.
  * First it looks for show commands to apply as it iterates through the schema node, then it stores the outputs
  * into json_obj, and starts processing the schema nodes based on the content of that json_obj.
@@ -1039,8 +1105,10 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
 int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
                    struct lyd_node **parent_data_node)
 {
-    char *show_cmd = "NULL";
+    char *show_cmd = NULL;
+    char *json_buffer_cpy = NULL;
     struct json_object *cmd_output = NULL;
+
     /* Create top-level lyd_node */
     if (*parent_data_node == NULL) { // Top-level node
         lyd_new_inner(NULL, s_node->module, s_node->name, 0, parent_data_node);
@@ -1074,16 +1142,76 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
         }
         free(show_cmd);
 
-        cmd_output = json_tokener_parse(json_buffer);
+        json_buffer_cpy = strdup(json_buffer);
+        cmd_output = json_tokener_parse(json_buffer_cpy);
+
+        struct json_object *inner_cmd_output = NULL;
+        char *inner_cmd_arg, *json_buffer_inner_cpy = NULL;
+        char *inner_show_cmd = NULL, *inner_cmd_key = NULL, *inner_cmd_inculde_key = NULL;
+        if (get_lys_extension(OPER_INNER_CMD_EXT, s_node, &inner_cmd_arg) == EXIT_SUCCESS) {
+            char *temp;
+            char *token;
+            // Create a copy of the input string to avoid modifying the original string
+            temp = strdup(inner_cmd_arg);
+
+            // Tokenize the string using comma as the delimiter
+            token = strtok(temp, ",");
+            if (token) {
+                inner_show_cmd = strdup(token);
+                token = strtok(NULL, ",");
+            }
+            if (token) {
+                inner_cmd_key = strdup(token);
+                token = strtok(NULL, ",");
+            }
+            if (token) {
+                inner_cmd_inculde_key = strdup(token);
+            }
+            // Free the duplicated string
+            free(temp);
+            // Check if all tokens were found
+            if (!inner_show_cmd || !inner_cmd_key || !inner_cmd_inculde_key) {
+                fprintf(stderr, "%s: failed to get inner_show_cmd ext argument for node = %s\n",
+                        __func__, s_node->name);
+                return EXIT_FAILURE;
+            }
+            if (strcmp(net_namespace, "1") != 0) {
+                // Calculate the new size needed for show_cmd
+                size_t new_size = strlen(inner_show_cmd) + strlen(" -n ") + strlen(net_namespace) +
+                                  1; // +1 for the null terminator
+
+                // Reallocate memory for show_cmd
+                show_cmd = realloc(inner_show_cmd, new_size);
+                insert_netns(inner_show_cmd, net_namespace);
+            }
+
+            if (apply_ipr2_cmd(inner_show_cmd) != EXIT_SUCCESS) {
+                fprintf(stderr, "%s: command execution failed\n", __func__);
+                return EXIT_FAILURE;
+            }
+            free(inner_show_cmd);
+            json_buffer_inner_cpy = strdup(json_buffer);
+            inner_cmd_output = json_tokener_parse(json_buffer_inner_cpy);
+        }
 
         if (json_object_get_type(cmd_output) == json_type_array) {
             // Iterate over json_obj arrays:
             size_t n_arrays = json_object_array_length(cmd_output);
             for (size_t i = 0; i < n_arrays; i++) {
                 struct json_object *array_obj = json_object_array_get_idx(cmd_output, i);
+
+                if (inner_cmd_output) {
+                    merge_json_by_key(array_obj, inner_cmd_output, inner_cmd_key,
+                                      inner_cmd_inculde_key);
+                }
                 process_node(s_node, array_obj, lys_flags, parent_data_node);
             }
         }
+        if (inner_cmd_output)
+            json_object_put(inner_cmd_output);
+        if (json_buffer_inner_cpy)
+            free(json_buffer_inner_cpy);
+
     } else {
         const struct lysc_node *s_child;
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
@@ -1093,6 +1221,8 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
     }
     if (cmd_output)
         json_object_put(cmd_output);
+    if (json_buffer_cpy)
+        free(json_buffer_cpy);
 
     return EXIT_SUCCESS;
 }

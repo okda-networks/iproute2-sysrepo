@@ -28,9 +28,9 @@ BINDIR = $(PREFIX)/bin
 
 all: $(IPR2_SR_OBJ) $(IPR2_SR_LIB_OBJ) iproute2/config.mk
 	@echo "Checking if json_print patch is already applied..."
-	@if ! patch --dry-run --reverse --force -d iproute2 -p1 < ipr2_patches/json_print.patch; then \
+	@if ! patch --dry-run --reverse --force -d iproute2 -p1 < ipr2_patches/ipr2_src.patch; then \
 		echo "Applying json_print patch..."; \
-		patch -d iproute2 -p1 < ipr2_patches/json_print.patch || { echo "Patch failed"; true; }; \
+		patch -d iproute2 -p1 < ipr2_patches/ipr2_src.patch || { echo "Patch failed"; true; }; \
 	else \
 		echo "json_print patch is already applied, skipping..."; \
 	fi
@@ -65,11 +65,11 @@ uninstall:
 
 clean:
 	@echo "Checking if json_print patch is already applied..."
-	@if ! patch --dry-run --reverse --force -d iproute2 -p1 < ipr2_patches/json_print.patch; then \
+	@if ! patch --dry-run --reverse --force -d iproute2 -p1 < ipr2_patches/ipr2_src.patch; then \
 		echo "Patch wasn't applying, nothing to reverse..."; \
 	else \
 		echo "Reversing json_print patch..."; \
-		patch -R -d iproute2 -p1 < ipr2_patches/json_print.patch || { echo "Patch failed"; true; }; \
+		patch -R -d iproute2 -p1 < ipr2_patches/ipr2_src.patch || { echo "Patch failed"; true; }; \
 	fi
 	@set -e; \
 	for i in $(SUBDIRS); do \
@@ -97,7 +97,5 @@ check:
 src/lib/%.o: src/lib/%.c
 	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
 
-
-src/%.o: $(IPR2_SR_SRC) $(IPR2_SR_LIB_OBJ)
+src/%.o: src/%.c
 	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
-

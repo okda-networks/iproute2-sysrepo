@@ -406,7 +406,8 @@ int find_netns(struct lyd_node *startcmd, char **netns)
     if (!strcmp(startcmd->schema->module->name, "iproute2-ip-link")) {
         // if the parent is not links, check if this is inner startcmd of link startcmd. example "ip"
         struct lyd_node *parent_node = lyd_parent(link_startcmd);
-        if (strcmp(parent_node->schema->name, "link") == 0) {
+        // if the parent of the startcmd is not the container links, then this is inner link startcmd.
+        if (strcmp(parent_node->schema->name, "links") != 0) {
             link_startcmd = get_parent_startcmd(lyd_parent(link_startcmd));
             is_inner = 1;
             // for inner link we need to check the link
@@ -710,7 +711,6 @@ int create_cmd_arg_value(struct lyd_node *dnode, oper_t startcmd_op_val, char **
             if (xpath_arg != NULL) {
                 struct ly_set *match_set = NULL;
                 int ret = lyd_find_xpath(dnode, xpath_arg, &match_set);
-                //                lyd_find_xpath(dnode, "../../name", &match_set);
                 if (match_set != NULL) {
                     free(xpath_arg);
                     xpath_arg = strdup(lyd_get_value(match_set->dnodes[0]));
@@ -968,13 +968,13 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
 
 /**
  * @brief this will fetch the startcmd_node from sysrepo, and merge it with the change node
- * this will result on a replace on update change node.
+ * this is used by include_all_by_update extension.
  * @param dnode the change lyd_node.
  * @return EXIST_SUCCESS
  * @return EXIST_FAILURE
  */
 
-int ext_onupdate_replace_hdlr(struct lyd_node **dnode)
+int ext_onupdate_include_all_hdlr(struct lyd_node **dnode)
 {
     int ret;
     // get the original node from sysrepo
@@ -1029,7 +1029,7 @@ char *lyd2cmd_line(struct lyd_node *startcmd_node, char *oper2cmd_prefix[3])
 
     if (op_val == UPDATE_OPR &&
         (get_extension(INCLUDE_ALL_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS)) {
-        ext_onupdate_replace_hdlr(&startcmd_node);
+        ext_onupdate_include_all_hdlr(&startcmd_node);
     }
     // add cmd prefix to the cmd_line
     strlcpy(cmd_line, oper2cmd_prefix[op_val], sizeof(cmd_line));
@@ -1233,44 +1233,6 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
         goto cleanup;
     }
 
-    // if this node is replace-on-update (where we need to delete and recreate the node in iproute2)
-    // first create a del_node with del operation then generate and add the command to the cmds before
-    // the original update cmd.
-    if (get_extension(REPLACE_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS &&
-        get_operation(startcmd_node) == UPDATE_OPR) {
-        //
-        ret = lyd_dup_single(startcmd_node, NULL, LYD_DUP_RECURSIVE, &del_startcmd_node);
-        if (ret != LY_SUCCESS) {
-            fprintf(
-                stderr,
-                "%s: ipr2cgen:failed to create del_startcmd_node: failed to duplicate node %s: %s\n",
-                __func__, startcmd_node->schema->name, ly_strerrcode(ret));
-            ret = EXIT_FAILURE;
-            goto cleanup;
-        }
-        // set the operation of the del_startcmd to delete.
-        struct lyd_meta *del_meta = lyd_find_meta(del_startcmd_node->meta, NULL, "yang:operation");
-        ret = lyd_change_meta(del_meta, "delete");
-        if (ret != LY_SUCCESS) {
-            fprintf(
-                stderr,
-                "%s: ipr2cgen:failed to add delete operation to del_startcmd_node for node %s: %s \n",
-                __func__, startcmd_node->schema->name, ly_strerrcode(ret));
-            ret = EXIT_FAILURE;
-            goto cleanup;
-        }
-        char *del_cmd_line = NULL;
-        initialize_startcmdinfo(del_startcmd_node);
-        del_cmd_line = lyd2cmd_line(del_startcmd_node, oper2cmd_prefix);
-        if (del_cmd_line == NULL) {
-            fprintf(stderr, "%s: failed to generate cmd for del_startcmd node \"%s\" \n", __func__,
-                    startcmd_node->schema->name);
-            ret = EXIT_FAILURE;
-            goto cleanup;
-        }
-        add_command(cmds, cmd_idx, del_cmd_line, del_cmd_line);
-    }
-
     // special case: for inner start_cmd, where the operation need to be taken from parent node.
     oper_t op_val = get_operation(startcmd_node);
     if (op_val == UNKNOWN_OPR) {
@@ -1306,6 +1268,46 @@ int add_cmd_info_core(struct cmd_info **cmds, int *cmd_idx, struct lyd_node *sta
             ret = EXIT_FAILURE;
             goto cleanup;
         }
+    }
+
+    // if this node is replace-on-update (where we need to delete and recreate the node in iproute2)
+    // first create a del_node with del operation then generate and add the command to the cmds before
+    // the original update cmd.
+    if (get_extension(REPLACE_ON_UPDATE_EXT, startcmd_node, NULL) == EXIT_SUCCESS &&
+        get_operation(startcmd_node) == UPDATE_OPR) {
+        //
+        ret = lyd_dup_single(startcmd_node, NULL, LYD_DUP_RECURSIVE | LYD_DUP_WITH_PARENTS,
+                             &del_startcmd_node);
+        if (ret != LY_SUCCESS) {
+            fprintf(
+                stderr,
+                "%s: ipr2cgen:failed to create del_startcmd_node: failed to duplicate node %s: %s\n",
+                __func__, startcmd_node->schema->name, ly_strerrcode(ret));
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        // set the operation of the del_startcmd to delete.
+        struct lyd_meta *del_meta = lyd_find_meta(del_startcmd_node->meta, NULL, "yang:operation");
+        ret = lyd_change_meta(del_meta, "delete");
+        if (ret != LY_SUCCESS) {
+            fprintf(
+                stderr,
+                "%s: ipr2cgen:failed to add delete operation to del_startcmd_node for node %s: %s \n",
+                __func__, startcmd_node->schema->name, ly_strerrcode(ret));
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        char *del_cmd_line = NULL;
+        initialize_startcmdinfo(del_startcmd_node);
+
+        del_cmd_line = lyd2cmd_line(del_startcmd_node, oper2cmd_prefix);
+        if (del_cmd_line == NULL) {
+            fprintf(stderr, "%s: failed to generate cmd for del_startcmd node \"%s\" \n", __func__,
+                    startcmd_node->schema->name);
+            ret = EXIT_FAILURE;
+            goto cleanup;
+        }
+        add_command(cmds, cmd_idx, del_cmd_line, del_cmd_line);
     }
 
     // before calling diff_reserve we need to do dup_single, otherwise all sibling startcmds,
