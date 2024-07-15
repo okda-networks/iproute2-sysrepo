@@ -94,6 +94,10 @@ iproute2/config.mk:
 check:
 	yanglint yang/*.yang
 
+install_sysrepo_modules:
+	chmod +x ./scripts/install_sysrepo_modules.sh
+	./scripts/install_sysrepo_modules.sh
+
 src/lib/%.o: src/lib/%.c
 	$(CC) -c $< -o $@ -Iiproute2/ip -Iiproute2/bridge -Iiproute2/tc -Iiproute2/include
 
