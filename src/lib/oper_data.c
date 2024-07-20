@@ -1149,8 +1149,8 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
         char *inner_cmd_arg, *json_buffer_inner_cpy = NULL;
         char *inner_show_cmd = NULL, *inner_cmd_key = NULL, *inner_cmd_inculde_key = NULL;
         if (get_lys_extension(OPER_INNER_CMD_EXT, s_node, &inner_cmd_arg) == EXIT_SUCCESS) {
-            char *temp;
-            char *token;
+            char *temp = NULL;
+            char *token = NULL;
             // Create a copy of the input string to avoid modifying the original string
             temp = strdup(inner_cmd_arg);
 
@@ -1181,7 +1181,7 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
                                   1; // +1 for the null terminator
 
                 // Reallocate memory for show_cmd
-                show_cmd = realloc(inner_show_cmd, new_size);
+                inner_show_cmd = realloc(inner_show_cmd, new_size);
                 insert_netns(inner_show_cmd, net_namespace);
             }
 
