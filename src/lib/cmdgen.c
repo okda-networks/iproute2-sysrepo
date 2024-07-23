@@ -771,6 +771,10 @@ char *lyd2cmdline_args(const struct lyd_node *startcmd_node, oper_t op_val)
                 break;
             if (op_val == DELETE_OPR)
                 break;
+            // if the operation is delete we need to skip, unless it's INCLUDE_ALL_ON_DELETE
+            if ((get_operation(next) == DELETE_OPR) &&
+                get_extension(INCLUDE_ALL_ON_DELETE, startcmd_node, NULL) == EXIT_FAILURE)
+                break;
             if (get_extension(ADD_STATIC_ARG_EXT, next, &add_static_arg) == EXIT_SUCCESS) {
                 if (add_static_arg == NULL) {
                     fprintf(stderr,
