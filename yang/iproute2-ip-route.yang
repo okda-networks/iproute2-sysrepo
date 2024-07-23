@@ -340,13 +340,13 @@ module iproute2-ip-route {
                     "nexthop interface";
             }
             leaf via {
-                ipr2cgen:value-only;
+                ipr2cgen:arg-name "via inet";
                 ipr2cgen:oper-arg-name "gateway";
                 // TODO IPv6 support: oper also uses "host" arg name when via family is set to inet6
                 // while using gateway when family is set to inet
                 type inet:ip-address;
                 description
-                    "via address";
+                    "ipv4 nexthop address";
             }
         }
     }
