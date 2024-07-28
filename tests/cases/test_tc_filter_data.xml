@@ -36,7 +36,6 @@
     <qdisc-filter>
         <dev>if_tc_f1</dev>
         <parent>8001:</parent>
-        <protocol>ip</protocol>
         <netns>1</netns>
         <rule>
             <pref>20</pref>
@@ -72,7 +71,6 @@
     <qdisc-filter>
         <dev>if_tc_f2</dev>
         <parent>8002:</parent>
-        <protocol>ip</protocol>
         <netns>1</netns>
         <rule>
             <pref>20</pref>
@@ -89,7 +87,6 @@
     <dev-filter>
         <dev>if_tc_f4</dev>
         <direction>ingress</direction>
-        <protocol>ip</protocol>
         <netns>1</netns>
         <rule>
             <pref>10</pref>
@@ -111,7 +108,6 @@
     <dev-filter>
         <dev>if_tc_f5_red</dev>
         <direction>ingress</direction>
-        <protocol>ip</protocol>
         <netns>tc_filter_red</netns>
         <rule>
             <pref>101</pref>
@@ -132,7 +128,6 @@
     </dev-filter>
     <shared-block-filter xmlns="urn:okda:iproute2:tc:filter">
         <block>10</block>
-        <protocol>ip</protocol>
         <netns>1</netns>
         <rule>
             <pref>10</pref>

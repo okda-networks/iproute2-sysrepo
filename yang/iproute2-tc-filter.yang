@@ -38,12 +38,7 @@ module iproute2-tc-filter {
             default "1";
             description "network namespace name";
         }
-        leaf protocol {
-            type enumeration {
-                enum "ip";
-            }
-            description "The protocol.";
-        }
+
     }
     grouping filter-result {
         leaf classid {
@@ -72,16 +67,28 @@ module iproute2-tc-filter {
             ipr2cgen:cmd-start;
             ipr2cgen:cmd-add "tc filter add";
             ipr2cgen:cmd-delete "tc filter del";
-            ipr2cgen:cmd-update "tc filter change";
+            ipr2cgen:cmd-update "tc filter replace";
+            ipr2cgen:replace-on-update;
             ipr2cgen:include_parent_leafs;
+            ipr2cgen:include-all-on-update;
             key "pref";
             leaf pref {
                 type uint32;
                 description "the preference value";
             }
+            leaf protocol {
+                type enumeration {
+                    enum "ip";
+                }
+                description "EthType protocol.";
+                default "ip";
+            }
             leaf handle {
-                type uint16; // review
+                type string {
+                    pattern '0x[0-9a-fA-F]+|\d+';
+                }
                 description "The filter ID.";
+                default "0x1";
             }
             leaf prio {
                 type uint8;
