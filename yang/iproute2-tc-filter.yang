@@ -67,7 +67,7 @@ module iproute2-tc-filter {
             ipr2cgen:cmd-start;
             ipr2cgen:cmd-add "tc filter add";
             ipr2cgen:cmd-delete "tc filter del";
-            ipr2cgen:cmd-update "tc filter replace";
+            ipr2cgen:cmd-update "tc filter add";
             ipr2cgen:replace-on-update;
             ipr2cgen:include_parent_leafs;
             ipr2cgen:include-all-on-update;
