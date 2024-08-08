@@ -50,16 +50,53 @@ module iproute2-tc-filter {
                 is in the form X:Y, while X and Y are interpreted as
                 numbers in hexadecimal format.";
         }
-        leaf action {
-            type enumeration {
-                enum "pass";
-                enum "drop";
-                enum "reclassify";
-                enum "continue";
-                enum "pipe";
+
+        container actions {
+            leaf gact {
+                ipr2cgen:arg-name "action";
+                type enumeration {
+                    enum "pass";
+                    enum "drop";
+                    enum "reclassify";
+                    enum "continue";
+                    enum "pipe";
+                }
+                description
+                    "specify action";
             }
-            description
-                "specify action";
+            container nat {
+                leaf direction {
+                    ipr2cgen:arg-name "action nat ";
+                    must "../old_ip and ../new_ip"{
+                        error-message "direction, old_ip and new_ip are mandatory for nat action.";
+                    }
+                    type enumeration {
+                        enum "ingress";
+                        enum "egress";
+                    }
+                    description "NAT direction";
+                }
+                leaf old_ip {
+                    ipr2cgen:value-only;
+                    must "../direction and ../new_ip"{
+                        error-message "direction, old_ip and new_ip are mandatory for nat action.";
+                    }
+                    type union {
+                        type inet:ip-address;
+                        type inet:ip-prefix;
+                    }
+                    description "original ip";
+                }
+                leaf new_ip {
+                    ipr2cgen:value-only;
+                    must "../direction and ../old_ip"{
+                        error-message "direction, old_ip and new_ip are mandatory for nat action.";
+                    }
+                    type inet:ip-address;
+                    description "natted ip";
+                }
+
+            }
         }
     }
     grouping filter-rule{

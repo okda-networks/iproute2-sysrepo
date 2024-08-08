@@ -44,7 +44,10 @@
                     <src_ip>1.1.1.1/32</src_ip>
                 </match>
                 <classid>8001:20</classid>
-                <action>pass</action>
+                <actions>
+                    <gact>pass</gact>
+                </actions>
+
             </flower>
         </rule>
         <rule>
@@ -54,7 +57,9 @@
                     <src_ip>5.5.5.5/32</src_ip>
                 </match>
                 <classid>8001:30</classid>
-                <action>pass</action>
+                <actions>
+                    <gact>pass</gact>
+                </actions>
             </flower>
         </rule>
         <rule>
@@ -64,7 +69,9 @@
                     <dst_ip>9.9.9.0/24</dst_ip>
                 </match>
                 <classid>8001:40</classid>
-                <action>pass</action>
+                <actions>
+                    <gact>pass</gact>
+                </actions>
             </flower>
         </rule>
     </qdisc-filter>
@@ -95,13 +102,17 @@
                     <ip_proto>icmp</ip_proto>
                     <src_ip>1.2.1.2/32</src_ip>
                 </match>
-                <action>pass</action>
+                <actions>
+                    <gact>pass</gact>
+                </actions>
             </flower>
         </rule>
         <rule>
             <pref>20</pref>
             <flower>
-                <action>drop</action>
+                <actions>
+                    <gact>drop</gact>
+                </actions>
             </flower>
         </rule>
     </dev-filter>
@@ -116,13 +127,17 @@
                     <ip_proto>icmp</ip_proto>
                     <src_ip>11.21.11.21/32</src_ip>
                 </match>
-                <action>pass</action>
+                <actions>
+                    <gact>pass</gact>
+                </actions>
             </flower>
         </rule>
         <rule>
             <pref>201</pref>
             <flower>
-                <action>drop</action>
+                <actions>
+                    <gact>drop</gact>
+                </actions>
             </flower>
         </rule>
     </dev-filter>
@@ -132,7 +147,9 @@
         <rule>
             <pref>10</pref>
             <flower>
-                <action>pass</action>
+                <actions>
+                    <gact>pass</gact>
+                </actions>
             </flower>
         </rule>
     </shared-block-filter>
