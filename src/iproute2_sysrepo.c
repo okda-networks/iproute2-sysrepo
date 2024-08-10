@@ -830,10 +830,10 @@ static int accept_msg2(struct rtnl_ctrl_data *ctrl, struct nlmsghdr *n, void *ar
     if (linux_monitor_suspended)
         return EXIT_SUCCESS;
 
-    fprintf(
-        stdout,
-        "%s: new change detected on linux config for module = %s, loading config to sysrepo...\n",
-        __func__, module_name);
+    //    fprintf(
+    //        stdout,
+    //        "%s: new change detected on linux config for module = %s, loading config to sysrepo...\n",
+    //        __func__, module_name);
 
     load_linux_config_for_all_netns(module_name, &root_node);
     ret = sr_edit_batch(sr_session, root_node, "replace");
