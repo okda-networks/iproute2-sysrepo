@@ -677,9 +677,15 @@ module iproute2-tc-qdisc {
                     "link to attach this class to";
             }
             leaf parent {
-                type leafref {
-                    path '/qdisc:qdiscs/qdisc:qdisc/qdisc:handle';
+                type union {
+                    type leafref {
+                        path '/qdisc:qdiscs/qdisc:qdisc/qdisc:handle';
+                    }
+                    type leafref {
+                        path '/qdisc:classes/qdisc:class/qdisc:classid';
+                    }
                 }
+
                 description
                     "class's parent, can be qdisc hanlde or other classid";
             }
