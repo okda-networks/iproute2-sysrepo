@@ -19,6 +19,7 @@ More details about its architecture can be found in the [documentation page](htt
 - ip route
 - ip rule
 - ip neighbor
+- bridge vlan
 - tc qdisc
 - tc filter
 - tc class
@@ -81,20 +82,7 @@ sudo make install
 
 After successful installation, you will need to load IPRoute2-Sysrepo yang modules to sysrepo:
 ```
-cd yang/
-sysrepoctl -i iproute2-cmdgen-extensions.yang
-sysrepoctl -i okda-onmcli-extensions.yang
-sysrepoctl -i ietf-inet-types.yang
-sysrepoctl -i ietf-yang-types.yang
-sysrepoctl -i iproute2-ip-netns.yang
-sysrepoctl -i iproute2-ip-link.yang
-sysrepoctl -i iproute2-ip-nexthop.yang
-sysrepoctl -i iproute2-net-types.yang
-sysrepoctl -i iproute2-ip-route.yang
-sysrepoctl -i iproute2-tc-qdisc.yang
-sysrepoctl -i iproute2-tc-filter.yang
-sysrepoctl -i iproute2-ip-rule.yang
-sysrepoctl -i iproute2-ip-neighbor.yang
+sudo make install_sysrepo_modules 
 ```
 
 # Starting IPRoute2-Sysrepo
