@@ -37,11 +37,11 @@ module iproute2-tc-qdisc {
             }
             type string {
             // Temporary to allow referencing a qdisc
-                pattern '\d+:\d+';
+                pattern '[0-9a-fA-F]+:[0-9a-fA-F]+';
             }
             type string {
             // Temporary to allow referencing a qdisc
-                pattern ':\d+';
+                pattern ':[0-9a-fA-F]+';
             }
         }
     }
@@ -669,6 +669,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-add "tc class add";
             ipr2cgen:cmd-delete "tc class del";
             ipr2cgen:cmd-update "tc class change";
+            ipr2cgen:oper-cmd "tc qdisc list";
             ipr2cgen:include-all-on-update;
             key "dev parent classid netns";
             leaf dev {
@@ -691,7 +692,7 @@ module iproute2-tc-qdisc {
             }
             leaf classid {
                 type string {
-                    pattern '\d+:\d+';
+                    pattern '[0-9a-fA-F]+:[0-9a-fA-F]+';
                 }
                 description
                     "";
