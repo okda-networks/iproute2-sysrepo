@@ -114,10 +114,17 @@ module iproute2-cmdgen-extensions {
                     ir2cmdgen:oper-cmd \"ip link show type vrf\"";
        argument "show_cmd";
     }
+
     extension oper-inner-cmd {
         description "define node which a new show cmd is needed, typically used in the first list in the schema, example
         ir2cmdgen:oper-cmd \"ip link show type vrf\"";
         argument "show_cmd";
+    }
+
+    extension oper-dump-tc-filters {
+        description "A sepcial extension to dump all tc filters configured on the system and load them on tc-filter yang
+        module";
+        argument "filter_type";
     }
 
     extension flag {

@@ -589,6 +589,7 @@ module iproute2-tc-qdisc {
                     timescales. Because of further queues living in network adaptors,
                     this is often not a problem.";
                 leaf default {
+                    ipr2cgen:oper-arg-name "not-supported";
                     type uint32;
                     description
                         "Unclassified traffic gets sent to the class with this

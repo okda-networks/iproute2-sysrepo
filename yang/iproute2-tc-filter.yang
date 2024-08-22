@@ -52,8 +52,11 @@ module iproute2-tc-filter {
         }
 
         container actions {
+            ipr2cgen:oper-sub-jobj "actions";
             leaf gact {
                 ipr2cgen:arg-name "action";
+                ipr2cgen:oper-sub-jobj "control_action";
+                ipr2cgen:oper-arg-name "type";
                 type enumeration {
                     enum "pass";
                     enum "drop";
@@ -78,6 +81,7 @@ module iproute2-tc-filter {
                 }
                 leaf old_ip {
                     ipr2cgen:value-only;
+                    ipr2cgen:oper-arg-name "old_addr";
                     must "../direction and ../new_ip"{
                         error-message "direction, old_ip and new_ip are mandatory for nat action.";
                     }
@@ -89,6 +93,7 @@ module iproute2-tc-filter {
                 }
                 leaf new_ip {
                     ipr2cgen:value-only;
+                    ipr2cgen:oper-arg-name "new_addr";
                     must "../direction and ../old_ip"{
                         error-message "direction, old_ip and new_ip are mandatory for nat action.";
                     }
@@ -132,8 +137,10 @@ module iproute2-tc-filter {
                 description "The priority.";
             }
             choice filter {
+                //ipr2cgen:oper-arg-name "kind";
                 container flower {
                     ipr2cgen:add-static-arg "flower";
+                    ipr2cgen:oper-stop-if "{\"kind\": [\"u32\"]}";
                     container match {
                         leaf indev {
                             type iplink:link-ref;
@@ -277,8 +284,10 @@ module iproute2-tc-filter {
                 }
                 container u32 {
                     ipr2cgen:add-static-arg "u32";
+                    ipr2cgen:oper-stop-if "{\"kind\": [\"flower\"]}";
                     container match {
                         ipr2cgen:add-static-arg "match";
+                        ipr2cgen:oper-sub-jobj "match";
                         container ip {
                             ipr2cgen:add-static-arg "ip";
                             leaf src {
@@ -339,6 +348,7 @@ module iproute2-tc-filter {
     container tc-filters {
         description "Container for all tc filter configurations.";
         list qdisc-filter {
+            ipr2cgen:oper-dump-tc-filters "not-supported";
             key "dev parent netns";
             description "filter that is applied to qdisc";
             leaf dev {
@@ -360,6 +370,7 @@ module iproute2-tc-filter {
 
         }
         list dev-filter {
+            ipr2cgen:oper-dump-tc-filters "dev-filter";
             description "A list of filters.";
             key "dev direction netns";
             leaf dev {
@@ -381,6 +392,7 @@ module iproute2-tc-filter {
             uses filter-rule;
         }
         list shared-block-filter {
+            ipr2cgen:oper-dump-tc-filters "shared-block-filter";
             key "block netns";
             leaf block {
                 type union{
