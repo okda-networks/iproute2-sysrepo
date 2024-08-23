@@ -33,6 +33,7 @@ typedef enum {
     OPER_STOP_IF_EXT,
     OPER_COMBINE_VALUES_EXT,
     OPER_SUB_JOBJ_EXT,
+    OPER_DUMP_TC_FILTERS,
 } oper_extension_t;
 
 /* to be merged with cmdgen */
@@ -45,11 +46,157 @@ char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
                               [OPER_DEFAULT_VALUE_EXT] = "oper-default-val",
                               [OPER_STOP_IF_EXT] = "oper-stop-if",
                               [OPER_COMBINE_VALUES_EXT] = "oper-combine-values",
-                              [OPER_SUB_JOBJ_EXT] = "oper-sub-jobj" };
+                              [OPER_SUB_JOBJ_EXT] = "oper-sub-jobj",
+                              [OPER_DUMP_TC_FILTERS] = "oper-dump-tc-filters" };
 
 extern int apply_ipr2_cmd(char *ipr2_show_cmd);
 int process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
                  struct lyd_node **parent_data_node);
+
+void generate_tc_sh_cmds(char **commands, int *command_count, char *tc_filter_type,
+                         const char *dev_name, const char *qdisc_kind, const char *ingress_block,
+                         const char *egress_block)
+{
+    if (*command_count >= CMDS_ARRAY_SIZE) {
+        fprintf(stderr, "%s: Command buffer overflow.\n", __func__);
+        return;
+    }
+
+    int result;
+
+    if (strcmp(tc_filter_type, "shared-block-filter") == 0) {
+        if (strcmp(qdisc_kind, "ingress") == 0 && ingress_block) {
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE, "tc filter show block %s",
+                              ingress_block);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr, "%s: snprintf failed or truncated for ingress block.\n", __func__);
+                return;
+            }
+            (*command_count)++;
+        } else if (strcmp(qdisc_kind, "clsact") == 0) {
+            if (ingress_block) {
+                result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                                  "tc filter show block %s", ingress_block);
+                if (result < 0 || result >= CMD_LINE_SIZE) {
+                    fprintf(stderr,
+                            "%s: snprintf failed or truncated for ingress block (clsact).\n",
+                            __func__);
+                    return;
+                }
+                (*command_count)++;
+            }
+            if (egress_block) {
+                result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                                  "tc filter show block %s", egress_block);
+                if (result < 0 || result >= CMD_LINE_SIZE) {
+                    fprintf(stderr, "%s: snprintf failed or truncated for egress block.\n",
+                            __func__);
+                    return;
+                }
+                (*command_count)++;
+            }
+        }
+    } else if (strcmp(tc_filter_type, "dev-filter") == 0 && (!ingress_block || !egress_block)) {
+        if (strcmp(qdisc_kind, "ingress") == 0) {
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                              "tc filter show dev %s ingress", dev_name);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr, "%s: snprintf failed or truncated for dev ingress filter.\n",
+                        __func__);
+                return;
+            }
+            (*command_count)++;
+        } else if (strcmp(qdisc_kind, "clsact") == 0) {
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                              "tc filter show dev %s ingress", dev_name);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr,
+                        "%s: snprintf failed or truncated for dev ingress filter (clsact).\n",
+                        __func__);
+                return;
+            }
+            (*command_count)++;
+
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                              "tc filter show dev %s egress", dev_name);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr, "%s: snprintf failed or truncated for dev egress filter.\n",
+                        __func__);
+                return;
+            }
+            (*command_count)++;
+        }
+    } else if (strcmp(tc_filter_type, "qdisc-filter") == 0) {
+        result =
+            snprintf(commands[*command_count], CMD_LINE_SIZE, "tc filter show dev %s", dev_name);
+        if (result < 0 || result >= CMD_LINE_SIZE) {
+            fprintf(stderr, "%s: snprintf failed or truncated for qdisc filter.\n", __func__);
+            return;
+        }
+        (*command_count)++;
+    }
+}
+
+/* generates tc filter commands using the information in interfaces qdiscs */
+void qdiscs_to_filters_cmds(struct json_object *qdisc_array, char *tc_filter_type, char **commands,
+                            int *command_count)
+{
+    size_t n_qdiscs = json_object_array_length(qdisc_array);
+
+    for (size_t i = 0; i < n_qdiscs; i++) {
+        struct json_object *qdisc = json_object_array_get_idx(qdisc_array, i);
+        if (!qdisc) {
+            fprintf(stderr, "%s: Failed to retrieve qdisc object at index %zu.\n", __func__, i);
+            continue;
+        }
+
+        struct json_object *kind, *dev, *ingress_block, *egress_block;
+
+        if (!json_object_object_get_ex(qdisc, "kind", &kind) ||
+            !json_object_object_get_ex(qdisc, "dev", &dev)) {
+            fprintf(stderr, "%s: Missing required qdisc information at index %zu.\n", __func__, i);
+            continue;
+        }
+
+        const char *kind_str = json_object_get_string(kind);
+        const char *dev_str = json_object_get_string(dev);
+        if (kind_str == NULL || dev_str == NULL) {
+            fprintf(stderr, "%s: Error converting JSON object to string at index %zu.\n", __func__,
+                    i);
+            continue;
+        }
+
+        const char *ingress_block_str = NULL;
+        const char *egress_block_str = NULL;
+
+        if (json_object_object_get_ex(qdisc, "ingress_block", &ingress_block)) {
+            ingress_block_str = json_object_get_string(ingress_block);
+            if (ingress_block_str == NULL) {
+                fprintf(stderr,
+                        "%s: Error converting ingress block JSON object to string at index %zu.\n",
+                        __func__, i);
+                continue;
+            }
+        }
+        if (json_object_object_get_ex(qdisc, "egress_block", &egress_block)) {
+            egress_block_str = json_object_get_string(egress_block);
+            if (egress_block_str == NULL) {
+                fprintf(stderr,
+                        "%s: Error converting egress block JSON object to string at index %zu.\n",
+                        __func__, i);
+                continue;
+            }
+        }
+
+        if (*command_count >= CMDS_ARRAY_SIZE) {
+            fprintf(stderr, "%s: Command buffer overflow.\n", __func__);
+            return;
+        }
+
+        generate_tc_sh_cmds(commands, command_count, tc_filter_type, dev_str, kind_str,
+                            ingress_block_str, egress_block_str);
+    }
+}
 
 void free_list_params(const char ***key_values, uint32_t **values_lengths, int key_count)
 {
@@ -322,6 +469,36 @@ cleanup:
     return ret;
 }
 
+/* helper function convert json-c object to lyd_new_list2 keys string format */
+int jobj_to_list2_keys(json_object *keys_jobj, char **keys_str)
+{
+    // Calculate the length of the result string
+    int str_length = 1; // Start with 1 for the null terminator
+    json_object_object_foreach(keys_jobj, key_alloc, val_alloc)
+    {
+        // Add the length of each key-value pair to the total length
+        str_length +=
+            snprintf(NULL, 0, "[%s=%s] ", key_alloc,
+                     json_object_to_json_string_ext(val_alloc, JSON_C_TO_STRING_NOSLASHESCAPE));
+    }
+
+    // Allocate memory for the result string
+    char *result_str = (char *)malloc(str_length * sizeof(char));
+    if (!result_str) {
+        fprintf(stderr, "%s: Failed to allocate memory\n", __func__);
+        return EXIT_FAILURE;
+    }
+    result_str[0] = '\0';
+    json_object_object_foreach(keys_jobj, key, val)
+    {
+        sprintf(result_str + strlen(result_str), "[%s=%s]", key,
+                json_object_to_json_string_ext(val, JSON_C_TO_STRING_NOSLASHESCAPE));
+    }
+    *keys_str = strdup(result_str);
+    free(result_str);
+
+    return EXIT_SUCCESS;
+}
 /**
  * Outputs keys in the format needed for lyd_new_list2 as workaround of to libyang bug:
  * https://github.com/CESNET/libyang/pull/2207
@@ -416,31 +593,7 @@ int get_list_keys2(const struct lysc_node_list *list, json_object *json_array_ob
         }
     }
 
-    // Calculate the length of the result string
-    int str_length = 1; // Start with 1 for the null terminator
-    json_object_object_foreach(keys_jobj, key_alloc, val_alloc)
-    {
-        // Add the length of each key-value pair to the total length
-        str_length +=
-            snprintf(NULL, 0, "[%s=%s] ", key_alloc,
-                     json_object_to_json_string_ext(val_alloc, JSON_C_TO_STRING_NOSLASHESCAPE));
-    }
-
-    // Allocate memory for the result string
-    char *result_str = (char *)malloc(str_length * sizeof(char));
-    if (!result_str) {
-        fprintf(stderr, "Failed to allocate memory\n");
-        return 1;
-    }
-    result_str[0] = '\0';
-    json_object_object_foreach(keys_jobj, key, val)
-    {
-        sprintf(result_str + strlen(result_str), "[%s=%s]", key,
-                json_object_to_json_string_ext(val, JSON_C_TO_STRING_NOSLASHESCAPE));
-    }
-    *keys = strdup(result_str);
-    free(result_str);
-    ret = EXIT_SUCCESS;
+    ret = jobj_to_list2_keys(keys_jobj, keys);
 cleanup:
     if (keys_jobj != NULL) {
         json_object_put(keys_jobj);
@@ -545,22 +698,49 @@ bool terminate_processing(struct json_object *cmd_out_jobj, struct json_object *
  * @param [in] s_node: schema node being processed (typically the s_node of a leaf or leaf_list).
  * @param [in] parent_data_node: lyd data tree to which nodes under process are being attached to.
  */
-void add_missing_parents(const struct lysc_node *s_node, struct lyd_node **parent_data_node)
+int add_missing_parents(const struct lysc_node *s_node, struct lyd_node **parent_data_node)
 {
+    if (*parent_data_node == NULL) {
+        fprintf(stderr, "%s: Failed to check node parents, reference lyd_node is NULL\n", __func__);
+        return EXIT_FAILURE;
+    }
+
     struct lyd_node *new_data_node = NULL;
     char snode_parent_xpath[1024] = { 0 };
     char parent_data_node_xpath[1024] = { 0 };
     lysc_path(s_node->parent, LYSC_PATH_LOG, snode_parent_xpath, 1024);
     lysc_path((*parent_data_node)->schema, LYSC_PATH_LOG, parent_data_node_xpath, 1024);
+
+    /* exit if root node was reached */
+    if (strcmp(snode_parent_xpath, "/") == 0 || strcmp(parent_data_node_xpath, "/") == 0)
+        return EXIT_SUCCESS;
+
+    /* Check first-level children in case parent was added by a sibling leaf/leaf-list iteration */
+    struct lyd_node *child_node = NULL;
+    LY_LIST_FOR(lyd_child(*parent_data_node), child_node)
+    {
+        if (child_node->schema->nodetype == LYS_CONTAINER) {
+            lysc_path(child_node->schema, LYSC_PATH_LOG, parent_data_node_xpath, 1024);
+            if (strcmp(snode_parent_xpath, parent_data_node_xpath) == 0) {
+                *parent_data_node = child_node;
+                return EXIT_SUCCESS;
+            }
+        }
+    }
+
+    /* check parent xpaths */
     if (strcmp(snode_parent_xpath, parent_data_node_xpath) != 0 &&
         s_node->parent->nodetype == LYS_CONTAINER) {
-        // check grand_parents
+        /* check grand_parents xpaths */
         add_missing_parents(s_node->parent, parent_data_node);
+
+        /* add missing parent */
         if (LY_SUCCESS ==
             lyd_new_inner(*parent_data_node, NULL, s_node->parent->name, 0, &new_data_node)) {
             *parent_data_node = new_data_node;
         }
     }
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -806,7 +986,8 @@ void jdata_to_leaflist(struct json_object *json_array_obj, const char *arg_name,
     }
 }
 
-/* 
+/*
+This function shouldn't be used.
 Uses lyd_new_list3, on libyang version 2.1.148 there is a bug:
 https://github.com/CESNET/libyang/pull/2207
 */
@@ -843,8 +1024,7 @@ void single_jobj_to_list(struct json_object *json_obj, struct lyd_node **parent_
 }
 
 /* 
-Uses lyd_new_list2 as workaround of to libyang bug:
-https://github.com/CESNET/libyang/pull/2207
+Uses lyd_new_list2
 */
 void single_jobj_to_list2(struct json_object *json_obj, struct lyd_node **parent_data_node,
                           const struct lysc_node *s_node, uint16_t lys_flags)
@@ -852,7 +1032,8 @@ void single_jobj_to_list2(struct json_object *json_obj, struct lyd_node **parent
     const struct lysc_node_list *list = (const struct lysc_node_list *)s_node;
     char *keys = NULL;
     if (get_list_keys2(list, json_obj, &keys) == EXIT_SUCCESS) {
-        add_missing_parents(s_node, parent_data_node);
+        if (add_missing_parents(s_node, parent_data_node) == EXIT_FAILURE)
+            return;
         struct lyd_node *new_data_node = NULL;
         if (LY_SUCCESS !=
             lyd_new_list2(*parent_data_node, NULL, s_node->name, keys, 0, &new_data_node)) {
@@ -936,6 +1117,8 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
     /* check for schema extension overrides */
     char *arg_name = NULL;
     char *term_vals = NULL;
+    char *sub_jobj_name = NULL;
+    json_object *node_jobj = NULL;
 
     if (get_lys_extension(OPER_STOP_IF_EXT, s_node, &term_vals) == EXIT_SUCCESS) {
         if (term_vals == NULL) {
@@ -977,6 +1160,22 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
         arg_name = strdup(s_node->name);
     }
 
+    if (get_lys_extension(OPER_SUB_JOBJ_EXT, s_node, &sub_jobj_name) == EXIT_SUCCESS) {
+        if (sub_jobj_name == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-sub-job extension found but failed to "
+                    "get the sub json object name value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return EXIT_FAILURE;
+        }
+    }
+    if (sub_jobj_name != NULL) {
+        find_json_value_by_key(json_obj, sub_jobj_name, &node_jobj);
+        free(sub_jobj_name);
+    } else {
+        node_jobj = json_obj;
+    }
+
     switch (s_node->nodetype) {
     case LYS_LEAFLIST:
     case LYS_LEAF: {
@@ -991,56 +1190,22 @@ int process_node(const struct lysc_node *s_node, json_object *json_obj, uint16_t
             break;
 
         if (s_node->nodetype == LYS_LEAFLIST)
-            jdata_to_leaflist(json_obj, arg_name, parent_data_node, s_node);
+            jdata_to_leaflist(node_jobj, arg_name, parent_data_node, s_node);
 
         if (s_node->nodetype == LYS_LEAF)
-            jdata_to_leaf(json_obj, arg_name, parent_data_node, s_node);
+            jdata_to_leaf(node_jobj, arg_name, parent_data_node, s_node);
         break;
     }
     case LYS_LIST: {
-        char *sub_jobj_name = NULL;
-        json_object *list_jobj = NULL;
-        if (get_lys_extension(OPER_SUB_JOBJ_EXT, s_node, &sub_jobj_name) == EXIT_SUCCESS) {
-            if (sub_jobj_name == NULL) {
-                fprintf(stderr,
-                        "%s: ipr2cgen:oper-sub-job extension found but failed to "
-                        "get the sub json object name value for node \"%s\"\n",
-                        __func__, s_node->name);
-                return EXIT_FAILURE;
-            }
-        }
-        if (sub_jobj_name != NULL) {
-            find_json_value_by_key(json_obj, sub_jobj_name, &list_jobj);
-        } else {
-            list_jobj = json_obj;
-        }
-        free(sub_jobj_name);
-        jdata_to_list(list_jobj, arg_name, s_node, lys_flags, parent_data_node);
+        jdata_to_list(node_jobj, arg_name, s_node, lys_flags, parent_data_node);
         break;
     }
     case LYS_CHOICE:
     case LYS_CASE:
     case LYS_CONTAINER: {
-        char *sub_jobj_name = NULL;
-        json_object *container_job = NULL;
-        if (get_lys_extension(OPER_SUB_JOBJ_EXT, s_node, &sub_jobj_name) == EXIT_SUCCESS) {
-            if (sub_jobj_name == NULL) {
-                fprintf(stderr,
-                        "%s: ipr2cgen:oper-sub-job extension found but failed to "
-                        "get the sub json object name value for node \"%s\"\n",
-                        __func__, s_node->name);
-                return EXIT_FAILURE;
-            }
-        }
-        if (sub_jobj_name != NULL) {
-            find_json_value_by_key(json_obj, sub_jobj_name, &container_job);
-        } else {
-            container_job = json_obj;
-        }
-        free(sub_jobj_name);
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
         {
-            if (process_node(s_child, container_job, lys_flags, &new_data_node))
+            if (process_node(s_child, node_jobj, lys_flags, &new_data_node))
                 return EXIT_FAILURE;
         }
         break;
@@ -1111,6 +1276,7 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
             return EXIT_SUCCESS;
     }
     char *show_cmd = NULL;
+    char *tc_filter_type = NULL;
     char *json_buffer_cpy = NULL;
     struct json_object *cmd_output = NULL;
 
@@ -1217,6 +1383,109 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
         if (json_buffer_inner_cpy)
             free(json_buffer_inner_cpy);
 
+    } else if (get_lys_extension(OPER_DUMP_TC_FILTERS, s_node, &tc_filter_type) == EXIT_SUCCESS) {
+        int tc_command_count = 0;
+        char tc_cmd_key_value[CMD_LINE_SIZE];
+        char *tc_cmd_key_name = NULL, *tc_filter_direction = NULL;
+        struct json_object *qdisc_cmd_output = NULL, *tc_cmd_output = NULL;
+        char **tc_commands = malloc(CMDS_ARRAY_SIZE * sizeof(char *));
+
+        if (tc_commands == NULL) {
+            fprintf(stderr, "%s: Failed to allocate memory for tc_commands array", __func__);
+            return EXIT_FAILURE;
+        }
+
+        for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
+            tc_commands[i] = malloc(CMD_LINE_SIZE * sizeof(char));
+            if (tc_commands[i] == NULL) {
+                fprintf(stderr, "%s: Failed to allocate memory for a command string", __func__);
+                return EXIT_FAILURE;
+            }
+        }
+
+        /* Apply tc qdisc command, qdisc outputs are used to generate tc filters commands */
+        char *tc_qdisc_cmd = "tc qdisc list";
+        if (strcmp(net_namespace, "1") != 0) {
+            tc_qdisc_cmd = "tc qdisc list -n %s";
+        }
+        if (apply_ipr2_cmd(tc_qdisc_cmd) != EXIT_SUCCESS) {
+            fprintf(stderr, "%s: command execution failed\n", __func__);
+            return EXIT_FAILURE;
+        }
+        qdisc_cmd_output = json_tokener_parse(json_buffer);
+        if (json_object_get_type(qdisc_cmd_output) == json_type_array) {
+            qdiscs_to_filters_cmds(qdisc_cmd_output, tc_filter_type, tc_commands,
+                                   &tc_command_count);
+        }
+        free(tc_filter_type);
+        if (qdisc_cmd_output)
+            json_object_put(qdisc_cmd_output);
+
+        /* Iterate over generated tc filter commands */
+        for (int i = 0; i < tc_command_count; i++) {
+            char *filter_list_str = NULL;
+            struct lyd_node *new_filter = NULL;
+
+            /* Extract tc list keys */
+            if (strstr(tc_commands[i], "block")) {
+                sscanf(tc_commands[i], "tc filter show block %s", tc_cmd_key_value);
+                tc_cmd_key_name = "block";
+                tc_filter_direction = NULL;
+            } else if (strstr(tc_commands[i], "dev")) {
+                sscanf(tc_commands[i], "tc filter show dev %s", tc_cmd_key_value);
+                tc_cmd_key_name = "dev";
+
+                if (strstr(tc_commands[i], "ingress"))
+                    tc_filter_direction = "ingress";
+                else if (strstr(tc_commands[i], "egress"))
+                    tc_filter_direction = "egress";
+                else
+                    tc_filter_direction = NULL;
+            }
+
+            /* Create tc list json-c object */
+            json_object *filter_list_jobj = json_object_new_object();
+            json_object_object_add(filter_list_jobj, tc_cmd_key_name,
+                                   json_object_new_string(tc_cmd_key_value));
+            json_object_object_add(filter_list_jobj, "netns",
+                                   json_object_new_string(net_namespace));
+            if (tc_filter_direction != NULL)
+                json_object_object_add(filter_list_jobj, "direction",
+                                       json_object_new_string(tc_filter_direction));
+
+            /* Create the tc list lyd_node */
+            jobj_to_list2_keys(filter_list_jobj, &filter_list_str);
+            lyd_new_list2(*parent_data_node, NULL, s_node->name, filter_list_str, 0, &new_filter);
+            json_object_put(filter_list_jobj);
+            free(filter_list_str);
+
+            /* Apply tc filter command */
+            if (apply_ipr2_cmd(tc_commands[i]) != EXIT_SUCCESS) {
+                fprintf(stderr, "%s: command execution failed\n", __func__);
+                return EXIT_FAILURE;
+            }
+            free(tc_commands[i]);
+
+            /* Process tc filter rules */
+            tc_cmd_output = json_tokener_parse(json_buffer);
+            if (json_object_get_type(tc_cmd_output) == json_type_array) {
+                size_t n_arrays = json_object_array_length(tc_cmd_output);
+                for (size_t i = 0; i < n_arrays; i++) {
+                    if (i % 2 == 1) {
+                        struct json_object *tc_array_obj =
+                            json_object_array_get_idx(tc_cmd_output, i);
+                        const struct lysc_node *s_child = NULL;
+                        LY_LIST_FOR(lysc_node_child(s_node), s_child)
+                        {
+                            process_node(s_child, tc_array_obj, lys_flags, &new_filter);
+                        }
+                    }
+                }
+            }
+            if (tc_cmd_output)
+                json_object_put(tc_cmd_output);
+        }
+        free(tc_commands);
     } else {
         const struct lysc_node *s_child;
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
