@@ -43,7 +43,7 @@ qdisc_if5="qdisc_if5"
 qdisc_if6="qdisc_if6"
 qdisc_if7="qdisc_if7"
 qdisc_if8="qdisc_if8"
-
+qdisc_if9="qdisc_if9"
 
 # Function to create LINK
 create_interfaces() {
@@ -112,6 +112,7 @@ delete_interfaces() {
     ip link del name $qdisc_if6
     ip link del name $qdisc_if7
     ip link del name $qdisc_if8
+    ip link del name $qdisc_if9
 }
 
 # Function to delete network interfaces
@@ -156,6 +157,7 @@ create_interfaces $qdisc_if5 $mtu_value "dummy"
 create_interfaces $qdisc_if6 $mtu_value "dummy"
 create_interfaces $qdisc_if7 $mtu_value "dummy"
 create_interfaces $qdisc_if8 $mtu_value "dummy"
+create_interfaces $qdisc_if9 $mtu_value "dummy"
 
 #prio
 tc qdisc add dev $qdisc_if1 root handle 1: prio bands 3 priomap 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
@@ -177,6 +179,26 @@ tc qdisc add dev $qdisc_if6 root handle 20: pfifo
 tc qdisc add dev $qdisc_if7 ingress_block 10 ingress
 #clsact
 tc qdisc add dev $qdisc_if8 ingress_block 11 egress_block 12 clsact
+
+# TC-FILTERs
+# shared-block-filter
+tc filter add block 11 pref 10 protocol ip flower dst_ip 10.10.10.0/24 action drop
+tc filter add block 11 pref 20 protocol ip flower src_ip 11.11.11.11 action nat ingress 11.11.11.11 100.100.100.100
+tc filter add block 12 pref 10 protocol ip flower src_ip 11.11.0.0/16 action pass
+tc filter add block 12 pref 20 protocol ip flower ip_proto tcp src_port 50 action drop
+tc filter add block 12 pref 30 protocol ip flower ip_proto udp dst_port 50 action drop
+tc filter add block 12 pref 40 protocol ip flower src_mac 11:11:11:11:11:11 action drop
+
+
+# dev-filter
+tc qdisc add dev $qdisc_if9 clsact
+tc filter add dev $qdisc_if9 ingress pref 10 protocol ip flower dst_ip "10.10.10.10" action drop
+tc filter add dev $qdisc_if9 ingress pref 20 protocol ip flower ip_proto tcp src_port 50 action drop
+tc filter add dev $qdisc_if9 ingress pref 30 protocol ip flower src_ip "12.12.12.12" action nat ingress "12.12.12.12/32" "100.100.100.100"
+tc filter add dev $qdisc_if9 egress pref 10 protocol ip flower dst_ip "13.13.13.13" action pass
+
+# qdisc-filter
+# not-supported
 
 # Run iproute2-sysrepo and store its PID
 echo -e "\nSTARTING IPROUTE2-SYSREPO"
@@ -504,6 +526,66 @@ check_special_qdiscs() {
     fi
 }
 
+# Function to check shared block filter rules
+check_shared_block_rule() {
+    echo "- Checking shared block ($1) filter rule ($2) configuration on sysrepo:"
+    output=$(sysrepocfg -X -d running -f xml -x "/iproute2-tc-filter:tc-filters/shared-block-filter[block=\"$1\"]/rule[pref=\"$2\"]")
+
+    echo -e "sysrepo outputs:\n $output"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: sysrepo failed to extract data for $1 (SYSREPO PROBLEM ?)."
+        cleanup
+        exit 1
+    fi
+
+    local i=3
+    local args=("$@")
+    while [ $i -lt $# ]; do
+        echo "Checking rule condition or action (${args[$((i-1))]}):"
+        pattern="<${args[$((i-1))]}>\\s*${args[$i]}\\s*</${args[$((i-1))]}>"
+        
+        # Use the pattern with grep
+        if ! echo "$output" | grep -qP "$pattern"; then
+            echo "Error: rule condition (${args[$((i-1))]}) not found or not matching expected value of (${args[$i]})"
+            cleanup
+            exit 1
+        fi
+        echo "    found expected value (${args[$i]})"
+        i=$((i+2))
+    done
+}
+
+# Function to check dev-filter rules
+check_dev_filter_rule() {
+    echo "- Checking dev ($1) filter direction ($2) filter rule ($3) configuration on sysrepo:"
+    output=$(sysrepocfg -X -d running -f xml -x "/iproute2-tc-filter:tc-filters/dev-filter[dev=\"$1\"][direction=\"$2\"]/rule[pref=\"$3\"]")
+
+    echo -e "sysrepo outputs:\n $output"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: sysrepo failed to extract data for $1 (SYSREPO PROBLEM ?)."
+        cleanup
+        exit 1
+    fi
+
+    local i=4
+    local args=("$@")
+    while [ $i -lt $# ]; do
+        echo "Checking rule condition or action (${args[$((i-1))]}):"
+        pattern="<${args[$((i-1))]}>\\s*${args[$i]}\\s*</${args[$((i-1))]}>"
+        
+        # Use the pattern with grep
+        if ! echo "$output" | grep -qP "$pattern"; then
+            echo "Error: rule condition (${args[$((i-1))]}) not found or not matching expected value of (${args[$i]})"
+            cleanup
+            exit 1
+        fi
+        echo "    found expected value (${args[$i]})"
+        i=$((i+2))
+    done
+}
+
 echo -e "\nVLIDATING DATA ON SYSREPO"
 check_interface $link_name
 echo -e "\n"
@@ -536,6 +618,26 @@ echo -e "\n"
 check_special_qdiscs $qdisc_if7 "ingress" "10"
 echo -e "\n"
 check_special_qdiscs $qdisc_if8 "clsact" "11"
+echo -e "\n"
+check_shared_block_rule "11" "10" "dst_ip" "10.10.10.0/24" "gact" "drop"
+echo -e "\n"
+check_shared_block_rule "11" "20" "src_ip" "11.11.11.11" "direction" "ingress" "old_ip" "11.11.11.11/32" "new_ip" "100.100.100.100" "gact" "pass"
+echo -e "\n"
+check_shared_block_rule "12" "10" "src_ip" "11.11.0.0/16" "gact" "pass"
+echo -e "\n"
+check_shared_block_rule "12" "20" "ip_proto" "tcp" "src_port" "50" "gact" "drop"
+echo -e "\n"
+check_shared_block_rule "12" "30" "ip_proto" "udp" "dst_port" "50" "gact" "drop"
+echo -e "\n"
+check_shared_block_rule "12" "40" "src_mac" "11:11:11:11:11:11" "gact" "drop"
+echo -e "\n"
+check_dev_filter_rule $qdisc_if9 "ingress" "10" "dst_ip" "10.10.10.10" "gact" "drop"
+echo -e "\n"
+check_dev_filter_rule $qdisc_if9 "ingress" "20" "ip_proto" "tcp" "src_port" "50" "gact" "drop"
+echo -e "\n"
+check_dev_filter_rule $qdisc_if9 "ingress" "30" "src_ip" "12.12.12.12" "direction" "ingress" "old_ip" "12.12.12.12/32" "new_ip" "100.100.100.100" "gact" "pass"
+echo -e "\n"
+check_dev_filter_rule $qdisc_if9 "egress" "10" "dst_ip" "13.13.13.13" "gact" "pass"
 echo -e "\n"
 cleanup
 
