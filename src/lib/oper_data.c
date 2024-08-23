@@ -1410,6 +1410,7 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
         }
         if (apply_ipr2_cmd(tc_qdisc_cmd) != EXIT_SUCCESS) {
             fprintf(stderr, "%s: command execution failed\n", __func__);
+            free(tc_filter_type);
             return EXIT_FAILURE;
         }
         qdisc_cmd_output = json_tokener_parse(json_buffer);
@@ -1453,15 +1454,11 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
                 json_object_object_add(filter_list_jobj, "direction",
                                        json_object_new_string(tc_filter_direction));
 
-            /* Create the tc list lyd_node */
-            jobj_to_list2_keys(filter_list_jobj, &filter_list_str);
-            lyd_new_list2(*parent_data_node, NULL, s_node->name, filter_list_str, 0, &new_filter);
-            json_object_put(filter_list_jobj);
-            free(filter_list_str);
-
             /* Apply tc filter command */
             if (apply_ipr2_cmd(tc_commands[i]) != EXIT_SUCCESS) {
                 fprintf(stderr, "%s: command execution failed\n", __func__);
+                free(tc_commands[i]);
+                free(tc_commands);
                 return EXIT_FAILURE;
             }
             free(tc_commands[i]);
@@ -1469,15 +1466,26 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
             /* Process tc filter rules */
             tc_cmd_output = json_tokener_parse(json_buffer);
             if (json_object_get_type(tc_cmd_output) == json_type_array) {
-                size_t n_arrays = json_object_array_length(tc_cmd_output);
-                for (size_t i = 0; i < n_arrays; i++) {
-                    if (i % 2 == 1) {
-                        struct json_object *tc_array_obj =
-                            json_object_array_get_idx(tc_cmd_output, i);
-                        const struct lysc_node *s_child = NULL;
-                        LY_LIST_FOR(lysc_node_child(s_node), s_child)
-                        {
-                            process_node(s_child, tc_array_obj, lys_flags, &new_filter);
+                /* Process only if the command outputs are not empty */
+                if (json_object_array_length(tc_cmd_output) != 0) {
+                    /* Create the tc list lyd_node */
+                    jobj_to_list2_keys(filter_list_jobj, &filter_list_str);
+                    lyd_new_list2(*parent_data_node, NULL, s_node->name, filter_list_str, 0,
+                                  &new_filter);
+                    json_object_put(filter_list_jobj);
+                    free(filter_list_str);
+
+                    /* start processing the filter rules */
+                    size_t n_arrays = json_object_array_length(tc_cmd_output);
+                    for (size_t i = 0; i < n_arrays; i++) {
+                        if (i % 2 == 1) {
+                            struct json_object *tc_array_obj =
+                                json_object_array_get_idx(tc_cmd_output, i);
+                            const struct lysc_node *s_child = NULL;
+                            LY_LIST_FOR(lysc_node_child(s_node), s_child)
+                            {
+                                process_node(s_child, tc_array_obj, lys_flags, &new_filter);
+                            }
                         }
                     }
                 }
