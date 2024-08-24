@@ -24,6 +24,60 @@ module iproute2-tc-filter {
         description "Initial version.";
     }
 
+    grouping filter-state {
+        container state {
+            config false;
+            leaf installed {
+                type uint64;
+                description "Time in seconds passed since the filter was installed.";
+            }
+            leaf last_used {
+                type uint64;
+                description "Time in seconds passed since the filter was last used.";
+            }
+            leaf first_used {
+                type uint64;
+                description "Time in seconds passed since the filter was first used.";
+            }
+            leaf expires {
+                type uint64;
+                description "Time in seconds until filter expires.";
+            }
+            container stats {
+                description "Contains 64-bit counters for various network statistics.
+                Providing detailed information on the traffic handled by the filter.";
+                leaf bytes {
+                    type uint64;
+                    description "Total number of bytes received by the filter.";
+                }
+                leaf packets {
+                    type uint64;
+                    description "Total number of packets received by the filter.";
+                }
+                leaf drops {
+                    type uint64;
+                    description "Number of packets dropped by the filter.";
+                }
+                leaf overlimits {
+                    type uint64;
+                    description " The number of times the filter has encountered a situation where it exceeded 
+                    its configured limits (e.g., rate limits).";
+                }
+                leaf requeues {
+                    type uint64;
+                    description "The number of packets that have been requeued by the filter.";
+                }
+                leaf backlog {
+                    type uint64;
+                    description "TThe current amount of data (in bytes) that is waiting in the queue for this filter.";
+                }
+                leaf qlen {
+                    type uint64;
+                    description "filter queue length.";
+                }
+            }
+        }
+    }
     grouping filter-common {
         leaf netns {
             ipr2cgen:not-cmd-arg;
@@ -38,7 +92,6 @@ module iproute2-tc-filter {
             default "1";
             description "network namespace name";
         }
-
     }
     grouping filter-result {
         leaf classid {
@@ -136,6 +189,7 @@ module iproute2-tc-filter {
                 type uint8;
                 description "The priority.";
             }
+            uses filter-state;
             choice filter {
                 //ipr2cgen:oper-arg-name "kind";
                 container flower {
