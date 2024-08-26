@@ -1404,9 +1404,9 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
         }
 
         /* Apply tc qdisc command, qdisc outputs are used to generate tc filters commands */
-        char *tc_qdisc_cmd = "tc qdisc list";
+        char tc_qdisc_cmd[100] = "tc qdisc list";
         if (strcmp(net_namespace, "1") != 0) {
-            tc_qdisc_cmd = "tc qdisc list -n %s";
+            insert_netns(tc_qdisc_cmd, net_namespace);
         }
         if (apply_ipr2_cmd(tc_qdisc_cmd) != EXIT_SUCCESS) {
             fprintf(stderr, "%s: command execution failed\n", __func__);
