@@ -34,6 +34,7 @@ typedef enum {
     OPER_COMBINE_VALUES_EXT,
     OPER_SUB_JOBJ_EXT,
     OPER_DUMP_TC_FILTERS,
+    OPER_DUMP_TC_CLASSES,
 } oper_extension_t;
 
 /* to be merged with cmdgen */
@@ -47,156 +48,12 @@ char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
                               [OPER_STOP_IF_EXT] = "oper-stop-if",
                               [OPER_COMBINE_VALUES_EXT] = "oper-combine-values",
                               [OPER_SUB_JOBJ_EXT] = "oper-sub-jobj",
-                              [OPER_DUMP_TC_FILTERS] = "oper-dump-tc-filters" };
+                              [OPER_DUMP_TC_FILTERS] = "oper-dump-tc-filters",
+                              [OPER_DUMP_TC_CLASSES] = "oper-dump-tc-classes" };
 
 extern int apply_ipr2_cmd(char *ipr2_show_cmd);
 int process_node(const struct lysc_node *s_node, json_object *json_array_obj, uint16_t lys_flags,
                  struct lyd_node **parent_data_node);
-
-void generate_tc_sh_cmds(char **commands, int *command_count, char *tc_filter_type,
-                         const char *dev_name, const char *qdisc_kind, const char *ingress_block,
-                         const char *egress_block)
-{
-    if (*command_count >= CMDS_ARRAY_SIZE) {
-        fprintf(stderr, "%s: Command buffer overflow.\n", __func__);
-        return;
-    }
-
-    int result;
-
-    if (strcmp(tc_filter_type, "shared-block-filter") == 0) {
-        if (strcmp(qdisc_kind, "ingress") == 0 && ingress_block) {
-            result = snprintf(commands[*command_count], CMD_LINE_SIZE, "tc filter show block %s",
-                              ingress_block);
-            if (result < 0 || result >= CMD_LINE_SIZE) {
-                fprintf(stderr, "%s: snprintf failed or truncated for ingress block.\n", __func__);
-                return;
-            }
-            (*command_count)++;
-        } else if (strcmp(qdisc_kind, "clsact") == 0) {
-            if (ingress_block) {
-                result = snprintf(commands[*command_count], CMD_LINE_SIZE,
-                                  "tc filter show block %s", ingress_block);
-                if (result < 0 || result >= CMD_LINE_SIZE) {
-                    fprintf(stderr,
-                            "%s: snprintf failed or truncated for ingress block (clsact).\n",
-                            __func__);
-                    return;
-                }
-                (*command_count)++;
-            }
-            if (egress_block) {
-                result = snprintf(commands[*command_count], CMD_LINE_SIZE,
-                                  "tc filter show block %s", egress_block);
-                if (result < 0 || result >= CMD_LINE_SIZE) {
-                    fprintf(stderr, "%s: snprintf failed or truncated for egress block.\n",
-                            __func__);
-                    return;
-                }
-                (*command_count)++;
-            }
-        }
-    } else if (strcmp(tc_filter_type, "dev-filter") == 0 && (!ingress_block || !egress_block)) {
-        if (strcmp(qdisc_kind, "ingress") == 0) {
-            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
-                              "tc filter show dev %s ingress", dev_name);
-            if (result < 0 || result >= CMD_LINE_SIZE) {
-                fprintf(stderr, "%s: snprintf failed or truncated for dev ingress filter.\n",
-                        __func__);
-                return;
-            }
-            (*command_count)++;
-        } else if (strcmp(qdisc_kind, "clsact") == 0) {
-            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
-                              "tc filter show dev %s ingress", dev_name);
-            if (result < 0 || result >= CMD_LINE_SIZE) {
-                fprintf(stderr,
-                        "%s: snprintf failed or truncated for dev ingress filter (clsact).\n",
-                        __func__);
-                return;
-            }
-            (*command_count)++;
-
-            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
-                              "tc filter show dev %s egress", dev_name);
-            if (result < 0 || result >= CMD_LINE_SIZE) {
-                fprintf(stderr, "%s: snprintf failed or truncated for dev egress filter.\n",
-                        __func__);
-                return;
-            }
-            (*command_count)++;
-        }
-    } else if (strcmp(tc_filter_type, "qdisc-filter") == 0) {
-        result =
-            snprintf(commands[*command_count], CMD_LINE_SIZE, "tc filter show dev %s", dev_name);
-        if (result < 0 || result >= CMD_LINE_SIZE) {
-            fprintf(stderr, "%s: snprintf failed or truncated for qdisc filter.\n", __func__);
-            return;
-        }
-        (*command_count)++;
-    }
-}
-
-/* generates tc filter commands using the information in interfaces qdiscs */
-void qdiscs_to_filters_cmds(struct json_object *qdisc_array, char *tc_filter_type, char **commands,
-                            int *command_count)
-{
-    size_t n_qdiscs = json_object_array_length(qdisc_array);
-
-    for (size_t i = 0; i < n_qdiscs; i++) {
-        struct json_object *qdisc = json_object_array_get_idx(qdisc_array, i);
-        if (!qdisc) {
-            fprintf(stderr, "%s: Failed to retrieve qdisc object at index %zu.\n", __func__, i);
-            continue;
-        }
-
-        struct json_object *kind, *dev, *ingress_block, *egress_block;
-
-        if (!json_object_object_get_ex(qdisc, "kind", &kind) ||
-            !json_object_object_get_ex(qdisc, "dev", &dev)) {
-            fprintf(stderr, "%s: Missing required qdisc information at index %zu.\n", __func__, i);
-            continue;
-        }
-
-        const char *kind_str = json_object_get_string(kind);
-        const char *dev_str = json_object_get_string(dev);
-        if (kind_str == NULL || dev_str == NULL) {
-            fprintf(stderr, "%s: Error converting JSON object to string at index %zu.\n", __func__,
-                    i);
-            continue;
-        }
-
-        const char *ingress_block_str = NULL;
-        const char *egress_block_str = NULL;
-
-        if (json_object_object_get_ex(qdisc, "ingress_block", &ingress_block)) {
-            ingress_block_str = json_object_get_string(ingress_block);
-            if (ingress_block_str == NULL) {
-                fprintf(stderr,
-                        "%s: Error converting ingress block JSON object to string at index %zu.\n",
-                        __func__, i);
-                continue;
-            }
-        }
-        if (json_object_object_get_ex(qdisc, "egress_block", &egress_block)) {
-            egress_block_str = json_object_get_string(egress_block);
-            if (egress_block_str == NULL) {
-                fprintf(stderr,
-                        "%s: Error converting egress block JSON object to string at index %zu.\n",
-                        __func__, i);
-                continue;
-            }
-        }
-
-        if (*command_count >= CMDS_ARRAY_SIZE) {
-            fprintf(stderr, "%s: Command buffer overflow.\n", __func__);
-            return;
-        }
-
-        generate_tc_sh_cmds(commands, command_count, tc_filter_type, dev_str, kind_str,
-                            ingress_block_str, egress_block_str);
-    }
-}
 
 void free_list_params(const char ***key_values, uint32_t **values_lengths, int key_count)
 {
@@ -1097,6 +954,543 @@ void jdata_to_list(struct json_object *json_obj, const char *arg_name,
     }
 }
 
+/* helper function to generate tc filter commands based on required filter type */
+void generate_tc_filter_sh_cmds(char **commands, int *command_count, char *tc_filter_type,
+                                const char *dev_name, const char *qdisc_kind,
+                                const char *ingress_block, const char *egress_block)
+{
+    if (*command_count >= CMDS_ARRAY_SIZE) {
+        fprintf(stderr, "%s: Command buffer overflow.\n", __func__);
+        return;
+    }
+
+    int result;
+
+    if (strcmp(tc_filter_type, "shared-block-filter") == 0) {
+        if (strcmp(qdisc_kind, "ingress") == 0 && ingress_block) {
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE, "tc filter show block %s",
+                              ingress_block);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr, "%s: snprintf failed or truncated for ingress block.\n", __func__);
+                return;
+            }
+            (*command_count)++;
+        } else if (strcmp(qdisc_kind, "clsact") == 0) {
+            if (ingress_block) {
+                result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                                  "tc filter show block %s", ingress_block);
+                if (result < 0 || result >= CMD_LINE_SIZE) {
+                    fprintf(stderr,
+                            "%s: snprintf failed or truncated for ingress block (clsact).\n",
+                            __func__);
+                    return;
+                }
+                (*command_count)++;
+            }
+            if (egress_block) {
+                result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                                  "tc filter show block %s", egress_block);
+                if (result < 0 || result >= CMD_LINE_SIZE) {
+                    fprintf(stderr, "%s: snprintf failed or truncated for egress block.\n",
+                            __func__);
+                    return;
+                }
+                (*command_count)++;
+            }
+        }
+    } else if (strcmp(tc_filter_type, "dev-filter") == 0 && (!ingress_block || !egress_block)) {
+        if (strcmp(qdisc_kind, "ingress") == 0) {
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                              "tc filter show dev %s ingress", dev_name);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr, "%s: snprintf failed or truncated for dev ingress filter.\n",
+                        __func__);
+                return;
+            }
+            (*command_count)++;
+        } else if (strcmp(qdisc_kind, "clsact") == 0) {
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                              "tc filter show dev %s ingress", dev_name);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr,
+                        "%s: snprintf failed or truncated for dev ingress filter (clsact).\n",
+                        __func__);
+                return;
+            }
+            (*command_count)++;
+
+            result = snprintf(commands[*command_count], CMD_LINE_SIZE,
+                              "tc filter show dev %s egress", dev_name);
+            if (result < 0 || result >= CMD_LINE_SIZE) {
+                fprintf(stderr, "%s: snprintf failed or truncated for dev egress filter.\n",
+                        __func__);
+                return;
+            }
+            (*command_count)++;
+        }
+    } else if (strcmp(tc_filter_type, "qdisc-filter") == 0) {
+        result =
+            snprintf(commands[*command_count], CMD_LINE_SIZE, "tc filter show dev %s", dev_name);
+        if (result < 0 || result >= CMD_LINE_SIZE) {
+            fprintf(stderr, "%s: snprintf failed or truncated for qdisc filter.\n", __func__);
+            return;
+        }
+        (*command_count)++;
+    }
+}
+
+/* helper function to generate tc filter commands using the information in interfaces qdiscs */
+void qdiscs_to_filters_cmds(struct json_object *qdisc_array, char *tc_filter_type, char **commands,
+                            int *command_count)
+{
+    size_t n_qdiscs = json_object_array_length(qdisc_array);
+
+    for (size_t i = 0; i < n_qdiscs; i++) {
+        struct json_object *qdisc = json_object_array_get_idx(qdisc_array, i);
+        if (!qdisc) {
+            fprintf(stderr, "%s: Failed to retrieve qdisc object at index %zu.\n", __func__, i);
+            continue;
+        }
+
+        struct json_object *kind, *dev, *ingress_block, *egress_block;
+
+        if (!json_object_object_get_ex(qdisc, "kind", &kind) ||
+            !json_object_object_get_ex(qdisc, "dev", &dev)) {
+            fprintf(stderr, "%s: Missing required qdisc information at index %zu.\n", __func__, i);
+            continue;
+        }
+
+        const char *kind_str = json_object_get_string(kind);
+        const char *dev_str = json_object_get_string(dev);
+        if (kind_str == NULL || dev_str == NULL) {
+            fprintf(stderr, "%s: Error converting JSON object to string at index %zu.\n", __func__,
+                    i);
+            continue;
+        }
+
+        const char *ingress_block_str = NULL;
+        const char *egress_block_str = NULL;
+
+        if (json_object_object_get_ex(qdisc, "ingress_block", &ingress_block)) {
+            ingress_block_str = json_object_get_string(ingress_block);
+            if (ingress_block_str == NULL) {
+                fprintf(stderr,
+                        "%s: Error converting ingress block JSON object to string at index %zu.\n",
+                        __func__, i);
+                continue;
+            }
+        }
+        if (json_object_object_get_ex(qdisc, "egress_block", &egress_block)) {
+            egress_block_str = json_object_get_string(egress_block);
+            if (egress_block_str == NULL) {
+                fprintf(stderr,
+                        "%s: Error converting egress block JSON object to string at index %zu.\n",
+                        __func__, i);
+                continue;
+            }
+        }
+
+        if (*command_count >= CMDS_ARRAY_SIZE) {
+            fprintf(stderr, "%s: Command buffer overflow.\n", __func__);
+            return;
+        }
+
+        generate_tc_filter_sh_cmds(commands, command_count, tc_filter_type, dev_str, kind_str,
+                                   ingress_block_str, egress_block_str);
+    }
+}
+
+/* helper function to generate tc class commands using the information in interfaces qdiscs */
+void qdiscs_to_classes_cmds(struct json_object *qdisc_array, char **commands, int *command_count)
+{
+    int array_len = json_object_array_length(qdisc_array);
+    *command_count = 0;
+
+    for (int i = 0; i < array_len; i++) {
+        struct json_object *qdisc_obj = json_object_array_get_idx(qdisc_array, i);
+        struct json_object *kind_obj, *dev_obj;
+
+        // Extract qdisc type, device, and handle
+        if (json_object_object_get_ex(qdisc_obj, "kind", &kind_obj) &&
+            json_object_object_get_ex(qdisc_obj, "dev", &dev_obj)) {
+            const char *kind = json_object_get_string(kind_obj);
+            const char *dev = json_object_get_string(dev_obj);
+
+            // Check if the qdisc type supports classes
+            if (strcmp(kind, "htb") == 0 || strcmp(kind, "cbq") == 0 || strcmp(kind, "hfsc") == 0 ||
+                strcmp(kind, "atm") == 0 || strcmp(kind, "dsmark") == 0) {
+                // Generate the tc class show command
+                char command[256];
+                snprintf(command, sizeof(command), "tc class show dev %s", dev);
+
+                // Store the command in the commands array
+                commands[*command_count] = strdup(command);
+                (*command_count)++;
+            }
+        }
+    }
+}
+
+/**
+ * dumps tc filters configured on the system into sysrepo YANG data tree 
+ */
+int dump_tc_filters(char *tc_filter_type, const struct lysc_node *s_node,
+                    struct lyd_node **parent_data_node, int lys_flags)
+{
+    int tc_command_count = 0;
+    char tc_cmd_key_value[CMD_LINE_SIZE];
+    char *tc_cmd_key_name = NULL, *tc_filter_direction = NULL;
+    struct json_object *qdisc_cmd_output = NULL, *tc_cmd_output = NULL;
+    char **tc_commands = NULL;
+    int ret = EXIT_FAILURE;
+
+    /* Apply tc qdisc command */
+    char tc_qdisc_cmd[CMD_LINE_SIZE] = "tc qdisc list";
+    if (strcmp(net_namespace, "1") != 0) {
+        insert_netns(tc_qdisc_cmd, net_namespace);
+    }
+    if (apply_ipr2_cmd(tc_qdisc_cmd) != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: command execution failed\n", __func__);
+        goto cleanup;
+    }
+
+    /* Allocate memory for tc filter commands */
+    tc_commands = calloc(CMDS_ARRAY_SIZE, sizeof(char *));
+    if (tc_commands == NULL) {
+        fprintf(stderr, "%s: Failed to allocate memory for tc_commands array\n", __func__);
+        goto cleanup;
+    }
+    for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
+        tc_commands[i] = calloc(CMD_LINE_SIZE, sizeof(char));
+        if (tc_commands[i] == NULL) {
+            fprintf(stderr, "%s: Failed to allocate memory for command string at index %d\n",
+                    __func__, i);
+            goto cleanup;
+        }
+    }
+
+    /* Parse qdisc command output */
+    qdisc_cmd_output = json_tokener_parse(json_buffer);
+    if (qdisc_cmd_output == NULL) {
+        fprintf(stderr, "%s: JSON parsing failed for qdisc output\n", __func__);
+        goto cleanup;
+    }
+
+    if (json_object_get_type(qdisc_cmd_output) == json_type_array) {
+        qdiscs_to_filters_cmds(qdisc_cmd_output, tc_filter_type, tc_commands, &tc_command_count);
+    } else {
+        fprintf(stderr, "%s: Unexpected JSON type for qdisc output\n", __func__);
+        goto cleanup;
+    }
+    json_object_put(qdisc_cmd_output);
+    qdisc_cmd_output = NULL;
+
+    /* Process each tc filter command */
+    for (int i = 0; i < tc_command_count; i++) {
+        /* Apply tc filter command */
+        if (apply_ipr2_cmd(tc_commands[i]) != EXIT_SUCCESS) {
+            fprintf(stderr, "%s: command execution failed for command: %s\n", __func__,
+                    tc_commands[i]);
+            goto cleanup;
+        }
+
+        /* Parse tc filter command output */
+        tc_cmd_output = json_tokener_parse(json_buffer);
+        if (tc_cmd_output == NULL) {
+            fprintf(stderr, "%s: JSON parsing failed for command output: %s\n", __func__,
+                    tc_commands[i]);
+            goto cleanup;
+        }
+        if (json_object_get_type(tc_cmd_output) != json_type_array ||
+            json_object_array_length(tc_cmd_output) == 0) {
+            json_object_put(tc_cmd_output);
+            tc_cmd_output = NULL;
+            continue; /* No data to process, proceed to next tc filter command */
+        }
+
+        /* Extract keys from command */
+        if (strstr(tc_commands[i], "block")) {
+            if (sscanf(tc_commands[i], "tc filter show block %s", tc_cmd_key_value) != 1) {
+                fprintf(stderr, "%s: Failed to parse block from command: %s\n", __func__,
+                        tc_commands[i]);
+                json_object_put(tc_cmd_output);
+                tc_cmd_output = NULL;
+                goto cleanup;
+            }
+            tc_cmd_key_name = "block";
+            tc_filter_direction = NULL;
+        } else if (strstr(tc_commands[i], "dev")) {
+            if (sscanf(tc_commands[i], "tc filter show dev %s", tc_cmd_key_value) != 1) {
+                fprintf(stderr, "%s: Failed to parse dev from command: %s\n", __func__,
+                        tc_commands[i]);
+                json_object_put(tc_cmd_output);
+                tc_cmd_output = NULL;
+                goto cleanup;
+            }
+            tc_cmd_key_name = "dev";
+
+            if (strstr(tc_commands[i], "ingress"))
+                tc_filter_direction = "ingress";
+            else if (strstr(tc_commands[i], "egress"))
+                tc_filter_direction = "egress";
+            else
+                tc_filter_direction = NULL;
+        } else {
+            fprintf(stderr, "%s: Unknown command format: %s\n", __func__, tc_commands[i]);
+            json_object_put(tc_cmd_output);
+            tc_cmd_output = NULL;
+            goto cleanup;
+        }
+
+        /* Create tc filter list in YANG data tree */
+        json_object *filter_list_jobj = json_object_new_object();
+        if (!filter_list_jobj) {
+            fprintf(stderr, "%s: Failed to create JSON object for filter list\n", __func__);
+            json_object_put(tc_cmd_output);
+            tc_cmd_output = NULL;
+            goto cleanup;
+        }
+        json_object_object_add(filter_list_jobj, tc_cmd_key_name,
+                               json_object_new_string(tc_cmd_key_value));
+        json_object_object_add(filter_list_jobj, "netns", json_object_new_string(net_namespace));
+        if (tc_filter_direction != NULL)
+            json_object_object_add(filter_list_jobj, "direction",
+                                   json_object_new_string(tc_filter_direction));
+        char *filter_list_str = NULL;
+        jobj_to_list2_keys(filter_list_jobj, &filter_list_str);
+        json_object_put(filter_list_jobj);
+        filter_list_jobj = NULL;
+
+        if (!filter_list_str) {
+            fprintf(stderr, "%s: Failed to convert JSON object to string for filter list\n",
+                    __func__);
+            json_object_put(tc_cmd_output);
+            tc_cmd_output = NULL;
+            goto cleanup;
+        }
+        struct lyd_node *new_filter = NULL;
+        if (lyd_new_list2(*parent_data_node, NULL, s_node->name, filter_list_str, 0, &new_filter) !=
+            LY_SUCCESS) {
+            fprintf(stderr, "%s: Failed to create new list in YANG data tree\n", __func__);
+            free(filter_list_str);
+            json_object_put(tc_cmd_output);
+            tc_cmd_output = NULL;
+            goto cleanup;
+        }
+        free(filter_list_str);
+        filter_list_str = NULL;
+
+        /* Process individual filter rules into tc filter YANG data tree */
+        size_t n_arrays = json_object_array_length(tc_cmd_output);
+        for (size_t j = 0; j < n_arrays; j++) {
+            if (j % 2 == 1) { /* workaround having tc filter rules shown twice
+                                in tc filer command outputs */
+                struct json_object *tc_array_obj = json_object_array_get_idx(tc_cmd_output, j);
+                if (!tc_array_obj) {
+                    fprintf(stderr, "%s: Failed to get JSON array element at index %zu\n", __func__,
+                            j);
+                    continue;
+                }
+                const struct lysc_node *s_child = NULL;
+                LY_LIST_FOR(lysc_node_child(s_node), s_child)
+                {
+                    process_node(s_child, tc_array_obj, lys_flags, &new_filter);
+                }
+            }
+        }
+
+        /* Clean up for this iteration */
+        json_object_put(tc_cmd_output);
+        tc_cmd_output = NULL;
+    }
+
+    ret = EXIT_SUCCESS;
+
+cleanup:
+    /* Free tc_commands array */
+    if (tc_commands) {
+        for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
+            if (tc_commands[i]) {
+                free(tc_commands[i]);
+                tc_commands[i] = NULL;
+            }
+        }
+        free(tc_commands);
+        tc_commands = NULL;
+    }
+    /* Free any remaining JSON objects */
+    if (qdisc_cmd_output) {
+        json_object_put(qdisc_cmd_output);
+        qdisc_cmd_output = NULL;
+    }
+    if (tc_cmd_output) {
+        json_object_put(tc_cmd_output);
+        tc_cmd_output = NULL;
+    }
+    return ret;
+}
+
+/**
+ * dumps tc classes configured on the system into sysrepo YANG data tree 
+ */
+int dump_tc_classes(const struct lysc_node *s_node, struct lyd_node **parent_data_node,
+                    int lys_flags)
+{
+    int tc_command_count = 0;
+    char tc_cmd_key_value[CMD_LINE_SIZE];
+    char *tc_cmd_key_name = NULL;
+    struct json_object *qdisc_cmd_output = NULL, *tc_cmd_output = NULL;
+    char **tc_commands = NULL;
+    int ret = EXIT_FAILURE;
+
+    /* Apply tc qdisc command */
+    char tc_qdisc_cmd[CMD_LINE_SIZE] = "tc qdisc list";
+    if (strcmp(net_namespace, "1") != 0) {
+        insert_netns(tc_qdisc_cmd, net_namespace);
+    }
+    if (apply_ipr2_cmd(tc_qdisc_cmd) != EXIT_SUCCESS) {
+        fprintf(stderr, "%s: command execution failed\n", __func__);
+        goto cleanup;
+    }
+
+    /* Allocate memory for tc class commands */
+    tc_commands = calloc(CMDS_ARRAY_SIZE, sizeof(char *));
+    if (tc_commands == NULL) {
+        fprintf(stderr, "%s: Failed to allocate memory for tc_commands array\n", __func__);
+        goto cleanup;
+    }
+    for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
+        tc_commands[i] = calloc(CMD_LINE_SIZE, sizeof(char));
+        if (tc_commands[i] == NULL) {
+            fprintf(stderr, "%s: Failed to allocate memory for command string at index %d\n",
+                    __func__, i);
+            goto cleanup;
+        }
+    }
+
+    /* Parse qdisc command output */
+    qdisc_cmd_output = json_tokener_parse(json_buffer);
+    if (qdisc_cmd_output == NULL) {
+        fprintf(stderr, "%s: JSON parsing failed for qdisc output\n", __func__);
+        goto cleanup;
+    }
+    qdiscs_to_classes_cmds(qdisc_cmd_output, tc_commands, &tc_command_count);
+    json_object_put(qdisc_cmd_output);
+    qdisc_cmd_output = NULL;
+
+    /* Process each tc class command */
+    for (int i = 0; i < tc_command_count; i++) {
+        /* Apply tc class command */
+        if (apply_ipr2_cmd(tc_commands[i]) != EXIT_SUCCESS) {
+            fprintf(stderr, "%s: command execution failed for command: %s\n", __func__,
+                    tc_commands[i]);
+            goto cleanup;
+        }
+
+        /* Parse tc class command output */
+        tc_cmd_output = json_tokener_parse(json_buffer);
+        if (tc_cmd_output == NULL) {
+            fprintf(stderr, "%s: JSON parsing failed for command output: %s\n", __func__,
+                    tc_commands[i]);
+            goto cleanup;
+        }
+
+        if (json_object_get_type(tc_cmd_output) != json_type_array ||
+            json_object_array_length(tc_cmd_output) == 0) {
+            json_object_put(tc_cmd_output);
+            tc_cmd_output = NULL;
+            continue; /* No data to process, proceed to next tc class command */
+        }
+
+        /* iterate through every class array */
+        size_t n_arrays = json_object_array_length(tc_cmd_output);
+        for (size_t j = 0; j < n_arrays; j++) {
+            struct json_object *tc_array_obj = json_object_array_get_idx(tc_cmd_output, j);
+
+            /* Extract tc class list keys */
+            struct json_object *classid_obj, *parent_obj;
+            const char *classid_str, *parent_str = NULL;
+            if (strstr(tc_commands[i], "dev")) {
+                if (sscanf(tc_commands[i], "tc class show dev %s", tc_cmd_key_value) != 1) {
+                    fprintf(stderr, "%s: Failed to parse dev from command: %s\n", __func__,
+                            tc_commands[i]);
+                    goto cleanup;
+                }
+                tc_cmd_key_name = "dev";
+            } else {
+                fprintf(stderr, "%s: Unknown command format: %s\n", __func__, tc_commands[i]);
+                goto cleanup;
+            }
+            if (json_object_object_get_ex(tc_array_obj, "handle", &classid_obj)) {
+                classid_str = json_object_get_string(classid_obj);
+            }
+            if (json_object_object_get_ex(tc_array_obj, "parent", &parent_obj)) {
+                parent_str = json_object_get_string(parent_obj);
+            } else if (json_object_object_get_ex(tc_array_obj, "root", &parent_obj)) {
+                parent_str = "root";
+            }
+
+            /* create tc class YANG list data tree */
+            json_object *class_list_jobj = json_object_new_object();
+            json_object_object_add(class_list_jobj, tc_cmd_key_name,
+                                   json_object_new_string(tc_cmd_key_value));
+            json_object_object_add(class_list_jobj, "netns", json_object_new_string(net_namespace));
+            json_object_object_add(class_list_jobj, "parent", json_object_new_string(parent_str));
+            json_object_object_add(class_list_jobj, "classid", json_object_new_string(classid_str));
+
+            char *class_list_str = NULL;
+            jobj_to_list2_keys(class_list_jobj, &class_list_str);
+            json_object_put(class_list_jobj);
+            class_list_jobj = NULL;
+
+            struct lyd_node *new_class = NULL;
+            if (lyd_new_list2(*parent_data_node, NULL, s_node->name, class_list_str, 0,
+                              &new_class) != LY_SUCCESS) {
+                fprintf(stderr, "%s: Failed to create new list in YANG data tree\n", __func__);
+                free(class_list_str);
+                goto cleanup;
+            }
+            free(class_list_str);
+
+            /* process the class list children nodes */
+            const struct lysc_node *s_child = NULL;
+            LY_LIST_FOR(lysc_node_child(s_node), s_child)
+            {
+                process_node(s_child, tc_array_obj, lys_flags, &new_class);
+            }
+        }
+        json_object_put(tc_cmd_output);
+        tc_cmd_output = NULL;
+    }
+
+    ret = EXIT_SUCCESS;
+
+cleanup:
+    /* Free tc_commands array */
+    if (tc_commands) {
+        for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
+            if (tc_commands[i]) {
+                free(tc_commands[i]);
+                tc_commands[i] = NULL;
+            }
+        }
+        free(tc_commands);
+        tc_commands = NULL;
+    }
+
+    /* Free any remaining JSON objects */
+    if (qdisc_cmd_output) {
+        json_object_put(qdisc_cmd_output);
+        qdisc_cmd_output = NULL;
+    }
+    if (tc_cmd_output) {
+        json_object_put(tc_cmd_output);
+        tc_cmd_output = NULL;
+    }
+
+    return ret;
+}
+
 /**
  * Processes a schema node and maps its data from a JSON object to a YANG data tree (lyd_node).
  * This function looks up schema node names in json object keys to retrive their values, and creates
@@ -1384,116 +1778,11 @@ int process_schema(const struct lysc_node *s_node, uint16_t lys_flags,
             free(json_buffer_inner_cpy);
 
     } else if (get_lys_extension(OPER_DUMP_TC_FILTERS, s_node, &tc_filter_type) == EXIT_SUCCESS) {
-        int tc_command_count = 0;
-        char tc_cmd_key_value[CMD_LINE_SIZE];
-        char *tc_cmd_key_name = NULL, *tc_filter_direction = NULL;
-        struct json_object *qdisc_cmd_output = NULL, *tc_cmd_output = NULL;
-        char **tc_commands = malloc(CMDS_ARRAY_SIZE * sizeof(char *));
-
-        if (tc_commands == NULL) {
-            fprintf(stderr, "%s: Failed to allocate memory for tc_commands array", __func__);
-            return EXIT_FAILURE;
-        }
-
-        for (int i = 0; i < CMDS_ARRAY_SIZE; i++) {
-            tc_commands[i] = malloc(CMD_LINE_SIZE * sizeof(char));
-            if (tc_commands[i] == NULL) {
-                fprintf(stderr, "%s: Failed to allocate memory for a command string", __func__);
-                return EXIT_FAILURE;
-            }
-        }
-
-        /* Apply tc qdisc command, qdisc outputs are used to generate tc filters commands */
-        char tc_qdisc_cmd[100] = "tc qdisc list";
-        if (strcmp(net_namespace, "1") != 0) {
-            insert_netns(tc_qdisc_cmd, net_namespace);
-        }
-        if (apply_ipr2_cmd(tc_qdisc_cmd) != EXIT_SUCCESS) {
-            fprintf(stderr, "%s: command execution failed\n", __func__);
-            free(tc_filter_type);
-            return EXIT_FAILURE;
-        }
-        qdisc_cmd_output = json_tokener_parse(json_buffer);
-        if (json_object_get_type(qdisc_cmd_output) == json_type_array) {
-            qdiscs_to_filters_cmds(qdisc_cmd_output, tc_filter_type, tc_commands,
-                                   &tc_command_count);
-        }
+        int result = dump_tc_filters(tc_filter_type, s_node, parent_data_node, lys_flags);
         free(tc_filter_type);
-        if (qdisc_cmd_output)
-            json_object_put(qdisc_cmd_output);
-
-        /* Iterate over generated tc filter commands */
-        for (int i = 0; i < tc_command_count; i++) {
-            char *filter_list_str = NULL;
-            struct lyd_node *new_filter = NULL;
-
-            /* Extract tc list keys */
-            if (strstr(tc_commands[i], "block")) {
-                sscanf(tc_commands[i], "tc filter show block %s", tc_cmd_key_value);
-                tc_cmd_key_name = "block";
-                tc_filter_direction = NULL;
-            } else if (strstr(tc_commands[i], "dev")) {
-                sscanf(tc_commands[i], "tc filter show dev %s", tc_cmd_key_value);
-                tc_cmd_key_name = "dev";
-
-                if (strstr(tc_commands[i], "ingress"))
-                    tc_filter_direction = "ingress";
-                else if (strstr(tc_commands[i], "egress"))
-                    tc_filter_direction = "egress";
-                else
-                    tc_filter_direction = NULL;
-            }
-
-            /* Create tc list json-c object */
-            json_object *filter_list_jobj = json_object_new_object();
-            json_object_object_add(filter_list_jobj, tc_cmd_key_name,
-                                   json_object_new_string(tc_cmd_key_value));
-            json_object_object_add(filter_list_jobj, "netns",
-                                   json_object_new_string(net_namespace));
-            if (tc_filter_direction != NULL)
-                json_object_object_add(filter_list_jobj, "direction",
-                                       json_object_new_string(tc_filter_direction));
-
-            /* Apply tc filter command */
-            if (apply_ipr2_cmd(tc_commands[i]) != EXIT_SUCCESS) {
-                fprintf(stderr, "%s: command execution failed\n", __func__);
-                free(tc_commands[i]);
-                free(tc_commands);
-                return EXIT_FAILURE;
-            }
-            free(tc_commands[i]);
-
-            /* Process tc filter rules */
-            tc_cmd_output = json_tokener_parse(json_buffer);
-            if (json_object_get_type(tc_cmd_output) == json_type_array) {
-                /* Process only if the command outputs are not empty */
-                if (json_object_array_length(tc_cmd_output) != 0) {
-                    /* Create the tc list lyd_node */
-                    jobj_to_list2_keys(filter_list_jobj, &filter_list_str);
-                    lyd_new_list2(*parent_data_node, NULL, s_node->name, filter_list_str, 0,
-                                  &new_filter);
-                    json_object_put(filter_list_jobj);
-                    free(filter_list_str);
-
-                    /* start processing the filter rules */
-                    size_t n_arrays = json_object_array_length(tc_cmd_output);
-                    for (size_t i = 0; i < n_arrays; i++) {
-                        if (i % 2 == 1) {
-                            struct json_object *tc_array_obj =
-                                json_object_array_get_idx(tc_cmd_output, i);
-                            const struct lysc_node *s_child = NULL;
-                            LY_LIST_FOR(lysc_node_child(s_node), s_child)
-                            {
-                                process_node(s_child, tc_array_obj, lys_flags, &new_filter);
-                            }
-                        }
-                    }
-                }
-            }
-            if (tc_cmd_output)
-                json_object_put(tc_cmd_output);
-        }
-        free(tc_commands);
+        return result;
+    } else if (get_lys_extension(OPER_DUMP_TC_CLASSES, s_node, NULL) == EXIT_SUCCESS) {
+        return dump_tc_classes(s_node, parent_data_node, lys_flags);
     } else {
         const struct lysc_node *s_child;
         LY_LIST_FOR(lysc_node_child(s_node), s_child)
