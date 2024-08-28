@@ -127,6 +127,11 @@ module iproute2-cmdgen-extensions {
         argument "filter_type";
     }
 
+    extension oper-dump-tc-classes {
+        description "A sepcial extension to dump all tc classes configured on the system and load them on tc-qdisc yang
+        module";
+    }
+
     extension flag {
         description
             "iproute2 cmd generator will use the leaf name only, ususally used for flags where the leaf type will be bool,

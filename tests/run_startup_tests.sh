@@ -44,6 +44,7 @@ qdisc_if6="qdisc_if6"
 qdisc_if7="qdisc_if7"
 qdisc_if8="qdisc_if8"
 qdisc_if9="qdisc_if9"
+qdisc_if10="qdisc_if10"
 
 # Function to create LINK
 create_interfaces() {
@@ -113,6 +114,7 @@ delete_interfaces() {
     ip link del name $qdisc_if7
     ip link del name $qdisc_if8
     ip link del name $qdisc_if9
+    ip link del name $qdisc_if10
 }
 
 # Function to delete network interfaces
@@ -199,6 +201,13 @@ tc filter add dev $qdisc_if9 egress pref 10 protocol ip flower dst_ip "13.13.13.
 
 # qdisc-filter
 # not-supported
+
+# tc-class
+ip link add dev $qdisc_if10 type dummy
+tc qdisc add dev $qdisc_if10 root handle 1: htb
+tc class add dev $qdisc_if10 parent root classid 1:10 htb rate 8Mbit prio 0 
+tc class add dev $qdisc_if10 parent 1:10 classid 1:11 htb rate 8Mbit
+tc class add dev $qdisc_if10 parent 1:11 classid 1:12 htb rate 8Mbit prio 7 burst 1000 cburst 10000 quantum 100
 
 # Run iproute2-sysrepo and store its PID
 echo -e "\nSTARTING IPROUTE2-SYSREPO"
@@ -586,6 +595,36 @@ check_dev_filter_rule() {
     done
 }
 
+# Function to check classes
+check_tc_classes() {
+    echo "- Checking dev ($1) classid ($2) configuration on sysrepo:"
+    output=$(sysrepocfg -X -d running -f xml -x "/iproute2-tc-qdisc:classes/class[dev=\"$1\"][classid=\"$2\"]")
+
+    echo -e "sysrepo outputs:\n $output"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: sysrepo failed to extract data for $1 (SYSREPO PROBLEM ?)."
+        cleanup
+        exit 1
+    fi
+
+    local i=3
+    local args=("$@")
+    while [ $i -lt $# ]; do
+        echo "Checking class leaf (${args[$((i-1))]}):"
+        pattern="<${args[$((i-1))]}>\\s*${args[$i]}\\s*</${args[$((i-1))]}>"
+        
+        # Use the pattern with grep
+        if ! echo "$output" | grep -qP "$pattern"; then
+            echo "Error: rule condition (${args[$((i-1))]}) not found or not matching expected value of (${args[$i]})"
+            cleanup
+            exit 1
+        fi
+        echo "    found expected value (${args[$i]})"
+        i=$((i+2))
+    done
+}
+
 echo -e "\nVLIDATING DATA ON SYSREPO"
 check_interface $link_name
 echo -e "\n"
@@ -638,6 +677,12 @@ echo -e "\n"
 check_dev_filter_rule $qdisc_if9 "ingress" "30" "src_ip" "12.12.12.12" "direction" "ingress" "old_ip" "12.12.12.12/32" "new_ip" "100.100.100.100" "gact" "pass"
 echo -e "\n"
 check_dev_filter_rule $qdisc_if9 "egress" "10" "dst_ip" "13.13.13.13" "gact" "pass"
+echo -e "\n"
+check_tc_classes $qdisc_if10 "1:10" "parent" "root" 
+echo -e "\n"
+check_tc_classes $qdisc_if10 "1:11" "parent" "1:10"
+echo -e "\n"
+check_tc_classes $qdisc_if10 "1:12" "parent" "1:11" "prio" "7" "burst" "1000" "cburst" "10000" "quantum" "100"
 echo -e "\n"
 cleanup
 

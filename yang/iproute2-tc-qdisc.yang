@@ -526,6 +526,7 @@ module iproute2-tc-qdisc {
                     }
                     case pkt-latency {
                         leaf latency {
+                            ipr2cgen:oper-arg-name "lat";
                             type uint32;
                             description
                                 "specifies the maximum amount of time a packet can
@@ -670,8 +671,8 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-add "tc class add";
             ipr2cgen:cmd-delete "tc class del";
             ipr2cgen:cmd-update "tc class change";
-            ipr2cgen:oper-cmd "tc qdisc list";
             ipr2cgen:include-all-on-update;
+            ipr2cgen:oper-dump-tc-classes;
             key "dev parent classid netns";
             leaf dev {
                 type iplink:link-ref;
@@ -686,12 +687,16 @@ module iproute2-tc-qdisc {
                     type leafref {
                         path '/qdisc:classes/qdisc:class/qdisc:classid';
                     }
+                    type enumeration {
+                        enum "root";
+                    }
                 }
 
                 description
                     "class's parent, can be qdisc hanlde or other classid";
             }
             leaf classid {
+                ipr2cgen:oper-arg-name "handle";
                 type string {
                     pattern '[0-9a-fA-F]+:[0-9a-fA-F]+';
                 }
@@ -714,6 +719,7 @@ module iproute2-tc-qdisc {
             choice qdisc-options {
                 mandatory true;
                 container htb {
+                    ipr2cgen:oper-stop-if "{\"class\": [\"cbq\"]}";
                     ipr2cgen:add-static-arg "htb";
                     leaf prio {
                         type uint32;
@@ -722,12 +728,14 @@ module iproute2-tc-qdisc {
                             "class priority";
                     }
                     leaf rate {
+                        ipr2cgen:oper-arg-name "not-supported";
                         type pkt-rate;
                         description
                             "Maximum rate this class and all its children are
                             guaranteed. Mandatory. example 1kbit,3mbit etc ";
                     }
                     leaf ceil {
+                        ipr2cgen:oper-arg-name "not-supported";
                         type string{
                             pattern '\d+[tmkb]bit';
                         }
@@ -763,6 +771,7 @@ module iproute2-tc-qdisc {
 
                 }
                 container cbq {
+                    ipr2cgen:oper-stop-if "{\"class\": [\"htb\"]}";
                     ipr2cgen:add-static-arg "cbq";
                     leaf weight {
                         type pkt-rate;
