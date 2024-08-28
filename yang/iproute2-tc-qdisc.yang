@@ -526,6 +526,7 @@ module iproute2-tc-qdisc {
                     }
                     case pkt-latency {
                         leaf latency {
+                            ipr2cgen:oper-arg-name "lat";
                             type uint32;
                             description
                                 "specifies the maximum amount of time a packet can
