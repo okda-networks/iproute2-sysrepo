@@ -194,7 +194,7 @@ module iproute2-tc-filter {
                 //ipr2cgen:oper-arg-name "kind";
                 container flower {
                     ipr2cgen:add-static-arg "flower";
-                    ipr2cgen:oper-stop-if "{\"kind\": [\"u32\"]}";
+                    ipr2cgen:oper-stop-if '{"kind": ["u32"]}';
                     container match {
                         leaf indev {
                             type iplink:link-ref;
@@ -338,7 +338,7 @@ module iproute2-tc-filter {
                 }
                 container u32 {
                     ipr2cgen:add-static-arg "u32";
-                    ipr2cgen:oper-stop-if "{\"kind\": [\"flower\"]}";
+                    ipr2cgen:oper-stop-if '{"kind": ["flower"]}';
                     container match {
                         ipr2cgen:add-static-arg "match";
                         ipr2cgen:oper-sub-jobj "match";

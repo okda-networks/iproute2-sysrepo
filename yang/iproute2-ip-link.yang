@@ -310,7 +310,7 @@ module iproute2-ip-link {
             description "set admin status for the link";
             ipr2cgen:value-only;
             ipr2cgen:oper-arg-name "flags";
-            ipr2cgen:oper-flag-map "UP:up;FLAG-UNSET:down";
+            ipr2cgen:oper-flag-map '{"UP":"up", "FLAG-UNSET":"down"}';
             type enumeration {
                 enum "up";
                 enum "down";
@@ -339,7 +339,7 @@ module iproute2-ip-link {
             GROUP has a dual role: If both group and dev are present,
             then move the device to the specified group. If only a group is specified,
             then the change operates on all devices in that group.";
-            ipr2cgen:oper-value-map "default:0";
+            ipr2cgen:oper-value-map '{"default": "0"}';
             type uint64;
             default 0;
         }
@@ -434,7 +434,7 @@ module iproute2-ip-link {
             leaf arp {
                 description "change the NOARP flag on the device.";
                 ipr2cgen:oper-arg-name "flags";
-                ipr2cgen:oper-flag-map "NOARP:off;FLAG-UNSET:on";
+                ipr2cgen:oper-flag-map '{"NOARP":"off", "FLAG-UNSET":"on"}';
                 type enumeration {
                     enum "on";
                     enum "off";
@@ -444,7 +444,7 @@ module iproute2-ip-link {
             leaf multicast {
                 description "change the MULTICAST flag on the device.";
                 ipr2cgen:oper-arg-name "flags";
-                ipr2cgen:oper-flag-map "MULTICAST:on;FLAG-UNSET:off";
+                ipr2cgen:oper-flag-map '{"MULTICAST":"on", "FLAG-UNSET":"off"}';
                 type enumeration {
                     enum "on";
                     enum "off";
@@ -456,7 +456,7 @@ module iproute2-ip-link {
                 instructs network driver to retrieve all multicast packets from the network
                 to the kernel for further processing.";
                 ipr2cgen:oper-arg-name "flags";
-                ipr2cgen:oper-flag-map "ALLMULTI:on;FLAG-UNSET:off";
+                ipr2cgen:oper-flag-map '{"ALLMULTI":"on", "FLAG-UNSET":"off"}';
                 type enumeration {
                     enum "on";
                     enum "off";
@@ -465,7 +465,7 @@ module iproute2-ip-link {
             }
             leaf promisc {
                 ipr2cgen:oper-arg-name "promiscuity";
-                ipr2cgen:oper-value-map "0:off;1:on;2:on";
+                ipr2cgen:oper-value-map '{"0":"off", "1":"on", "2":"on"}';
                 type enumeration {
                     enum "on";
                     enum "off";
@@ -478,7 +478,7 @@ module iproute2-ip-link {
                 description "change the NOTRAILERS flag on the device,
                 NOT used by the Linux and exists for BSD compatibility";
                 ipr2cgen:oper-arg-name "flags";
-                ipr2cgen:oper-flag-map "NOTRAILERS:off;FLAG-UNSET:on";
+                ipr2cgen:oper-flag-map '{"NOTRAILERS":"off", "FLAG-UNSET":"on"}';
                 type enumeration {
                     enum "on";
                     enum "off";
@@ -525,7 +525,7 @@ module iproute2-ip-link {
                 ipr2cgen:after-node-add-static-arg "dev (../../name)";
                 ipr2cgen:value-only;
                 ipr2cgen:oper-arg-name "local";
-                ipr2cgen:oper-combine-values "{\"separator\":\"/\", \"values\": [\"local\", \"prefixlen\"]}";
+                ipr2cgen:oper-combine-values '{"separator":"/", "values": ["local", "prefixlen"]}';
                 description "ip address with cider, e.g 192.168.1.1/24";
                 type ip-address-with-cider;
             }
@@ -556,7 +556,7 @@ module iproute2-ip-link {
                 leaf pvid {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "PVID:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"PVID":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description
                         "when enabled, this vlan will be considered a PVID at ingress.
@@ -565,7 +565,7 @@ module iproute2-ip-link {
                 leaf untagged {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "Egress Untagged:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"Egress Untagged":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description
                         "the vlan specified is to be treated as untagged on egress.";
@@ -573,7 +573,7 @@ module iproute2-ip-link {
                 leaf self {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "SELF:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"SELF":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description
                         "the vlan is configured on the specified physical device.
@@ -582,7 +582,7 @@ module iproute2-ip-link {
                 leaf master {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "MASTER:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"MASTER":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description
                         "the vlan is configured on the software bridge (default).";
@@ -616,7 +616,7 @@ module iproute2-ip-link {
                     algorithms";
                 }
                 leaf guard {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -624,7 +624,7 @@ module iproute2-ip-link {
                     description "block incoming BPDU packets on this port.";
                 }
                 leaf hairpin {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -634,7 +634,7 @@ module iproute2-ip-link {
                     port to be reflected back.";
                 }
                 leaf fastleave {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -643,7 +643,7 @@ module iproute2-ip-link {
                     ";
                 }
                 leaf root_block {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -651,7 +651,7 @@ module iproute2-ip-link {
                     description "block this port from becoming the bridge's root port.";
                 }
                 leaf learning {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -659,7 +659,7 @@ module iproute2-ip-link {
                     description "allow MAC address learning on this port.";
                 }
                 leaf flood {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -670,7 +670,7 @@ module iproute2-ip-link {
                     turned off.";
                 }
                 leaf proxy_arp {
-                    ipr2cgen:oper-value-map "true:on;false:off";
+                    ipr2cgen:oper-value-map '{"true":"on", "false":"off"}';
                     type enumeration {
                         enum "on";
                         enum "off";
@@ -819,14 +819,14 @@ module iproute2-ip-link {
 
     grouping tunnel-common {
         leaf local {
-            ipr2cgen:oper-value-map "any:0.0.0.0";
+            ipr2cgen:oper-value-map '{"any":"0.0.0.0"}';
             type inet:ipv4-address;
             description "specifies the fixed local ipv4 address for tunneled packets.
             It must be an address on another interface on the host.";
             default "0.0.0.0";
         }
         leaf remote {
-            ipr2cgen:oper-value-map "any:0.0.0.0";
+            ipr2cgen:oper-value-map '{"any":"0.0.0.0"}';
             type inet:ipv4-address;
             description "specifies the remote ipv4 address of the tunnel.";
             default "0.0.0.0";
@@ -922,8 +922,8 @@ module iproute2-ip-link {
             ipr2cgen:cmd-start;
             ipr2cgen:oper-cmd "ip address show";
             ipr2cgen:oper-inner-cmd "bridge vlan show,ifname,vlans";
-            ipr2cgen:oper-stop-if "{\"info_kind\": [\"vti\", \"vlan\", \"vrf\", \"bond\", \"bridge\", \"vxlan\",
-            \"gre\", \"sit\"], \"link_type\": [\"tunnel6\",\"loopback\"]}";
+            ipr2cgen:oper-stop-if '{"info_kind": ["vti", "vlan", "vrf", "bond", "bridge", "vxlan", "gre", "sit"], 
+                                    "link_type": ["tunnel6", "loopback"]}';
             key "name";
             description "ip-link - network device";
             leaf name {
@@ -1031,7 +1031,7 @@ module iproute2-ip-link {
                 }
                 description "vlan type interface paramters";
                 leaf protocol {
-                    ipr2cgen:oper-value-map "802.1Q:802.1q;802.1AD:802.1ad";
+                    ipr2cgen:oper-value-map '{"802.1Q":"802.1q","802.1AD":"802.1ad"}';
                     description "VLAN_PROTO - either 802.1Q or 802.1ad.";
                     default "802.1q";
                     type enumeration {
@@ -1045,7 +1045,7 @@ module iproute2-ip-link {
                 }
                 leaf reorder_hdr {
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "REORDER_HDR:on;FLAG-UNSET:off";
+                    ipr2cgen:oper-flag-map '{"REORDER_HDR":"on", "FLAG-UNSET":"off"}';
                     description "{ on | off } - specifies whether ethernet headers are reordered or not (default is on).";
                     type enumeration {
                         enum "on";
@@ -1054,7 +1054,7 @@ module iproute2-ip-link {
                 }
                 leaf gvrp {
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "GVRP:on;FLAG-UNSET:off";
+                    ipr2cgen:oper-flag-map '{"GVRP":"on", "FLAG-UNSET":"off"}';
                     description "{ on | off } - specifies whether this VLAN should be
                     registered using GARP VLAN Registration Protocol.";
                     type enumeration {
@@ -1064,7 +1064,7 @@ module iproute2-ip-link {
                 }
                 leaf mvrp {
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "MVRP:on;FLAG-UNSET:off";
+                    ipr2cgen:oper-flag-map '{"MVRP":"on", "FLAG-UNSET":"off"}';
                     description "{ on | off } - specifies whether this VLAN should be registered
                     using Multiple VLAN Registration Protocol.";
                     type enumeration {
@@ -1074,7 +1074,7 @@ module iproute2-ip-link {
                 }
                 leaf loose_binding {
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "LOOSE_BINDING:on;FLAG-UNSET:off";
+                    ipr2cgen:oper-flag-map '{"LOOSE_BINDING":"on", "FLAG-UNSET":"off"}';
                     description "{ on | off } - specifies whether the VLAN device state is bound to the
                     physical device state.";
                     type enumeration {
@@ -1084,7 +1084,7 @@ module iproute2-ip-link {
                 }
                 leaf bridge_binding {
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "BRIDGE_BINDING:on;FLAG-UNSET:off";
+                    ipr2cgen:oper-flag-map '{"BRIDGE_BINDING":"on", "FLAG-UNSET":"off"}';
                     description "{ on | off } - specifies whether the VLAN device link state tracks the state
                     of bridge ports that are members of the VLAN.";
                     type enumeration {
@@ -1601,7 +1601,7 @@ module iproute2-ip-link {
                 }
                 leaf primary {
                     ipr2cgen:not-dependency;
-                    ipr2cgen:oper-stop-if "{\"mode\": [\"balance-rr\", \"802.3ad\", \"balance-xor\", \"broadcast\", \"balance-alb\", \"balance-tlb\"]}";
+                    ipr2cgen:oper-stop-if '{"mode": ["balance-rr", "802.3ad", "balance-xor", "broadcast", "balance-alb", "balance-tlb", "802.3ad"]}';
                     type link-ref;
                     must "../mode = 'active-backup'" {
                         error-message "'primary' support on active-backup bond mode only.";
@@ -1611,7 +1611,7 @@ module iproute2-ip-link {
 
                 }
                 leaf arp_ip_target { // TODO: this should be leaflist, but still not supported.
-                    ipr2cgen:oper-arg-name " "; // workaround to prevent processing in oper_data.
+                    ipr2cgen:oper-arg-name "not-supported";
                     type inet:ip-address;
                     description
                         "Specifies the target IP address of ARP requests when the arp_interval parameter is enabled";
@@ -1624,7 +1624,7 @@ module iproute2-ip-link {
 
                 }
                 leaf updelay {
-                    ipr2cgen:oper-stop-if  "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\"]}";
+                    ipr2cgen:oper-stop-if  '{"mode": ["balance-rr", "active-backup", "balance-xor", "broadcast"]}';
                     must "(../mode = '802.3ad') or (../mode = 'balance-tlb') or (../mode = 'balance-alb')" {
                         error-message "updelay support on 802.3ad, balance-tlb or balance-alb bond modes only.";
                     }
@@ -1635,7 +1635,7 @@ module iproute2-ip-link {
                         The value is set to 0 by default, which disables it.";
                 }
                 leaf downdelay {
-                    ipr2cgen:oper-stop-if  "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\"]}";
+                    ipr2cgen:oper-stop-if  '{"mode": ["balance-rr", "active-backup", "balance-xor", "broadcast"]}';
                     must "(../mode = '802.3ad') or (../mode = 'balance-tlb') or (../mode = 'balance-alb')" {
                         error-message "'downdelay' is only supported on  802.3ad, balance-tlb or balance-alb bond modes.";
                     }
@@ -1656,7 +1656,7 @@ module iproute2-ip-link {
                         to maintains its state with netif_carrier_on/off; most device drivers support this function.";
                 }
                 leaf arp_interval {
-                    ipr2cgen:oper-stop-if "{\"mode\": [\"802.3ad\", \"balance-tlb\", \"balance-alb\"]}";
+                    ipr2cgen:oper-stop-if '{"mode": ["802.3ad", "balance-tlb", "balance-alb"]}';
                     must "(../mode = 'balance-rr') or (../mode = 'active-backup') or (../mode = 'balance-xor')
                     or (../mode = 'broadcast')" {
                         error-message "'arp_interval' is only supported on balance-rr, active-backup, balance-xor or broadcast bond modes.";
@@ -1666,7 +1666,7 @@ module iproute2-ip-link {
                         "how often ARP monitoring occurs.";
                 }
                 leaf arp_validate {
-                    ipr2cgen:oper-stop-if "{\"mode\": [\"802.3ad\", \"balance-tlb\", \"balance-alb\"]}";
+                    ipr2cgen:oper-stop-if '{"mode": ["802.3ad", "balance-tlb", "balance-alb"]}';
                     must "(../mode = 'balance-rr') or (../mode = 'active-backup') or (../mode = 'balance-xor')
                     or (../mode = 'broadcast')" {
                         error-message "'arp_validate' is only supported on balance-rr, active-backup, balance-xor or broadcast bond modes.";
@@ -1722,7 +1722,7 @@ module iproute2-ip-link {
                         "Selects the transmit hash policy used for port selection in balance-xor and 802.3ad modes.";
                 }
                 leaf lacp_active {
-                    ipr2cgen:oper-stop-if "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\", \"balance-alb\", \"balance-tlb\"]}";
+                    ipr2cgen:oper-stop-if '{"mode": ["balance-rr", "active-backup", "balance-xor", "broadcast", "balance-alb", "balance-tlb"]}';
                     must "../mode = '802.3ad'" {
                         error-message "lacp_active is only supported on 802.3ad mode.";
                     }
@@ -1735,7 +1735,7 @@ module iproute2-ip-link {
                         "set the LACP active mode";
                 }
                 leaf lacp_rate {
-                    ipr2cgen:oper-stop-if "{\"mode\": [\"balance-rr\", \"active-backup\", \"balance-xor\", \"broadcast\", \"balance-alb\", \"balance-tlb\"]}";
+                    ipr2cgen:oper-stop-if '{"mode": ["balance-rr", "active-backup", "balance-xor", "broadcast", "balance-alb", "balance-tlb"]}';
                     must "../mode = '802.3ad'" {
                         error-message "lacp_rate is only supported on 802.3ad mode.";
                     }

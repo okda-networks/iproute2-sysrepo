@@ -140,8 +140,7 @@ module iproute2-ip-neighbor {
             }
             leaf nud {
                 ipr2cgen:oper-arg-name "state";
-                // TODO: temp workaround.
-                    ipr2cgen:oper-value-map "[ \"PERMANENT\" ]:permanent;[ \"NOARP\" ]:noarp;[ \"REACHABLE\" ]:reachable;[ \"STALE\" ]:stale;[ \"NONE\" ]:none;[ \"INCOMPLETE\" ]:incomplete;[ \"DELAY\" ]:delay;[ \"FAILED\" ]:failed;[ \"PROBE\" ]:probe;";
+                ipr2cgen:oper-flag-map '{"PERMANENT":"permanent", "NOARP":"noarp", "REACHABLE":"reachable", "STALE":"stale", "NONE":"none", "INCOMPLETE":"incomplete", "DELAY":"delay", "FAILED":"failed", "PROBE":"probe"}';
                 type enumeration{
                     enum "permanent";
                     enum "noarp";
@@ -222,7 +221,7 @@ module iproute2-ip-neighbor {
                 leaf self {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "self:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"self":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description "the operation is fulfilled directly by the driver
                     for the specified network device. If the network device
@@ -240,7 +239,7 @@ module iproute2-ip-neighbor {
                 leaf router {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "router:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"router":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description "the destination address is associated with a
                     router.  Valid if the referenced device is a VXLAN type
@@ -249,7 +248,7 @@ module iproute2-ip-neighbor {
                 leaf use {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "use:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"use":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description "the address is in use. User space can use this
                     option to indicate to the kernel that the fdb entry is in
@@ -258,7 +257,7 @@ module iproute2-ip-neighbor {
                 leaf extern_learn {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "use:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"extern_learn":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description "this entry was learned externally. This
                     option can be used to indicate to the kernel that an entry
@@ -268,7 +267,7 @@ module iproute2-ip-neighbor {
                 leaf sticky {
                     ipr2cgen:flag;
                     ipr2cgen:oper-arg-name "flags";
-                    ipr2cgen:oper-flag-map "use:true;FLAG-UNSET:false";
+                    ipr2cgen:oper-flag-map '{"sticky":"true", "FLAG-UNSET":"false"}';
                     type boolean;
                     description "this entry will not change its port due to
                     learning.";

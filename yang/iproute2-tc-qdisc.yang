@@ -158,9 +158,9 @@ module iproute2-tc-qdisc {
         }
         description "Defines the supported queueing discipline kinds.";
     }
-    typedef pkt-rate {
+    typedef bit-units {
         type string{
-            pattern '\d+(\.\d+)?[tmkb]bit';
+            pattern '\d+(\.\d+)?[tgmkTGMK]bit';
         }
     }
 
@@ -255,7 +255,7 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-delete "tc qdisc del";
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:oper-cmd "tc qdisc list";
-            ipr2cgen:oper-stop-if "{\"kind\": [\"ingress\", \"clsact\", \"noqueue\", \"mq\"]}";
+            ipr2cgen:oper-stop-if '{"kind": ["ingress", "clsact", "noqueue", "mq"]}';
             ipr2cgen:include-all-on-update;
             key "dev parent netns";
             description "List of qdisc configurations.";
@@ -325,9 +325,10 @@ module iproute2-tc-qdisc {
                 description "The kind of qdisc to apply.";
             }
             container fifo-options {
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\",
-                \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo-fast\", \"multiq\", \"netem\",
-                \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\", \"qfq\"]}";
+                ipr2cgen:oper-stop-if '{"kind": ["choke", "codel", "fq_codel", "ingress", "clsact",
+                                      "tbf", "htb", "hhf", "fq", "fq_pie", "pie", "gred", "mqprio", 
+                                      "pfifo-fast", "multiq", "netem", "red", "sfq", "sfb", "ATM", 
+                                      "cbq", "drr", "dsmark", "ets", "hfsc", "prio", "qfq"]}';
                 ipr2cgen:oper-sub-jobj "options";
                 when "(../qdisc-kind = 'pfifo') or (../qdisc-kind = 'bfifo')";
                 description "pfifo/bfifo related settings";
@@ -347,9 +348,10 @@ module iproute2-tc-qdisc {
                 }
             }
             container codel-options{
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"ingress\", \"clsact\", \"tbf\", \"htb\", \"hhf\", \"fq\", \"fq_pie\",
-                \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\", \"netem\",  \"red\", \"sfq\",
-                \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
+                ipr2cgen:oper-stop-if '{"kind": ["choke", "ingress", "clsact", "tbf", "htb", 
+                                      "hhf", "fq", "fq_pie", "pie", "gred", "mqprio", "pfifo_fast", 
+                                      "bfifo", "pfifo", "multiq", "netem", "red", "sfq", "sfb", 
+                                      "ATM", "cbq", "drr", "dsmark", "ets", "hfsc", "prio", "qfq"]}';
                 ipr2cgen:oper-sub-jobj "options";
                 when "(../qdisc-kind = 'codel') or (../qdisc-kind = 'fq_codel')";
                 description "CoDel/fq_CoDel related settings";
@@ -413,7 +415,7 @@ module iproute2-tc-qdisc {
                 leaf ecn-opt{
                     ipr2cgen:value-only;
                     ipr2cgen:oper-arg-name "ecn";
-                    ipr2cgen:oper-value-map "true:ecn;false:noecn";
+                    ipr2cgen:oper-value-map '{"true":"ecn", "false":"noecn"}';
                     type enumeration {
                         enum "ecn";
                         enum "noecn";
@@ -440,9 +442,10 @@ module iproute2-tc-qdisc {
                 uses codel-stats;
             }
             container tbf-options {
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"htb\",
-                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\",
-                \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
+                ipr2cgen:oper-stop-if '{"kind": ["choke", "codel", "fq_codel", "ingress", "clsact", 
+                                      "htb", "hhf", "fq", "fq_pie", "pie", "gred", "mqprio", "pfifo_fast", 
+                                      "bfifo", "pfifo", "multiq", "netem", "red", "sfq", "sfb", "ATM", 
+                                      "cbq", "drr", "dsmark", "ets", "hfsc", "prio", "qfq"]}';
                 ipr2cgen:oper-sub-jobj "options";
                 when "../qdisc-kind = 'tbf'";
                 must "./rate and ./burst" {
@@ -568,9 +571,11 @@ module iproute2-tc-qdisc {
 
             }
             container htb-options {
-                ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"ingress\", \"clsact\", \"tbf\",
-                \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\",
-                \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\"]}";
+                ipr2cgen:oper-stop-if '{"kind": ["choke", "codel", "fq_codel", "ingress", 
+                                      "clsact", "tbf", "hhf", "fq", "fq_pie", "pie", "gred", 
+                                      "mqprio", "pfifo_fast", "bfifo", "pfifo", "multiq", 
+                                      "netem", "red", "sfq", "sfb", "ATM", "cbq", "drr", "dsmark", 
+                                      "ets", "hfsc", "prio", "qfq"]}';
                 ipr2cgen:oper-sub-jobj "options";
                 when "../qdisc-kind = 'htb'";
                 description
@@ -614,9 +619,10 @@ module iproute2-tc-qdisc {
             ipr2cgen:cmd-update "tc qdisc replace";
             ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "tc qdisc list";
-            ipr2cgen:oper-stop-if "{\"kind\": [\"choke\", \"codel\", \"fq_codel\", \"tbf\",
-            \"htb\", \"hhf\", \"fq\", \"fq_pie\",  \"pie\", \"gred\", \"mqprio\", \"pfifo_fast\", \"bfifo\", \"pfifo\", \"multiq\",
-            \"netem\",  \"red\", \"sfq\", \"sfb\", \"ATM\", \"cbq\", \"drr\", \"dsmark\", \"ets\", \"hfsc\", \"prio\" , \"qfq\", \"noqueue\", \"mq\"]}";
+            ipr2cgen:oper-stop-if '{"kind": ["choke", "codel", "fq_codel", "tbf", "htb", "hhf", 
+                                  "fq", "fq_pie", "pie", "gred", "mqprio", "pfifo_fast", "bfifo", 
+                                  "pfifo", "multiq", "netem", "red", "sfq", "sfb", "ATM", "cbq", 
+                                  "drr", "dsmark", "ets", "hfsc", "prio", "qfq", "noqueue", "mq"]}';
             key "dev qdisc-kind netns";
             unique "dev";
             description "List of qdisc configurations.";
@@ -719,7 +725,7 @@ module iproute2-tc-qdisc {
             choice qdisc-options {
                 mandatory true;
                 container htb {
-                    ipr2cgen:oper-stop-if "{\"class\": [\"cbq\"]}";
+                    ipr2cgen:oper-stop-if '{"class": ["cbq"]}';
                     ipr2cgen:add-static-arg "htb";
                     leaf prio {
                         type uint32;
@@ -729,16 +735,14 @@ module iproute2-tc-qdisc {
                     }
                     leaf rate {
                         ipr2cgen:oper-arg-name "not-supported";
-                        type pkt-rate;
+                        type bit-units;
                         description
                             "Maximum rate this class and all its children are
                             guaranteed. Mandatory. example 1kbit,3mbit etc ";
                     }
                     leaf ceil {
                         ipr2cgen:oper-arg-name "not-supported";
-                        type string{
-                            pattern '\d+[tmkb]bit';
-                        }
+                        type bit-units;
                         description
                             "Maximum rate at which a class can send, if its parent has
                             bandwidth to spare.  Defaults to the configured rate,
@@ -771,10 +775,10 @@ module iproute2-tc-qdisc {
 
                 }
                 container cbq {
-                    ipr2cgen:oper-stop-if "{\"class\": [\"htb\"]}";
+                    ipr2cgen:oper-stop-if '{"class": ["htb"]}';
                     ipr2cgen:add-static-arg "cbq";
                     leaf weight {
-                        type pkt-rate;
+                        type bit-units;
                         description
                             "When dequeuing to the interface, classes are tried for traffic in a round-robin fashion.
                             Classes with a higher configured qdisc will generally have more traffic to offer during
@@ -804,12 +808,12 @@ module iproute2-tc-qdisc {
                             which is derived from maxburst, which is specified in packets.";
                     }
                     leaf rate {
-                        type pkt-rate;
+                        type bit-units;
                         description
                             "Desired rate of traffic leaving this qdisc - this is the 'speed knob'!";
                     }
                     leaf bandwidth {
-                        type pkt-rate;
+                        type bit-units;
                         description
                             "This is different from the bandwidth specified when creating a CBQ disc! Only
                             used to determine maxidle and offtime, which are only calculated when specifying
