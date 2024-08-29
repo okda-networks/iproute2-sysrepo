@@ -651,6 +651,8 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                    struct lyd_node **parent_data_node, const struct lysc_node *s_node)
 {
     char *vmap_str = NULL, *fmap_str = NULL, *combine_ext_str = NULL, *static_value = NULL;
+    struct json_object *fmap_jobj = NULL, *vmap_jobj = NULL, *combine_ext_jobj = NULL;
+
     if (!strcmp(s_node->name, "netns")) {
         if (LY_SUCCESS !=
             lyd_new_term(*parent_data_node, NULL, s_node->name, net_namespace, 0, NULL)) {
@@ -658,11 +660,22 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
             return;
         }
     }
+
     if (get_lys_extension(OPER_FLAG_MAP_EXT, s_node, &fmap_str) == EXIT_SUCCESS) {
         if (fmap_str == NULL) {
             fprintf(stderr,
                     "%s: ipr2cgen:oper-flag-map extension found but failed to "
                     "get the flag_map value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+
+        fmap_jobj = fmap_str ? strmap_to_jsonmap(fmap_str) : NULL;
+        free(fmap_str);
+        if (fmap_jobj == NULL) {
+            fprintf(stderr,
+                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-flag-map extension,"
+                    " the extension value has a bad format\n",
                     __func__, s_node->name);
             return;
         }
@@ -674,9 +687,26 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     __func__, s_node->name);
             return;
         }
-    }
-
-    if (get_lys_extension(OPER_COMBINE_VALUES_EXT, s_node, &combine_ext_str) == EXIT_SUCCESS) {
+        vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
+        free(vmap_str);
+        if (vmap_jobj == NULL) {
+            fprintf(stderr,
+                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-value-map extension,"
+                    " the extension value has a bad format\n",
+                    __func__, s_node->name);
+            return;
+        }
+    } else if (get_lys_extension(OPER_CK_ARGNAME_PRESENCE_EXT, s_node, &static_value) ==
+               EXIT_SUCCESS) {
+        if (static_value == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-ck-argname-presence extension found but failed to "
+                    "get the static_value for node \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+    } else if (get_lys_extension(OPER_COMBINE_VALUES_EXT, s_node, &combine_ext_str) ==
+               EXIT_SUCCESS) {
         if (combine_ext_str == NULL) {
             fprintf(stderr,
                     "%s: ipr2cgen:oper-combine-values extension found but failed to "
@@ -684,10 +714,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     __func__, s_node->name);
             return;
         }
-    }
-    struct json_object *combine_ext_jobj = combine_ext_str ? json_tokener_parse(combine_ext_str) :
-                                                             NULL;
-    if (combine_ext_str != NULL) {
+        combine_ext_jobj = combine_ext_str ? json_tokener_parse(combine_ext_str) : NULL;
         free(combine_ext_str);
         if (combine_ext_jobj == NULL) {
             fprintf(stderr,
@@ -698,48 +725,17 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
         }
     }
 
-    struct json_object *fmap_jobj = fmap_str ? strmap_to_jsonmap(fmap_str) : NULL;
-    if (fmap_str != NULL) {
-        free(fmap_str);
-        if (fmap_jobj == NULL) {
-            fprintf(stderr,
-                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-flag-map extension,"
-                    " the extension value has a bad format\n",
-                    __func__, s_node->name);
-            return;
-        }
-    }
-
-    struct json_object *vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
-    if (vmap_str != NULL) {
-        free(vmap_str);
-        if (vmap_jobj == NULL) {
-            fprintf(stderr,
-                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-value-map extension,"
-                    " the extension value has a bad format\n",
-                    __func__, s_node->name);
-            return;
-        }
-    }
-
     struct json_object *temp_obj = NULL;
-    // Attempt to directly find the argument name or use search function
+    /* Attempt to directly find the argument name otherwise use the find function */
     json_bool argname_found = json_object_object_get_ex(json_obj, arg_name, &temp_obj);
     if (!argname_found) {
         argname_found = find_json_value_by_key(json_obj, arg_name, &temp_obj);
     }
 
-    if (argname_found) { // Proceed only if arg_name is found as a key
-        if (get_lys_extension(OPER_CK_ARGNAME_PRESENCE_EXT, s_node, &static_value) ==
-            EXIT_SUCCESS) {
-            if (static_value == NULL) {
-                fprintf(stderr,
-                        "%s: ipr2cgen:oper-ck-argname-presence extension found but failed to "
-                        "get the static_value for node \"%s\"\n",
-                        __func__, s_node->name);
-                return;
-            }
-            add_missing_parents(s_node, parent_data_node);
+    /* Proceed only if arg_name is found as a key */
+    if (argname_found) {
+        add_missing_parents(s_node, parent_data_node);
+        if (static_value) {
             if (LY_SUCCESS !=
                 lyd_new_term(*parent_data_node, NULL, s_node->name, static_value, 0, NULL)) {
                 fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
@@ -748,14 +744,13 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
             }
             free(static_value);
         } else if (temp_obj) {
-            add_missing_parents(s_node, parent_data_node);
             if (json_object_is_type(temp_obj, json_type_array) && fmap_jobj) {
-                // array values are processed as flags.
+                /* array values are processed as flags. */
                 flags_to_leafs(temp_obj, fmap_jobj, parent_data_node, s_node);
             } else {
-                // Process a single value
+                /* Process a single value */
                 if (combine_ext_jobj != NULL) {
-                    char *combined_value = combine_values(json_obj, combine_ext_jobj);
+                    char *combined_value = combine_values(temp_obj, combine_ext_jobj);
                     if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name,
                                                    combined_value, 0, NULL)) {
                         fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
