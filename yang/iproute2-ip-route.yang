@@ -39,7 +39,7 @@ module iproute2-ip-route {
             ipr2cgen:cmd-start;
             ipr2cgen:include-all-on-update;
             ipr2cgen:oper-cmd "ip -4 route list table all";
-            ipr2cgen:oper-stop-if "{\"table\": [\"local\"]}";
+            ipr2cgen:oper-stop-if '{"table": ["local"]}';
             // TODO IPv6 support: oper needs to also apply "ip -6 route show"
             description
                 "ip route details";
@@ -179,7 +179,7 @@ module iproute2-ip-route {
                     container mpls-encap {
                         leaf label {
                             ipr2cgen:arg-name "encap mpls";
-                            ipr2cgen:oper-arg-name "not_supported";
+                            ipr2cgen:oper-arg-name "not-supported";
                             type string{
                                 pattern '[0-9]+(/[0-9]+)*';
                             }
@@ -191,19 +191,19 @@ module iproute2-ip-route {
                         ipr2cgen:add-static-arg "encap ip";
                         leaf id {
                             type uint32;
-                            ipr2cgen:oper-arg-name "not_supported";
+                            ipr2cgen:oper-arg-name "not-supported";
                             description
                                 "tunnel id";
                         }
                         leaf dst {
                             type inet:ip-prefix;
-                            ipr2cgen:oper-arg-name "not_supported";
+                            ipr2cgen:oper-arg-name "not-supported";
                             description
                                 "remote ip";
                         }
                         leaf tos {
                             type ipr2net:tos;
-                            ipr2cgen:oper-arg-name "not_supported";
+                            ipr2cgen:oper-arg-name "not-supported";
                             description
                                 "the Type Of Service (TOS) key. This key has no associated mask and the longest match is
                                 understood as: First, compare the TOS of the route and of the packet. If they are not equal,
@@ -212,7 +212,7 @@ module iproute2-ip-route {
                         }
                         leaf ttl {
                             type ipr2net:ttl;
-                            ipr2cgen:oper-arg-name "not_supported";
+                            ipr2cgen:oper-arg-name "not-supported";
                             description
                                 "TTL - specifies the TTL value to use in outgoing packets.";
                             default 0;
@@ -235,7 +235,6 @@ module iproute2-ip-route {
                     description
                         "nexthop link";
                 }
-
                 container via {
                     ipr2cgen:add-static-arg "via";
                     leaf family {

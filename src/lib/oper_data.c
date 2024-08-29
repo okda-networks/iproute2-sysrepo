@@ -462,33 +462,6 @@ cleanup:
 }
 
 /**
- * Converts a semicolon-separated key-value string to a JSON object. Each pair is separated by ';', and key-value within a pair is separated by ':'.
- * This function is useful for converting OPER_VALUE_MAP_EXT and OPER_FLAG_MAP_EXT mapping from string to JSON objects for easier manipulation and access.
- * @param [in] input: A semicolon-separated key-value pairs string.
- * @return A pointer to a JSON object representing the input string's key-value pairs. The caller is responsible for freeing the JSON object.
- */
-json_object *strmap_to_jsonmap(const char *input)
-{
-    struct json_object *jobj = json_object_new_object();
-    char *pairs = strdup(input);
-    char *pair;
-    char *rest_pairs = pairs;
-
-    while ((pair = strtok_r(rest_pairs, ";", &rest_pairs))) {
-        char *rest_kv = pair;
-        char *key = strtok_r(rest_kv, ":", &rest_kv);
-        char *value = strtok_r(NULL, ":", &rest_kv);
-
-        if (key && value) {
-            json_object_object_add(jobj, key, json_object_new_string(value));
-        }
-    }
-
-    free(pairs);
-    return jobj;
-}
-
-/**
  * Looks up the value associated with a given key in a JSON object and returns it. If the key isn't found, returns the original value.
  * 
  * For a given value (original_value) this function helps mapping it to its corresponding mapped value found in value map JSON Object.
@@ -615,7 +588,7 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
     const char *value = NULL;
     json_object_object_foreach(fmap_jobj, key_flag, flag_map)
     {
-        size_t n_json_flags = json_object_array_length(temp_obj);
+        size_t n_json_flags = json_object_array_length(temp_obj); // alway = 1
         for (size_t i = 0; i < n_json_flags; i++) {
             struct json_object *json_flag_obj = json_object_array_get_idx(temp_obj, i);
             const char *json_flag = json_object_get_string(json_flag_obj);
@@ -624,15 +597,19 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
                 break;
             }
         }
-        break; // break after the first iteration, we need to check only the first element of fmap json object.
     }
     if (value == NULL) {
         json_object *flag_unset_obj = NULL;
         json_object_object_get_ex(fmap_jobj, "FLAG-UNSET", &flag_unset_obj);
         value = json_object_get_string(flag_unset_obj);
     }
-    if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
-        fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+    if (value) {
+        if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name, value, 0, NULL)) {
+            fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+        }
+    } else {
+        fprintf(stderr, "%s: node %s failed to find matching flag-map value\n", __func__,
+                s_node->name);
     }
 }
 
@@ -669,8 +646,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     __func__, s_node->name);
             return;
         }
-
-        fmap_jobj = fmap_str ? strmap_to_jsonmap(fmap_str) : NULL;
+        fmap_jobj = fmap_str ? json_tokener_parse(fmap_str) : NULL;
         free(fmap_str);
         if (fmap_jobj == NULL) {
             fprintf(stderr,
@@ -687,7 +663,7 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     __func__, s_node->name);
             return;
         }
-        vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
+        vmap_jobj = vmap_str ? json_tokener_parse(vmap_str) : NULL;
         free(vmap_str);
         if (vmap_jobj == NULL) {
             fprintf(stderr,
@@ -803,8 +779,7 @@ void jdata_to_leaflist(struct json_object *json_array_obj, const char *arg_name,
             return;
         }
     }
-
-    struct json_object *vmap_jobj = vmap_str ? strmap_to_jsonmap(vmap_str) : NULL;
+    struct json_object *vmap_jobj = vmap_str ? json_tokener_parse(vmap_str) : NULL;
     if (vmap_str) {
         free(vmap_str);
     }
