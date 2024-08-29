@@ -160,7 +160,7 @@ module iproute2-tc-qdisc {
     }
     typedef bit-units {
         type string{
-            pattern '\d+(\.\d+)?[tgmkTGMK]bit';
+            pattern '\d+(\.\d+)?([tgmkTGMK]bit|bit)';
         }
     }
 
@@ -734,14 +734,14 @@ module iproute2-tc-qdisc {
                             "class priority";
                     }
                     leaf rate {
-                        ipr2cgen:oper-arg-name "not-supported";
+                        ipr2cgen:oper-change-value-format '{"byte": "bit-units"}';
                         type bit-units;
                         description
                             "Maximum rate this class and all its children are
                             guaranteed. Mandatory. example 1kbit,3mbit etc ";
                     }
                     leaf ceil {
-                        ipr2cgen:oper-arg-name "not-supported";
+                        ipr2cgen:oper-change-value-format '{"byte": "bit-units"}';
                         type bit-units;
                         description
                             "Maximum rate at which a class can send, if its parent has
@@ -749,14 +749,14 @@ module iproute2-tc-qdisc {
                             which implies no borrowing";
                     }
                     leaf burst {
-                        type uint32;
+                        type uint64;
                         description
                             "Amount of bytes that can be burst at ceil speed, in excess
                             of the configured rate.  Should be at least as high as the
                             highest burst of all children.";
                     }
                     leaf cburst {
-                        type uint32;
+                        type uint64;
                         description
                             " Amount of bytes that can be burst at 'infinite' speed, in
                             other words, as fast as the interface can transmit them.

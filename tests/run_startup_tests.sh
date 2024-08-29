@@ -205,9 +205,10 @@ tc filter add dev $qdisc_if9 egress pref 10 protocol ip flower dst_ip "13.13.13.
 # tc-class
 ip link add dev $qdisc_if10 type dummy
 tc qdisc add dev $qdisc_if10 root handle 1: htb
-tc class add dev $qdisc_if10 parent root classid 1:10 htb rate 8Mbit prio 0 
-tc class add dev $qdisc_if10 parent 1:10 classid 1:11 htb rate 8Mbit
-tc class add dev $qdisc_if10 parent 1:11 classid 1:12 htb rate 8Mbit prio 7 burst 1000 cburst 10000 quantum 100
+tc class add dev $qdisc_if10 parent root classid 1:10 htb rate 1.1Gbit
+tc class add dev $qdisc_if10 parent 1:10 classid 1:11 htb rate 8Mbit burst 1000 cburst 10000
+tc class add dev $qdisc_if10 parent 1:11 classid 1:12 htb rate 950Kbit
+tc class add dev $qdisc_if10 parent 1:12 classid 1:13 htb rate 8bit prio 7
 
 # Run iproute2-sysrepo and store its PID
 echo -e "\nSTARTING IPROUTE2-SYSREPO"
@@ -678,11 +679,13 @@ check_dev_filter_rule $qdisc_if9 "ingress" "30" "src_ip" "12.12.12.12" "directio
 echo -e "\n"
 check_dev_filter_rule $qdisc_if9 "egress" "10" "dst_ip" "13.13.13.13" "gact" "pass"
 echo -e "\n"
-check_tc_classes $qdisc_if10 "1:10" "parent" "root" 
+check_tc_classes $qdisc_if10 "1:10" "parent" "root" "rate" "1100Mbit"
 echo -e "\n"
-check_tc_classes $qdisc_if10 "1:11" "parent" "1:10"
+check_tc_classes $qdisc_if10 "1:11" "parent" "1:10" "rate" "8Mbit" "burst" "1000" "cburst" "10000"
 echo -e "\n"
-check_tc_classes $qdisc_if10 "1:12" "parent" "1:11" "prio" "7" "burst" "1000" "cburst" "10000" "quantum" "100"
+check_tc_classes $qdisc_if10 "1:12" "parent" "1:11" "rate" "950Kbit" 
+echo -e "\n"
+check_tc_classes $qdisc_if10 "1:13" "parent" "1:12" "rate" "8bit" "prio" "7"
 echo -e "\n"
 cleanup
 
