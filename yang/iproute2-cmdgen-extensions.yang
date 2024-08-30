@@ -66,6 +66,13 @@ module iproute2-cmdgen-extensions {
        argument "flag_map";
     }
 
+    extension oper-change-value-format {
+        description "Instructs to convert iproute2 json output value from to a desired format.
+        it takes a json key pair where the key_name is the orignal format and the key value is the desired format.
+        example to convert bytes to packet rate use {\"byte\": \"bit-units\"}";
+        argument "conversion_key";
+    }
+
     extension oper-combine-values {
        description "used to combine iproute2 operational json data keys in one leaf, comined 
        json key names are expressed in json list format, the list key should be the combination 

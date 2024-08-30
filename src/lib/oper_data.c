@@ -32,6 +32,7 @@ typedef enum {
     OPER_DEFAULT_VALUE_EXT,
     OPER_STOP_IF_EXT,
     OPER_COMBINE_VALUES_EXT,
+    OPER_CHANGE_VAL_FORMAT_EXT,
     OPER_SUB_JOBJ_EXT,
     OPER_DUMP_TC_FILTERS,
     OPER_DUMP_TC_CLASSES,
@@ -47,6 +48,7 @@ char *oper_yang_ext_map[] = { [OPER_CMD_EXT] = "oper-cmd",
                               [OPER_DEFAULT_VALUE_EXT] = "oper-default-val",
                               [OPER_STOP_IF_EXT] = "oper-stop-if",
                               [OPER_COMBINE_VALUES_EXT] = "oper-combine-values",
+                              [OPER_CHANGE_VAL_FORMAT_EXT] = "oper-change-value-format",
                               [OPER_SUB_JOBJ_EXT] = "oper-sub-jobj",
                               [OPER_DUMP_TC_FILTERS] = "oper-dump-tc-filters",
                               [OPER_DUMP_TC_CLASSES] = "oper-dump-tc-classes" };
@@ -129,6 +131,74 @@ int get_lys_extension(oper_extension_t ex_t, const struct lysc_node *s_node, cha
         }
     }
     return EXIT_FAILURE;
+}
+
+/**
+ * Converts a given number in bytes to a formatted string representing the equivalent size in bits.
+ * The output follows the pattern: '\d+[tmkg]bit', where:
+ * - The number is converted from bytes to bits.
+ * - The appropriate unit (Tbit, Gbit, Mbit, Kbit, or bit) is selected based on the size.
+ * - If the conversion to a higher unit results in a decimal, the function drops to the next lower unit to display the exact value as an integer.
+ * 
+ * @param [in] bytes: The input value in bytes to be converted.
+ * @return char*: A dynamically allocated string representing the formatted size in bits. 
+ *                The caller is responsible for freeing this memory.
+ */
+char *bytes_to_bit_units(uint64_t bytes)
+{
+    uint64_t bits = bytes * 8; // Convert bytes to bits
+    char *suffix;
+    double value;
+    if (bits >= 1e12) {
+        value = bits / 1e12;
+        if (value == (int)value) {
+            suffix = "Tbit";
+        } else {
+            suffix = "Gbit";
+            value = bits / 1e9;
+        }
+    } else if (bits >= 1e9) {
+        value = bits / 1e9;
+        if (value == (int)value) {
+            suffix = "Gbit";
+        } else {
+            suffix = "Mbit";
+            value = bits / 1e6;
+        }
+    } else if (bits >= 1e6) {
+        value = bits / 1e6;
+        if (value == (int)value) {
+            suffix = "Mbit";
+        } else {
+            suffix = "Kbit";
+            value = bits / 1e3;
+        }
+    } else if (bits >= 1e3) {
+        suffix = "Kbit";
+        value = bits / 1e3;
+    } else {
+        suffix = "bit";
+        value = bits;
+    }
+    char *result = malloc(50);
+    printf("bits1 %ld bytes %ld\n", bits, bytes);
+    sprintf(result, "%.0f%s", value, suffix);
+    return result;
+}
+
+char *convert_value(struct json_object *cmd_out_jobj, struct json_object *convert_key_pair_jobj)
+{
+    json_object_object_foreach(convert_key_pair_jobj, key, val)
+    {
+        const char *src_format_str = key;
+        const char *dst_format_str = json_object_get_string(val);
+
+        /* "byte" to "bit-units" conversion */
+        if (strcmp(src_format_str, "byte") == 0 && strcmp(dst_format_str, "bit-units") == 0) {
+            uint64_t value = json_object_get_uint64(cmd_out_jobj);
+            return bytes_to_bit_units(value);
+        }
+    }
 }
 
 /**
@@ -627,8 +697,10 @@ void flags_to_leafs(struct json_object *temp_obj, struct json_object *fmap_jobj,
 void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                    struct lyd_node **parent_data_node, const struct lysc_node *s_node)
 {
-    char *vmap_str = NULL, *fmap_str = NULL, *combine_ext_str = NULL, *static_value = NULL;
-    struct json_object *fmap_jobj = NULL, *vmap_jobj = NULL, *combine_ext_jobj = NULL;
+    char *vmap_str = NULL, *fmap_str = NULL, *val_format_str = NULL, *combine_ext_str = NULL,
+         *static_value = NULL;
+    struct json_object *fmap_jobj = NULL, *vmap_jobj = NULL, *val_format_jobj = NULL,
+                       *combine_ext_jobj = NULL;
 
     if (!strcmp(s_node->name, "netns")) {
         if (LY_SUCCESS !=
@@ -681,6 +753,24 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                     __func__, s_node->name);
             return;
         }
+    } else if (get_lys_extension(OPER_CHANGE_VAL_FORMAT_EXT, s_node, &val_format_str) ==
+               EXIT_SUCCESS) {
+        if (val_format_str == NULL) {
+            fprintf(stderr,
+                    "%s: ipr2cgen:oper-change-value-format extension found but failed to "
+                    "get the conversion key pair \"%s\"\n",
+                    __func__, s_node->name);
+            return;
+        }
+        val_format_jobj = val_format_str ? json_tokener_parse(val_format_str) : NULL;
+        free(val_format_str);
+        if (val_format_jobj == NULL) {
+            fprintf(stderr,
+                    "%s: Error reading schema node \"%s\" ipr2cgen:oper-change-format extension,"
+                    " the extension value has a bad format\n",
+                    __func__, s_node->name);
+            return;
+        }
     } else if (get_lys_extension(OPER_COMBINE_VALUES_EXT, s_node, &combine_ext_str) ==
                EXIT_SUCCESS) {
         if (combine_ext_str == NULL) {
@@ -725,7 +815,14 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
                 flags_to_leafs(temp_obj, fmap_jobj, parent_data_node, s_node);
             } else {
                 /* Process a single value */
-                if (combine_ext_jobj != NULL) {
+                if (val_format_jobj) {
+                    char *converted_value = convert_value(temp_obj, val_format_jobj);
+                    if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name,
+                                                   converted_value, 0, NULL)) {
+                        fprintf(stderr, "%s: node %s creation failed\n", __func__, s_node->name);
+                    }
+                    free(converted_value);
+                } else if (combine_ext_jobj) {
                     char *combined_value = combine_values(temp_obj, combine_ext_jobj);
                     if (LY_SUCCESS != lyd_new_term(*parent_data_node, NULL, s_node->name,
                                                    combined_value, 0, NULL)) {
@@ -744,13 +841,16 @@ void jdata_to_leaf(struct json_object *json_obj, const char *arg_name,
         }
     }
 cleanup:
-    if (combine_ext_jobj != NULL) {
+    if (val_format_jobj) {
         json_object_put(combine_ext_jobj);
     }
-    if (vmap_jobj != NULL) {
+    if (combine_ext_jobj) {
+        json_object_put(combine_ext_jobj);
+    }
+    if (vmap_jobj) {
         json_object_put(vmap_jobj);
     }
-    if (fmap_jobj != NULL) {
+    if (fmap_jobj) {
         json_object_put(fmap_jobj);
     }
 }
