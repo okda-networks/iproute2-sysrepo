@@ -595,14 +595,16 @@ module iproute2-tc-qdisc {
                     timescales. Because of further queues living in network adaptors,
                     this is often not a problem.";
                 leaf default {
-                    ipr2cgen:oper-arg-name "not-supported";
-                    type uint32;
+                    type string {
+                        pattern '(0x)?[0-9a-fA-F]+|\d+';
+                    }
                     description
                         "Unclassified traffic gets sent to the class with this
                         minor-id.";
                 }
-                leaf offlaod {
+                leaf offload {
                     ipr2cgen:flag;
+                    ipr2cgen:oper-value-map '{"true":"on"}';
                     type enumeration {
                         enum "on";
                     }
